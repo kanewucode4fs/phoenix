@@ -1,22 +1,30 @@
-# CLI Agent Starter Kit
+<a id="cli-agent-starter-kit"></a>
 
-This is a TypeScript CLI agent starter kit with AI SDK and Anthropic integration.
+# CLI Agent 入门套件
 
-## Important: Private Package
+这是一个集成 AI SDK 和 Anthropic 的 TypeScript CLI Agent 入门套件。
 
-This package is marked as `"private": true` in package.json and is NOT published to npm. Therefore:
+<a id="important-private-package"></a>
 
-- **NO changesets are required** for changes to this package
-- This is an example/starter kit, not a published library
-- Changes here do not need versioning or changelog entries
+## 重要：私有包
 
-## Available Skills
+此包在 package.json 中标记为 `"private": true`，**不会**发布到 npm。因此：
 
-This project has access to Phoenix skills: `phoenix-cli`, `phoenix-tracing`, and `phoenix-evals`.
+- 修改此包**不需要 changeset**
+- 这是示例/入门套件，不是已发布的库
+- 此处修改不需要版本管理或变更日志条目
 
-Use these skills when working with Phoenix tracing, evaluations, or the Phoenix CLI.
+<a id="available-skills"></a>
 
-## Development
+## 可用技能
+
+本项目可使用 Phoenix 技能：`phoenix-cli`、`phoenix-tracing` 和 `phoenix-evals`。
+
+处理 Phoenix 追踪、评估或 Phoenix CLI 时使用这些技能。
+
+<a id="development"></a>
+
+## 开发
 
 ```bash
 pnpm dev    # Run the agent
@@ -24,15 +32,21 @@ pnpm build  # Build the TypeScript
 pnpm start  # Run the compiled output
 ```
 
-## Environment Variables
+<a id="environment-variables"></a>
 
-- `ANTHROPIC_API_KEY` - Required for Anthropic API calls
+## 环境变量
 
-## Debugging with Phoenix CLI
+- `ANTHROPIC_API_KEY` - 调用 Anthropic API 时必需
 
-### Quick Trace Check
+<a id="debugging-with-phoenix-cli"></a>
 
-To verify traces are being captured:
+## 使用 Phoenix CLI 调试
+
+<a id="quick-trace-check"></a>
+
+### 快速检查追踪
+
+验证是否正在采集追踪：
 
 ```bash
 npx @arizeai/phoenix-cli traces \
@@ -41,7 +55,9 @@ npx @arizeai/phoenix-cli traces \
   --limit 5
 ```
 
-### View Recent Traces with Key Details
+<a id="view-recent-traces-with-key-details"></a>
+
+### 查看近期追踪及关键详情
 
 ```bash
 npx @arizeai/phoenix-cli traces \
@@ -57,7 +73,9 @@ npx @arizeai/phoenix-cli traces \
   }'
 ```
 
-### Inspect Specific Trace (including tool calls)
+<a id="inspect-specific-trace-including-tool-calls"></a>
+
+### 检查指定追踪（含工具调用）
 
 ```bash
 npx @arizeai/phoenix-cli trace <trace-id> \
@@ -76,17 +94,21 @@ npx @arizeai/phoenix-cli trace <trace-id> \
   }'
 ```
 
-### Important Notes
+<a id="important-notes"></a>
 
-- **Project Name**: Must match `projectName` in `src/instrumentation.ts` (currently `cli-agent-starter-kit`)
-- **Endpoint**: Local Phoenix is at `http://localhost:6006`
-- **Format**: Use `--format raw --no-progress` for piping to `jq`
-- **Telemetry**: ToolLoopAgent requires `experimental_telemetry: { isEnabled: true }` in constructor
+### 重要说明
 
-### Common Span Attributes
+- **项目名称**：必须与 `src/instrumentation.ts` 中的 `projectName` 一致（当前为 `cli-agent-starter-kit`）
+- **端点**：本地 Phoenix 位于 `http://localhost:6006`
+- **格式**：通过管道传给 `jq` 时，使用 `--format raw --no-progress`
+- **遥测**：ToolLoopAgent 的构造函数需要设置 `experimental_telemetry: { isEnabled: true }`
 
-- `operation.name` - Operation type (e.g., `ai.generateText`)
-- `ai.model.id` - Model name (e.g., `claude-sonnet-4-20250514`)
-- `ai.toolCall.name` - Tool name for TOOL spans
-- `ai.usage.completionTokens` / `ai.usage.promptTokens` - Token counts
-- `span_kind` - Span type: `AGENT`, `LLM`, `TOOL`, `CHAIN`, etc.
+<a id="common-span-attributes"></a>
+
+### 常用 Span 属性
+
+- `operation.name` - 操作类型（如 `ai.generateText`）
+- `ai.model.id` - 模型名称（如 `claude-sonnet-4-20250514`）
+- `ai.toolCall.name` - TOOL Span 的工具名称
+- `ai.usage.completionTokens` / `ai.usage.promptTokens` - Token 数量
+- `span_kind` - Span 类型：`AGENT`、`LLM`、`TOOL`、`CHAIN` 等。

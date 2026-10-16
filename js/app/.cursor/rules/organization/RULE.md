@@ -1,12 +1,18 @@
-# Organization
+<a id="organization"></a>
 
-## Project Structure
+# 组织结构
 
-- `src/components/` - All reusable components
-- `stories/` - All Storybook files
+<a id="project-structure"></a>
 
-## Workflow
+## 项目结构
 
-- Place new reusable components in `src/components/`
-- Create corresponding `.stories.tsx` files in `stories/`
-- Keep component-specific utilities near components
+- `src/components/`：所有可复用组件
+- `stories/`：所有 Storybook 文件
+
+<a id="workflow"></a>
+
+## 工作流程
+
+- 将新的可复用组件放入 `src/components/`
+- 在 `stories/` 中创建对应的 `.stories.tsx` 文件
+- 将组件专用工具放在组件附近

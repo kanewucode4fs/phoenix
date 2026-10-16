@@ -5,4 +5,4 @@ allowed_tools: [Skill, Read]
 runs: 3
 tags: [phoenix-evals]
 ---
-My LangGraph agent already sends traces to Phoenix (project `support-agent`). I just want to pull the root spans into a pandas dataframe so I can eyeball the inputs and outputs in a notebook. I'm not scoring anything or setting up evals, I only want to look at the data. What's the Python code?
+我的 LangGraph 智能体已经向 Phoenix 发送追踪记录（项目 `support-agent`）。我只想将根跨度拉取到 pandas 数据帧中，以便在 Notebook 中查看输入和输出。我不需要评分或配置评估，只想查看数据。Python 代码该怎么写？

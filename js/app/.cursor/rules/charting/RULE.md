@@ -1,18 +1,26 @@
-# Charting
+<a id="charting"></a>
 
-## Style Guide
+# 图表
 
-- Use recharts as the charting library
-- Apply defaults from `src/components/chart/defaults.tsx` for consistent styling
-- Define chart colors semantically in `src/GlobalStyles.tsx`
+<a id="style-guide"></a>
 
-## Canonical Example
+## 风格指南
 
-See `src/components/chart/` for examples of chart implementations.
+- 使用 recharts 作为图表库
+- 应用 `src/components/chart/defaults.tsx` 中的默认值，确保风格一致
+- 在 `src/GlobalStyles.tsx` 中按语义定义图表颜色
 
-## Workflow
+<a id="canonical-example"></a>
 
-1. Import recharts components
-2. Apply defaults from `defaults.tsx`
-3. Use semantic color variables from GlobalStyles
-4. Follow existing chart component patterns
+## 规范示例
+
+图表实现示例见 `src/components/chart/`。
+
+<a id="workflow"></a>
+
+## 工作流程
+
+1. 导入 recharts 组件
+2. 应用 `defaults.tsx` 中的默认值
+3. 使用 GlobalStyles 中的语义颜色变量
+4. 遵循现有图表组件模式

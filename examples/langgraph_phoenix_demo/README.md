@@ -97,7 +97,7 @@ make -C examples/langgraph_phoenix_demo test
 
 ## 6. 验证记录
 
-源码 Docker 实例 `20.23.0` 及本机 PostgreSQL 的最新验证见 [部署记录](../../docs/04-部署文档/源码Docker运行.md)。下文是切换前对旧 `20.22.0` 发布镜像的历史验证，旧 Trace 不保证在当前数据库中存在。
+源码 Docker 实例 `20.23.0` 及本机 PostgreSQL 的验证见 [统一部署指南](../../docs/04-部署文档/部署指南.md#source-docker-verification)。下文是切换前对旧 `20.22.0` 发布镜像的历史验证，旧 Trace 不保证在当前数据库中存在。
 
 提交前于 2026-10-16 20:48（北京时间）重新运行 `make test`：本文件所列同一组 4 项测试全部通过，失败 0、跳过 0，耗时 0.32 秒，仍有 3 条依赖弃用警告。测试文件为 [test_demo.py](./test_demo.py)，Python `3.12.13`、pytest `8.4.2`；测试时 HEAD 仍为下述代码基线，新增代码尚未提交。
 

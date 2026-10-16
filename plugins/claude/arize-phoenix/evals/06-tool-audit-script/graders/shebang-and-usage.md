@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: tool-audit.sh}
 weight: 0.5
 ---
-You are looking at a bash script that should print every TOOL span of a Phoenix trace as JSON, including spans whose status is OK.
+你正在检查一个 bash 脚本，它应将 Phoenix 追踪记录中的每个 TOOL 跨度输出为 JSON，包括状态为 OK 的跨度。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: It is syntactically plausible bash with a shebang line, and it prints a usage message and exits non-zero when no trace id is supplied.
+判断条件：脚本是语法合理的 bash 脚本，带有 shebang 行；未提供追踪 ID 时打印用法消息，并以非零退出码退出。

@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: validate_judge.py}
 weight: 0.5
 ---
-The user has 80 examples that two analysts labeled by hand, plus their LLM judge's predictions over the same 80, and wants to decide whether the judge is trustworthy.
+用户有 80 个由两位分析人员人工标注的示例，以及 LLM 裁判对同一批 80 个示例的预测，希望判断裁判是否可信。
 
-Grade exactly one claim. PASS if the claim below holds for the file, FAIL otherwise. Ignore everything else about the file.
+只评定下面这一条判断条件。文件满足条件则为 PASS，否则为 FAIL；忽略文件中的其他内容。
 
-Claim: The script isolates and surfaces the judge's disagreements with the human labels — its false positives (judge passes, human fails) and false negatives (judge fails, human passes) — for inspection, rather than reporting only aggregate scores. Any means of pulling out and examining the disagreeing examples counts, regardless of variable names; computing only an overall accuracy or TPR/TNR number without separating the disagreements FAILS.
+判断条件：脚本将裁判模型与人工标签不一致的示例单独提取并展示，供检查假阳性（模型判 pass、人工判 fail）和假阴性（模型判 fail、人工判 pass），而非只报告汇总分数。无论变量如何命名，只要能提取并检查不一致示例都算满足；如果只计算总体准确率或 TPR/TNR 数值而不分离不一致示例，则失败。

@@ -1,76 +1,88 @@
-# PostgreSQL with TLS Setup
+<a id="postgresql-with-tls-setup"></a>
 
-This vignette demonstrates how to set up PostgreSQL with TLS encryption.
+# PostgreSQL TLS 设置
 
-## Quick Start
+本示例展示如何设置启用 TLS 加密的 PostgreSQL。
 
-1. Generate certificates:
+<a id="quick-start"></a>
+
+## 快速开始
+
+1. 生成证书：
    ```bash
    python generate_pg_certs.py
    ```
 
-2. Start PostgreSQL:
+2. 启动 PostgreSQL：
    ```bash
    docker compose up -d
    ```
 
-3. Check logs:
+3. 查看日志：
    ```bash
    docker compose logs postgres
    ```
 
-4. Test connection:
+4. 测试连接：
    ```bash
    python test_connection.py
    ```
 
-## Prerequisites
+<a id="prerequisites"></a>
 
-- Docker and Docker Compose installed
-- Python 3.x installed
-- OpenSSL (for certificate generation)
+## 前置条件
 
-## Configuration Details
+- 已安装 Docker 和 Docker Compose
+- 已安装 Python 3.x
+- OpenSSL，用于生成证书
 
-The setup includes:
-- PostgreSQL server with TLS encryption
-- Server certificates for secure communication
-- Custom PostgreSQL configuration files
-- Persistent data storage using Docker volumes
+<a id="configuration-details"></a>
 
-## Tips
+## 配置详情
 
-- **Certificate Generation**: The `generate_pg_certs.py` script creates a self-signed CA and generates both server and client certificates. You can find the generated certificates in the `certs` directory.
+配置包括：
+- 启用 TLS 加密的 PostgreSQL 服务器
+- 用于安全通信的服务器证书
+- 自定义 PostgreSQL 配置文件
+- 通过 Docker 卷持久化存储数据
 
-- **Connection Testing**: The `test_connection.py` script tests connections using both `psycopg` and `asyncpg` drivers, as well as SQLAlchemy. This helps verify that your TLS setup works with different PostgreSQL clients.
+<a id="tips"></a>
 
-- **Security Configuration**: 
-  - The `pg_hba.conf` file is configured to require SSL for remote connections
-  - Local connections (127.0.0.1) use MD5 authentication
-  - Local Unix socket connections use trust authentication
+## 提示
 
-- **Certificate Files**: 
-  - `server.crt` and `server.key`: Server's certificate and private key
-  - `client.crt` and `client.key`: Client's certificate and private key
-  - `root.crt`: Root CA certificate for verifying server certificates
+- **证书生成**：`generate_pg_certs.py` 脚本创建自签名 CA，并生成服务器和客户端证书。生成的证书位于 `certs` 目录。
 
-- **Docker Volumes**: 
-  - The PostgreSQL data is persisted in a Docker volume named `postgres-data`
-  - This means your data will survive container restarts
-  - To start fresh, you can remove the volume with `docker compose down -v`
+- **连接测试**：`test_connection.py` 脚本使用 `psycopg`、`asyncpg` 驱动和 SQLAlchemy 测试连接，验证 TLS 设置能与不同 PostgreSQL 客户端配合。
 
-- **Connection String**: When connecting to the database, you'll need to specify:
-  - The server's hostname (localhost)
-  - The port (5432)
-  - The database name (postgres)
-  - The username (postgres)
-  - The password (phoenix)
-  - SSL parameters (certificates and verification mode)
+- **安全配置**：
+  - `pg_hba.conf` 要求远程连接使用 SSL
+  - 本地连接（127.0.0.1）使用 MD5 身份验证
+  - 本地 Unix socket 连接使用 trust 身份验证
 
-## Troubleshooting
+- **证书文件**：
+  - `server.crt` 和 `server.key`：服务器证书和私钥
+  - `client.crt` 和 `client.key`：客户端证书和私钥
+  - `root.crt`：用于校验服务器证书的根 CA 证书
 
-If you encounter any issues:
-1. Check that the certificates were generated successfully
-2. Verify that the PostgreSQL container is running
-3. Ensure the certificates have the correct permissions
-4. Check the container logs for any error messages
+- **Docker 卷**：
+  - PostgreSQL 数据持久化至名为 `postgres-data` 的 Docker 卷
+  - 容器重启后数据仍保留
+  - 如需重新开始，可通过 `docker compose down -v` 删除卷
+
+- **连接字符串**：连接数据库时需要指定：
+  - 服务器主机名，localhost
+  - 端口，5432
+  - 数据库名称，postgres
+  - 用户名，postgres
+  - 密码，phoenix
+  - SSL 参数，证书和校验模式
+
+<a id="troubleshooting"></a>
+
+## 排障
+
+遇到问题时：
+1. 检查证书是否成功生成
+2. 确认 PostgreSQL 容器正在运行
+3. 确保证书权限正确
+4. 查看容器日志中的错误消息

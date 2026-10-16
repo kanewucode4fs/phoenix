@@ -1,1 +1,1 @@
-Annotators flagged agent mistakes in research-assistant with trail_error span annotations. Each annotation's score is its impact: 1.0 for high, 0.6 for medium, and 0.3 for low. How many traces have at least one high-impact mistake?
+标注人员使用 trail_error 跨度标注标记了 research-assistant 中智能体的错误。每条标注的分数表示影响程度：1.0 为高、0.6 为中、0.3 为低。有多少条追踪记录至少包含一个高影响错误？

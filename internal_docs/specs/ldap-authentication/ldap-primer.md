@@ -1,39 +1,47 @@
-# LDAP Primer for OIDC Engineers
+<a id="ldap-primer-for-oidc-engineers"></a>
 
-**Target Audience**: Engineers familiar with OAuth2/OIDC who need to understand LDAP authentication.
+# 面向 OIDC 工程师的 LDAP 入门
+
+**目标读者**：熟悉 OAuth2/OIDC、需要了解 LDAP 身份验证的工程师。
 
 ---
 
-## TL;DR: LDAP vs OIDC
+<a id="tldr-ldap-vs-oidc"></a>
 
-| Aspect | OIDC | LDAP |
+## 概览：LDAP 与 OIDC
+
+| 方面 | OIDC | LDAP |
 |--------|------|------|
-| **Protocol Type** | Modern REST/JSON API | Binary protocol (ASN.1/BER encoding) |
-| **Primary Use** | Delegated authentication (3rd party) | Direct authentication (same organization) |
-| **User Identifier** | Email or UUID (provider-specific) | Distinguished Name (DN) - hierarchical path |
-| **Authentication Flow** | Browser redirect → authorization code → token exchange | Direct username/password bind to directory |
-| **Trust Model** | Trust external IdP (Google, Okta, etc.) | Trust internal directory server (Active Directory, OpenLDAP) |
-| **Deployment** | SaaS or on-prem | Almost always on-prem or private cloud |
-| **Age** | Modern (2014+) | Legacy (1993+, based on X.500 from 1988) |
+| **协议类型** | 现代 REST/JSON API | 二进制协议，ASN.1/BER 编码 |
+| **主要用途** | 委托身份验证，第三方 | 直接身份验证，同一组织 |
+| **用户标识符** | 邮箱或 UUID，取决于提供方 | 专有名称（DN），层次路径 |
+| **身份验证流程** | 浏览器重定向 → 授权码 → token 交换 | 使用用户名和密码直接绑定目录 |
+| **信任模型** | 信任外部 IdP，例如 Google、Okta | 信任内部目录服务器，例如 Active Directory、OpenLDAP |
+| **部署** | SaaS 或本地部署 | 几乎总在本地或私有云 |
+| **年代** | 现代，2014 年起 | 传统，1993 年起，基于 1988 年的 X.500 |
 
-**When to Use**:
-- **OIDC**: External users, consumer apps, "Sign in with Google"
-- **LDAP**: Enterprise internal apps, corporate network integration, existing AD infrastructure
+**使用场景**：
+- **OIDC**：外部用户、消费者应用、“通过 Google 登录”
+- **LDAP**：企业内部应用、企业网络集成、现有 AD 基础设施
 
 ---
 
-## What Is LDAP?
+<a id="what-is-ldap"></a>
 
-**LDAP (Lightweight Directory Access Protocol)** is a protocol for accessing and managing directory services over TCP/IP.
+## 什么是 LDAP？
 
-Think of it as:
-- **Database**: Stores user accounts, groups, organizational structure
-- **Authentication Protocol**: Verifies credentials directly
-- **Query Language**: Searches directory tree with filters
+**LDAP（轻量目录访问协议）**是通过 TCP/IP 访问和管理目录服务的协议。
 
-### Core Concept: The Directory Tree
+可将其理解为：
+- **数据库**：保存用户账户、组和组织结构
+- **身份验证协议**：直接验证凭证
+- **查询语言**：使用过滤器搜索目录树
 
-Unlike OIDC (which is stateless HTTP), LDAP organizes data in a **hierarchical tree structure**:
+<a id="core-concept-the-directory-tree"></a>
+
+### 核心概念：目录树
+
+OIDC 使用无状态 HTTP，而 LDAP 将数据组织成**层次树结构**：
 
 ```mermaid
 graph TD
@@ -57,31 +65,33 @@ graph TD
     Groups --> Devs
 ```
 
-**Full Distinguished Names (DN)**:
-- Alice: `uid=alice,ou=users,dc=example,dc=com`
-- Bob: `uid=bob,ou=users,dc=example,dc=com`
-- Charlie: `uid=charlie,ou=contractors,ou=users,dc=example,dc=com`
-- Admins group: `cn=admins,ou=groups,dc=example,dc=com`
+**完整专有名称（DN）**：
+- Alice：`uid=alice,ou=users,dc=example,dc=com`
+- Bob：`uid=bob,ou=users,dc=example,dc=com`
+- Charlie：`uid=charlie,ou=contractors,ou=users,dc=example,dc=com`
+- 管理员组：`cn=admins,ou=groups,dc=example,dc=com`
 
-**OIDC Equivalent**: There is no tree structure - users are flat, identified by email or opaque ID (`sub` claim).
+**OIDC 对应概念**：没有树结构，用户平铺，通过邮箱或不透明 ID（`sub` 声明）识别。
 
 ---
 
-## Distinguished Names (DN)
+<a id="distinguished-names-dn"></a>
 
-**DN = Full path to a user in the directory tree**
+## 专有名称（DN）
 
-Example DN:
+**DN = 用户在目录树中的完整路径**
+
+DN 示例：
 ```
 uid=alice,ou=engineering,dc=example,dc=com
 ```
 
-**Breaking it down**:
-- `uid=alice` - User identifier (username)
-- `ou=engineering` - Organizational Unit (department/team)
-- `dc=example,dc=com` - Domain Components (company domain)
+**逐项说明**：
+- `uid=alice` — 用户标识符，即用户名
+- `ou=engineering` — 组织单位，即部门或团队
+- `dc=example,dc=com` — 域组件，即公司域名
 
-**OIDC Equivalent**: Closest analog is the `sub` (subject) claim:
+**OIDC 对应概念**：最接近的是 `sub`（主体）声明：
 ```json
 {
   "sub": "auth0|5f8e9a1234567890abcdef12",  // OIDC
@@ -89,17 +99,21 @@ uid=alice,ou=engineering,dc=example,dc=com
 }
 ```
 
-But OIDC's `sub` is:
-- ✅ **Stable** (like DN)
-- ✅ **Unique per provider** (like DN per directory)
-- ❌ **Not hierarchical** (DN encodes organizational structure)
-- ❌ **Not human-readable** (DN shows department, location, etc.)
+但 OIDC 的 `sub`：
+- ✅ **稳定**，类似 DN
+- ✅ **在每个提供方内唯一**，类似每个目录内的 DN
+- ❌ **没有层次结构**，而 DN 编码组织结构
+- ❌ **不适合人类阅读**，而 DN 展示部门、位置等信息
 
 ---
 
-## Authentication Flow Comparison
+<a id="authentication-flow-comparison"></a>
 
-### OIDC Flow (What You Know)
+## 身份验证流程对比
+
+<a id="oidc-flow-what-you-know"></a>
+
+### OIDC 流程（已有知识）
 
 ```mermaid
 sequenceDiagram
@@ -117,11 +131,13 @@ sequenceDiagram
     Phoenix->>Browser: 8. Set cookie, return success
 ```
 
-**Key**: Phoenix **never sees the password**. Google handles authentication.
+**要点**：Phoenix **永远看不到密码**，身份验证由 Google 处理。
 
 ---
 
-### LDAP Flow (New)
+<a id="ldap-flow-new"></a>
+
+### LDAP 流程（新知识）
 
 ```mermaid
 sequenceDiagram
@@ -139,23 +155,27 @@ sequenceDiagram
     Phoenix->>Browser: 8. Set cookie, return success
 ```
 
-**Key Differences**:
-- ✅ Phoenix **receives the password** directly (no redirect)
-- ✅ Phoenix **queries LDAP server** (not a REST API)
-- ✅ **Two LDAP operations**: Search (find user) + Bind (verify password)
-- ✅ **Binary protocol**, not HTTP/JSON
+**主要区别**：
+- ✅ Phoenix 直接**接收密码**，不进行重定向
+- ✅ Phoenix **查询 LDAP 服务器**，不是 REST API
+- ✅ **两项 LDAP 操作**：搜索以查找用户，绑定以验证密码
+- ✅ **二进制协议**，不是 HTTP/JSON
 
 ---
 
-## Key LDAP Concepts
+<a id="key-ldap-concepts"></a>
 
-### 1. Bind Operation (Authentication)
+## LDAP 关键概念
 
-**"Binding"** = Authenticating to the LDAP server.
+<a id="1-bind-operation-authentication"></a>
 
-Two types:
+### 1. 绑定操作（身份验证）
 
-**Service Account Bind** (search-and-bind pattern):
+**“绑定”** = 向 LDAP 服务器进行身份验证。
+
+分为两类：
+
+**服务账户绑定**，即搜索绑定模式：
 ```python
 # Phoenix binds with read-only service account
 connection = Connection(
@@ -170,7 +190,7 @@ connection.search(
 # Returns: uid=alice,ou=engineering,dc=example,dc=com
 ```
 
-**User Bind** (verify credentials):
+**用户绑定**，验证凭证：
 ```python
 # Bind as the actual user (proves they know password)
 user_connection = Connection(
@@ -184,29 +204,31 @@ if user_connection.bound:
     print("✓ Password correct")
 ```
 
-**OIDC Equivalent**: There is no equivalent - OIDC providers handle this internally.
+**OIDC 对应概念**：没有对应概念，OIDC 提供方在内部处理。
 
 ---
 
-### 2. LDAP Filters (Query Language)
+<a id="2-ldap-filters-query-language"></a>
 
-Filters search the directory tree (like SQL WHERE clauses, but with LISP-style prefix syntax):
+### 2. LDAP 过滤器（查询语言）
 
-| Filter | Meaning | OIDC Analogy |
+过滤器用于搜索目录树，类似 SQL WHERE 子句，但采用 LISP 风格的前缀语法：
+
+| 过滤器 | 含义 | OIDC 类比 |
 |--------|---------|--------------|
-| `(uid=alice)` | Find user where uid=alice | Search by email |
-| `(objectClass=user)` | Find all user objects | Filter by type |
-| `(&(uid=alice)(objectClass=user))` | AND logic | Multiple conditions |
-| `(\|(uid=alice)(uid=bob))` | OR logic | Match any |
-| `(uid=a*)` | Wildcard | Prefix search |
-| `(memberOf=cn=admins,ou=groups,...)` | Group membership | Roles/claims |
+| `(uid=alice)` | 查找 uid=alice 的用户 | 按邮箱搜索 |
+| `(objectClass=user)` | 查找所有用户对象 | 按类型过滤 |
+| `(&(uid=alice)(objectClass=user))` | AND 逻辑 | 多个条件 |
+| `(\|(uid=alice)(uid=bob))` | OR 逻辑 | 任意匹配 |
+| `(uid=a*)` | 通配符 | 前缀搜索 |
+| `(memberOf=cn=admins,ou=groups,...)` | 组成员关系 | 角色/声明 |
 
-**Example: Active Directory user search**:
+**示例：Active Directory 用户搜索**：
 ```ldap
 (&(objectClass=user)(sAMAccountName=alice))
 ```
 
-**Phoenix escapes user input** to prevent LDAP injection (like SQL injection):
+**Phoenix 转义用户输入**以防止 LDAP 注入，类似防范 SQL 注入：
 ```python
 from ldap3.utils.conv import escape_filter_chars
 
@@ -217,24 +239,26 @@ filter_str = f"(&(objectClass=user)(uid={escaped}))"
 
 ---
 
-### 3. Attributes (User Fields)
+<a id="3-attributes-user-fields"></a>
 
-LDAP users have **attributes** (like JSON fields, but schema-defined):
+### 3. 属性（用户字段）
 
-Common attributes:
+LDAP 用户具有**属性**，类似 JSON 字段，但由 schema 定义：
 
-| Attribute | Purpose | OIDC Claim Equivalent |
+常见属性：
+
+| 属性 | 用途 | OIDC 对应声明 |
 |-----------|---------|----------------------|
-| `uid` | Username | `preferred_username` |
-| `mail` | Email address | `email` |
-| `displayName` | Full name | `name` |
-| `memberOf` | Group memberships (AD) | `groups` or `roles` |
-| `cn` | Common Name | `name` |
-| `sn` | Surname | `family_name` |
-| `givenName` | First name | `given_name` |
-| `userPassword` | Password hash (not readable) | N/A (handled by IdP) |
+| `uid` | 用户名 | `preferred_username` |
+| `mail` | 邮箱地址 | `email` |
+| `displayName` | 全名 | `name` |
+| `memberOf` | 组成员关系，AD | `groups` 或 `roles` |
+| `cn` | 通用名称 | `name` |
+| `sn` | 姓 | `family_name` |
+| `givenName` | 名 | `given_name` |
+| `userPassword` | 密码哈希，不可读取 | 不适用，由 IdP 处理 |
 
-**Phoenix queries attributes**:
+**Phoenix 查询属性**：
 ```python
 # After finding user, read their attributes
 email = user_entry.mail.value
@@ -244,9 +268,11 @@ groups = user_entry.memberOf.values  # List of DNs
 
 ---
 
-### 4. Groups & Role Mapping
+<a id="4-groups--role-mapping"></a>
 
-Two group membership patterns:
+### 4. 组与角色映射
+
+两种组成员关系模式：
 
 ```mermaid
 graph LR
@@ -267,15 +293,15 @@ graph LR
     end
 ```
 
-**Pattern 1 (Active Directory)**:
-- User entry has `memberOf` attribute listing group DNs
-- Phoenix reads `memberOf` directly (efficient, 1 query)
+**模式 1（Active Directory）**：
+- 用户条目具有 `memberOf` 属性，列出组 DN
+- Phoenix 直接读取 `memberOf`，效率高，仅需一次查询
 
-**Pattern 2 (POSIX/OpenLDAP)**:
-- Group entries have `member` attribute listing user DNs
-- Phoenix must search groups where `(member=<user_dn>)` (slower, N queries)
+**模式 2（POSIX/OpenLDAP）**：
+- 组条目具有 `member` 属性，列出用户 DN
+- Phoenix 必须按 `(member=<user_dn>)` 搜索组，较慢，需要 N 次查询
 
-**Phoenix Configuration**:
+**Phoenix 配置**：
 ```bash
 # Map LDAP groups → Phoenix roles
 PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[
@@ -284,7 +310,7 @@ PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[
 ]'
 ```
 
-**OIDC Equivalent**:
+**OIDC 对应概念**：
 ```json
 {
   "groups": ["admins", "developers"],  // Flat list in ID token
@@ -292,23 +318,27 @@ PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[
 }
 ```
 
-**Key Difference**: OIDC groups are **in the token** (client-side). LDAP groups are **queried on every login** (server-side, always fresh).
+**主要区别**：OIDC 组位于 **token 中**，由客户端携带。LDAP 组**每次登录均会查询**，在服务端处理，始终保持最新。
 
 ---
 
-## Common LDAP Implementations
+<a id="common-ldap-implementations"></a>
 
-### 1. Active Directory (Microsoft)
+## 常见 LDAP 实现
 
-**What**: Microsoft's LDAP implementation (most common in enterprises)
+<a id="1-active-directory-microsoft"></a>
 
-**Unique Features**:
-- `sAMAccountName` instead of `uid` for username
-- `memberOf` attribute for group membership (efficient)
-- `userPrincipalName` as email alternative
-- Global Catalog for multi-domain searches
+### 1. Active Directory（微软）
 
-**Phoenix Config for AD**:
+**定义**：微软的 LDAP 实现，在企业中最常见。
+
+**独有特性**：
+- 使用 `sAMAccountName` 而非 `uid` 作为用户名
+- 使用 `memberOf` 属性表达组成员关系，效率高
+- 可使用 `userPrincipalName` 代替邮箱
+- 使用全局编录进行多域搜索
+
+**AD 的 Phoenix 配置**：
 ```bash
 PHOENIX_LDAP_HOST="ad.corp.example.com"
 PHOENIX_LDAP_PORT=389
@@ -320,16 +350,18 @@ PHOENIX_LDAP_ATTR_MEMBER_OF="memberOf"
 
 ---
 
+<a id="2-openldap"></a>
+
 ### 2. OpenLDAP
 
-**What**: Open-source LDAP server (common in Linux environments)
+**定义**：开源 LDAP 服务器，常见于 Linux 环境。
 
-**Unique Features**:
-- `uid` for username
-- POSIX groups (requires separate group search)
-- More RFC-compliant than AD
+**独有特性**：
+- 使用 `uid` 作为用户名
+- POSIX 组，需要独立组搜索
+- 比 AD 更符合 RFC
 
-**Phoenix Config for OpenLDAP**:
+**OpenLDAP 的 Phoenix 配置**：
 ```bash
 PHOENIX_LDAP_HOST="ldap.example.com"
 PHOENIX_LDAP_PORT=389
@@ -341,22 +373,28 @@ PHOENIX_LDAP_GROUP_SEARCH_FILTER="(memberUid=%s)"
 
 ---
 
+<a id="3-389-directory-server"></a>
+
 ### 3. 389 Directory Server
 
-**What**: Red Hat's LDAP server (OpenLDAP successor)
+**定义**：Red Hat 的 LDAP 服务器，OpenLDAP 的后继产品。
 
-**Unique Features**:
-- Similar to OpenLDAP
-- Better performance and replication
-- Multi-master support
+**独有特性**：
+- 类似 OpenLDAP
+- 性能和复制更佳
+- 支持多主节点
 
 ---
 
-## Security Considerations
+<a id="security-considerations"></a>
 
-### TLS/SSL (Encryption)
+## 安全考虑
 
-**Two modes** (like HTTPS vs HTTP):
+<a id="tlsssl-encryption"></a>
+
+### TLS/SSL（加密）
+
+**两种模式**，类似 HTTPS 与 HTTP：
 
 ```mermaid
 sequenceDiagram
@@ -379,16 +417,16 @@ sequenceDiagram
     Phoenix->>LDAP: 2. Bind + search (encrypted)
 ```
 
-**STARTTLS (port 389)**:
-- Connect in plaintext, then upgrade to TLS
-- **Phoenix default** (matches HTTP→HTTPS upgrade pattern)
+**STARTTLS（端口 389）**：
+- 先建立明文连接，再升级至 TLS
+- **Phoenix 默认方式**，类似 HTTP→HTTPS 升级模式
 
-**LDAPS (port 636)**:
-- TLS from connection start (like HTTPS)
+**LDAPS（端口 636）**：
+- 从连接开始即使用 TLS，类似 HTTPS
 
-**OIDC Equivalent**: Always HTTPS (TLS from start).
+**OIDC 对应概念**：始终使用 HTTPS，从开始即启用 TLS。
 
-**Phoenix Config**:
+**Phoenix 配置**：
 ```bash
 # Default: STARTTLS on port 389
 PHOENIX_LDAP_TLS_MODE="starttls"
@@ -400,11 +438,13 @@ PHOENIX_LDAP_PORT=636
 
 ---
 
-### LDAP Injection (Like SQL Injection)
+<a id="ldap-injection-like-sql-injection"></a>
 
-**Attack**: Inject special characters into username to manipulate search filters.
+### LDAP 注入（类似 SQL 注入）
 
-Example:
+**攻击**：将特殊字符注入用户名，操纵搜索过滤器。
+
+示例：
 ```python
 # Vulnerable code (DON'T DO THIS)
 username = request.username  # "admin)(uid=*"
@@ -412,7 +452,7 @@ filter_str = f"(uid={username})"
 # Result: (uid=admin)(uid=*)  ← Matches all users!
 ```
 
-**Phoenix Mitigation**:
+**Phoenix 防护**：
 ```python
 from ldap3.utils.conv import escape_filter_chars
 
@@ -420,15 +460,19 @@ username = escape_filter_chars(request.username)  # Escapes special chars
 filter_str = f"(uid={username})"
 ```
 
-**OIDC Equivalent**: Not applicable - OIDC uses HTTP/JSON, not custom query language.
+**OIDC 对应概念**：不适用，OIDC 使用 HTTP/JSON，不使用自定义查询语言。
 
 ---
 
-## Phoenix LDAP Implementation Highlights
+<a id="phoenix-ldap-implementation-highlights"></a>
 
-### DN-Based Identification (Stable Primary Key)
+## Phoenix LDAP 实现要点
 
-Phoenix stores **DN** (not email) as primary identifier:
+<a id="dn-based-identification-stable-primary-key"></a>
+
+### 基于 DN 的识别（稳定主键）
+
+Phoenix 使用 **DN** 而非邮箱作为主要标识符：
 
 ```mermaid
 graph LR
@@ -449,18 +493,20 @@ graph LR
     end
 ```
 
-**Why DN?**
-- ✅ Stable across email changes
-- ✅ Unique per LDAP directory
-- ✅ Matches Grafana's approach
+**为什么使用 DN？**
+- ✅ 邮箱变化时保持稳定
+- ✅ 每个 LDAP 目录内唯一
+- ✅ 与 Grafana 方案一致
 
-**OIDC Equivalent**: Store `sub` claim (stable), sync email on each login.
+**OIDC 对应概念**：存储稳定的 `sub` 声明，每次登录同步邮箱。
 
 ---
 
-### RFC 4514 Canonicalization (Prevent Duplicates)
+<a id="rfc-4514-canonicalization-prevent-duplicates"></a>
 
-DNs are **case-insensitive** and allow whitespace variations:
+### RFC 4514 规范化（防止重复）
+
+DN **不区分大小写**，且允许不同空白写法：
 
 ```
 Same user, different representations:
@@ -469,7 +515,7 @@ Same user, different representations:
 - "uid=alice,ou=users,dc=example,dc=com"
 ```
 
-Phoenix **canonicalizes** before storing:
+Phoenix 在存储前进行**规范化**：
 ```python
 from phoenix.server.ldap import canonicalize_dn
 
@@ -478,13 +524,15 @@ dn_canonical = canonicalize_dn(dn_raw)
 # Result: "uid=alice,ou=users,dc=example,dc=com"
 ```
 
-**OIDC Equivalent**: Not needed - `sub` is always normalized by IdP.
+**OIDC 对应概念**：无需此步骤，`sub` 始终由 IdP 规范化。
 
 ---
 
-### Email Fallback for Admin-Provisioned Users
+<a id="email-fallback-for-admin-provisioned-users"></a>
 
-Phoenix supports **pre-provisioning** users before first LDAP login:
+### 为管理员预配置用户提供邮箱回退
+
+Phoenix 支持在首次 LDAP 登录前**预配置**用户：
 
 ```python
 # Admin creates user at startup (DN unknown)
@@ -501,49 +549,57 @@ user = models.User(
 # 4. Future logins use DN
 ```
 
-**OIDC Equivalent**: Similar pattern - provision user by email, link on first login via `sub` claim.
+**OIDC 对应概念**：类似模式，按邮箱预配置用户，在首次登录时通过 `sub` 声明关联。
 
 ---
 
-## When to Choose LDAP vs OIDC
+<a id="when-to-choose-ldap-vs-oidc"></a>
 
-### Choose LDAP When:
+## LDAP 与 OIDC 的选择时机
 
-✅ **Enterprise internal apps**
-- Existing Active Directory infrastructure
-- All users in same organization
-- Corporate network (VPN required)
+<a id="choose-ldap-when"></a>
 
-✅ **Legacy integration requirements**
-- Must integrate with existing LDAP-based systems
-- No budget for IdP migration
+### 适合选择 LDAP 的情况：
 
-✅ **Fine-grained group management**
-- Complex organizational structure in directory
-- Groups managed by IT (not developers)
+✅ **企业内部应用**
+- 已有 Active Directory 基础设施
+- 所有用户属于同一组织
+- 企业网络，需要 VPN
 
-### Choose OIDC When:
+✅ **传统系统集成要求**
+- 必须与现有 LDAP 系统集成
+- 没有迁移 IdP 的预算
 
-✅ **Modern architecture**
-- Cloud-native apps
-- Microservices
-- External users (customers, partners)
+✅ **细粒度组管理**
+- 目录中存在复杂组织结构
+- 组由 IT 管理，而非开发者
 
-✅ **SaaS convenience**
-- Managed IdP (Okta, Auth0, Keycloak)
-- Multi-tenant apps
-- "Sign in with Google/GitHub" patterns
+<a id="choose-oidc-when"></a>
 
-✅ **Stateless authentication**
-- JWT tokens (no session server)
-- API-first design
+### 适合选择 OIDC 的情况：
 
-### Use Both (Phoenix's Approach):
+✅ **现代架构**
+- 云原生应用
+- 微服务
+- 外部用户，例如客户、合作伙伴
 
-Phoenix supports **both LDAP and OIDC simultaneously**:
-- Internal users → LDAP (corporate directory)
-- External users → OIDC (Google, GitHub, etc.)
-- Admins → Local (password)
+✅ **SaaS 便利性**
+- 托管 IdP，例如 Okta、Auth0、Keycloak
+- 多租户应用
+- “通过 Google/GitHub 登录”模式
+
+✅ **无状态身份验证**
+- JWT token，无需会话服务器
+- API 优先设计
+
+<a id="use-both-phoenixs-approach"></a>
+
+### 同时使用两者（Phoenix 的方案）：
+
+Phoenix 支持**同时使用 LDAP 和 OIDC**：
+- 内部用户 → LDAP，企业目录
+- 外部用户 → OIDC，例如 Google、GitHub
+- 管理员 → Local，密码
 
 ```bash
 # Enable all three
@@ -555,23 +611,25 @@ PHOENIX_LDAP_HOST="ldap.corp.com"   # LDAP
 
 ---
 
-## Further Reading
+<a id="further-reading"></a>
 
-**RFCs (Standards)**:
-- [RFC 4511](https://www.rfc-editor.org/rfc/rfc4511.html) - LDAP Protocol
-- [RFC 4514](https://www.rfc-editor.org/rfc/rfc4514.html) - Distinguished Names (DN)
-- [RFC 4515](https://www.rfc-editor.org/rfc/rfc4515.html) - Search Filters
-- [RFC 4516](https://www.rfc-editor.org/rfc/rfc4516.html) - LDAP URLs
+## 延伸阅读
 
-**OIDC for Comparison**:
+**RFC（标准）**：
+- [RFC 4511](https://www.rfc-editor.org/rfc/rfc4511.html) — LDAP 协议
+- [RFC 4514](https://www.rfc-editor.org/rfc/rfc4514.html) — 专有名称（DN）
+- [RFC 4515](https://www.rfc-editor.org/rfc/rfc4515.html) — 搜索过滤器
+- [RFC 4516](https://www.rfc-editor.org/rfc/rfc4516.html) — LDAP URL
+
+**用于对比的 OIDC 资料**：
 - [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html)
 - [OAuth 2.0 RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html)
 
-**Phoenix LDAP Docs**:
-- [Main Specification](../ldap-authentication.md)
-- [Configuration Reference](./configuration.md)
-- [Security Deep-Dive](./security.md)
-- [Grafana Comparison](./grafana-comparison.md)
+**Phoenix LDAP 文档**：
+- [主规范](../ldap-authentication.md)
+- [配置参考](./configuration.md)
+- [安全详解](./security.md)
+- [Grafana 对比](./grafana-comparison.md)
 
 ---
 

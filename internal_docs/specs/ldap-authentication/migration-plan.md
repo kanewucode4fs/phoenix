@@ -1,40 +1,46 @@
-# Future Migration: Stopgap → Dedicated LDAP Schema
+<a id="future-migration-stopgap--dedicated-ldap-schema"></a>
 
-**Context**: Phoenix initially ships LDAP using a stopgap approach that reuses OAuth2 columns. This document describes the future migration to a dedicated LDAP schema when/if we decide it's worth the effort.
+# 未来迁移：临时方案 → 独立 LDAP 数据库结构
+
+**背景**：Phoenix 最初复用 OAuth2 列，以临时方案发布 LDAP。本文描述未来在认为值得投入时，迁移至独立 LDAP 数据库结构的方案。
 
 ---
 
-## Current Implementation (Stopgap)
+<a id="current-implementation-stopgap"></a>
 
-Phoenix stores LDAP users using existing OAuth2 columns:
+## 当前实现（临时方案）
 
-| Field | Value | Purpose |
+Phoenix 使用现有 OAuth2 列保存 LDAP 用户：
+
+| 字段 | 值 | 用途 |
 |-------|-------|---------|
-| `auth_method` | `'OAUTH2'` | Satisfies existing CHECK constraint |
-| `oauth2_client_id` | `'\ue000LDAP(stopgap)'` | Unicode marker identifying LDAP users |
-| `oauth2_user_id` | `<unique_id>` or `NULL` | Immutable LDAP ID (if configured) or NULL (email-based) |
-| `email` | `user@example.com` | Email (unique constraint, primary identifier in simple mode) |
+| `auth_method` | `'OAUTH2'` | 满足现有 CHECK 约束 |
+| `oauth2_client_id` | `'\ue000LDAP(stopgap)'` | 识别 LDAP 用户的 Unicode 标记 |
+| `oauth2_user_id` | `<unique_id>` 或 `NULL` | 不可变 LDAP ID（若已配置），或 NULL（基于邮箱） |
+| `email` | `user@example.com` | 邮箱，具有唯一约束，也是简单模式的主要标识符 |
 
-**Identification Strategy** (see [User Identification Strategy](./user-identification-strategy.md)):
+**识别策略**（参见[用户识别策略](./user-identification-strategy.md)）：
 
-| Mode | `oauth2_user_id` | Lookup |
+| 模式 | `oauth2_user_id` | 查找方式 |
 |------|------------------|--------|
-| Simple (default) | `NULL` | By email column |
-| Enterprise | objectGUID/entryUUID | By oauth2_user_id, fallback to email |
+| 简单模式（默认） | `NULL` | 按邮箱列 |
+| 企业模式 | objectGUID/entryUUID | 按 oauth2_user_id，回退至邮箱 |
 
 ---
 
-## Future Migration (Dedicated Schema)
+<a id="future-migration-dedicated-schema"></a>
 
-**When to Migrate**: You've decided a clean schema is worth the migration cost.
+## 未来迁移（独立结构）
 
-**Why Migrate**:
-- ✅ Semantic clarity: `auth_method='LDAP'` instead of `'OAUTH2'`
-- ✅ Type safety: Dedicated `LDAPUser` class with polymorphism
-- ✅ No OAuth2 column pollution
-- ⚠️ Requires database migration and downtime
+**迁移时机**：已决定清晰的数据库结构值得迁移成本。
 
-**Schema Changes**:
+**迁移原因**：
+- ✅ 语义清晰：使用 `auth_method='LDAP'` 代替 `'OAUTH2'`
+- ✅ 类型安全：具有多态支持的独立 `LDAPUser` 类
+- ✅ 不再混用 OAuth2 列
+- ⚠️ 需要数据库迁移和停机
+
+**结构变更**：
 
 ```sql
 -- Step 1: Allow 'LDAP' as auth_method
@@ -54,7 +60,7 @@ ALTER TABLE users ADD CONSTRAINT users_ldap_check CHECK (
 );
 ```
 
-**Code Changes**:
+**代码变更**：
 
 ```python
 # Before (stopgap)
@@ -72,7 +78,9 @@ user = await session.scalar(
 
 ---
 
-## Migration Script
+<a id="migration-script"></a>
+
+## 迁移脚本
 
 ```python
 """Migrate LDAP users to auth_method='LDAP'.
@@ -131,9 +139,13 @@ def downgrade():
 
 ---
 
-## Validation
+<a id="validation"></a>
 
-### Pre-Migration
+## 验证
+
+<a id="pre-migration"></a>
+
+### 迁移前
 
 ```sql
 -- Count LDAP users
@@ -148,7 +160,9 @@ FROM users
 WHERE oauth2_client_id = E'\uE000LDAP(stopgap)';
 ```
 
-### Post-Migration
+<a id="post-migration"></a>
+
+### 迁移后
 
 ```sql
 -- Verify all LDAP users migrated
@@ -160,30 +174,34 @@ SELECT COUNT(*) FROM users WHERE oauth2_client_id = E'\uE000LDAP(stopgap)';
 
 ---
 
-## When to Migrate
+<a id="when-to-migrate"></a>
 
-**Stay on stopgap if**:
-- ✅ Current implementation working well
-- ✅ Don't need `auth_method='LDAP'` for queries/reporting
-- ✅ Not worth migration coordination effort
+## 迁移时机
 
-**Migrate when**:
-- ✅ Want semantic clarity (`auth_method='LDAP'`)
-- ✅ Want type-safe `LDAPUser` class with polymorphism
-- ✅ Ready to coordinate migration across deployments
+**以下情况保留临时方案**：
+- ✅ 当前实现运行良好
+- ✅ 查询和报表不需要 `auth_method='LDAP'`
+- ✅ 不值得投入迁移协调成本
 
-**Note**: The stopgap approach is fully functional. Migration is optional cleanup, not a requirement.
+**以下情况进行迁移**：
+- ✅ 希望语义清晰（`auth_method='LDAP'`）
+- ✅ 希望使用支持多态的类型安全 `LDAPUser` 类
+- ✅ 已准备好协调各部署的迁移
+
+**说明**：临时方案功能完整。迁移属于可选清理，并非必需。
 
 ---
 
-## Summary
+<a id="summary"></a>
 
-| Aspect | Stopgap (Current) | Dedicated (Future) |
+## 汇总
+
+| 方面 | 临时方案（当前） | 独立结构（未来） |
 |--------|-------------------|-------------------|
 | `auth_method` | `'OAUTH2'` | `'LDAP'` |
-| Detection | `oauth2_client_id == marker` | `auth_method == 'LDAP'` |
-| Identifier | email or unique_id | email or unique_id (unchanged) |
-| Polymorphism | No | Yes (`LDAPUser` class) |
-| Migration | None | ~1 day effort |
+| 检测 | `oauth2_client_id == marker` | `auth_method == 'LDAP'` |
+| 标识符 | 邮箱或 unique_id | 邮箱或 unique_id，不变 |
+| 多态 | 不支持 | 支持，使用 `LDAPUser` 类 |
+| 迁移 | 无 | 约一天工作量 |
 
-**Key Point**: Identification strategy (email/unique_id) is unchanged. Migration only affects schema semantics.
+**要点**：识别策略（邮箱/unique_id）保持不变。迁移仅影响数据库结构的语义。

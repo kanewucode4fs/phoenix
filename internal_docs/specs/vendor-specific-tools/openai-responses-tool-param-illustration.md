@@ -1,12 +1,13 @@
-# OpenAI Responses API: `ToolParam` variants
+<a id="openai-responses-api-toolparam-variants"></a>
+# OpenAI Responses API：`ToolParam` 变体
 
-Practical JSON examples for each shape you can pass in the Responses API `tools` array. They follow the TypedDict names in the Python SDK (`openai/types/responses/`), which mirror the HTTP schema. Use a section's example as a starting point and delete fields you do not need.
+本文为 Responses API `tools` 数组中各类可传入结构提供实用 JSON 示例。它们遵循 Python SDK（`openai/types/responses/`）中的 TypedDict 名称，与 HTTP schema 对应。可从各节示例开始，删除不需要的字段。
 
-**Reading order:** Each numbered section is one **kind of tool** the model may call. **`tool_choice`** (documented [below](#tool-choice-configuration-tool_choice)) is a separate request field: it controls *whether* the model must use tools or *which* tool family to prefer—not the tool definitions themselves.
+**阅读顺序：** 每个编号章节描述模型可调用的一**类工具**。**`tool_choice`** 是独立请求字段，见[下文](#tool-choice-configuration-tool_choice)，控制模型**是否**必须使用工具或优先选择**哪类**工具，而非工具定义本身。
 
-**Full union** (same order as the SDK):
+**完整联合类型**，顺序与 SDK 相同：
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L311-L327)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L311-L327)
 
 ```python
 ToolParam: TypeAlias = Union[
@@ -32,11 +33,11 @@ ToolParam: TypeAlias = Union[
 
 ## 1. `FunctionToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/function_tool_param.py#L11)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/function_tool_param.py#L11)
 
-Defines a function the model can call. Core fields: `type`, `name`, `parameters`, `strict`, `description`. You can set `defer_loading` so the tool is loaded later via tool search (see **`ToolSearchToolParam`** below).
+定义模型可调用的函数。核心字段为 `type`、`name`、`parameters`、`strict`、`description`。可设置 `defer_loading`，让工具稍后通过工具搜索加载，见下方 **`ToolSearchToolParam`**。
 
-**Insight:** With `strict: true`, OpenAI applies **tighter JSON Schema checks** on function arguments so you get more predictable, parse-friendly `tool_calls`. Design `parameters` so required fields and enums are explicit. Keep each tool's `name` **stable across turns** so follow-up messages can match earlier calls.
+**要点：** `strict: true` 使 OpenAI 对函数参数应用**更严格的 JSON Schema 检查**，得到更可预测、易解析的 `tool_calls`。设计 `parameters` 时应明确必填字段和枚举。各工具的 `name` 应**跨轮次稳定**，让后续消息匹配先前调用。
 
 ```json
 {
@@ -59,11 +60,11 @@ Defines a function the model can call. Core fields: `type`, `name`, `parameters`
 
 ## 2. `FileSearchToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/file_search_tool_param.py#L49)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/file_search_tool_param.py#L49)
 
-Searches uploaded files (vector stores). Requires `type` and `vector_store_ids`.
+搜索已上传文件，即向量存储。要求 `type` 和 `vector_store_ids`。
 
-**Insight:** `hybrid_search` weights trade off dense (embedding) vs lexical matches; raising `score_threshold` reduces noise but can return fewer chunks. Use metadata filters when multiple corpora share one vector store so the model does not pull the wrong tenant’s files.
+**要点：** `hybrid_search` 权重在稠密嵌入和词汇匹配之间取舍；提高 `score_threshold` 可减少噪声，但返回分块可能更少。多个语料库共用向量存储时，应使用元数据过滤器，避免模型取到其他租户文件。
 
 ```json
 {
@@ -81,7 +82,7 @@ Searches uploaded files (vector stores). Requires `type` and `vector_store_ids`.
 }
 ```
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -92,17 +93,18 @@ Minimal:
 
 ---
 
-## 3. Computer use tools
+<a id="3-computer-use-tools"></a>
+## 3. 计算机操作工具
 
-The SDK exposes **two** computer-related tools with different `type` discriminators. Pick the one that matches your integration.
+SDK 提供**两种**计算机相关工具，`type` 判别字段不同，应选择匹配集成的类型。
 
 ### `ComputerToolParam` (`type`: `"computer"`)
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/computer_tool_param.py#L10)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/computer_tool_param.py#L10)
 
-Minimal computer tool marker (no display or environment fields on the type itself).
+最小计算机工具标记，类型自身不包含显示或环境字段。
 
-**Insight:** Use this when your integration only needs the **generic computer-use capability** flag; pair with whatever environment setup your product handles outside this JSON (or prefer `computer_use_preview` when you want display size explicit in the tool definition).
+**要点：** 仅需**通用计算机操作能力**标志时使用，与产品在该 JSON 之外管理的环境设置配套。希望工具定义显式包含显示尺寸时，优先用 `computer_use_preview`。
 
 ```json
 {
@@ -112,11 +114,11 @@ Minimal computer tool marker (no display or environment fields on the type itsel
 
 ### `ComputerUsePreviewToolParam` (`type`: `"computer_use_preview"`)
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/computer_use_preview_tool_param.py#L10)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/computer_use_preview_tool_param.py#L10)
 
-Preview flow with explicit display and environment.
+预览流程，显式指定显示和环境。
 
-**Insight:** `"computer"` is a minimal capability flag in the SDK; `"computer_use_preview"` is the shape that pins **display geometry and OS/browser environment**, which matters for screenshot coordinate systems and action safety.
+**要点：** `"computer"` 是 SDK 中的最小能力标志；`"computer_use_preview"` 则固定**显示几何参数及操作系统/浏览器环境**，影响截图坐标系和操作安全。
 
 ```json
 {
@@ -127,17 +129,17 @@ Preview flow with explicit display and environment.
 }
 ```
 
-`environment`: one of `"windows"`, `"mac"`, `"linux"`, `"ubuntu"`, `"browser"`.
+`environment` 为 `"windows"`、`"mac"`、`"linux"`、`"ubuntu"`、`"browser"` 之一。
 
 ---
 
 ## 4. `WebSearchToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/web_search_tool_param.py#L51)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/web_search_tool_param.py#L51)
 
-Web search. Type is `web_search` or `web_search_2025_08_26`.
+网页搜索，类型为 `web_search` 或 `web_search_2025_08_26`。
 
-**Insight:** The versioned `type` string (`web_search` vs `web_search_2025_08_26`) tracks **API behavior over time**—stick to the variant you validated with your model. `filters.allowed_domains` limits which domains may appear in results (cost, latency, relevance); add `user_location` when answers should be locale- or region-aware.
+**要点：** 带版本的 `type` 字符串，即 `web_search` 与 `web_search_2025_08_26`，跟踪 **API 随时间变化的行为**；应坚持使用与模型共同验证过的变体。`filters.allowed_domains` 限制结果域名，影响费用、延迟和相关性；答案需要地区信息时，添加 `user_location`。
 
 ```json
 {
@@ -156,7 +158,7 @@ Web search. Type is `web_search` or `web_search_2025_08_26`.
 }
 ```
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -168,9 +170,9 @@ Minimal:
 
 ## 5. `Mcp`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L114)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L114)
 
-Model Context Protocol: connect to a remote MCP server. Requires `type: "mcp"`, `server_label`, and one of `server_url` or `connector_id`.
+模型上下文协议：连接远程 MCP 服务端。要求 `type: "mcp"`、`server_label`，以及 `server_url` 或 `connector_id` 之一。
 
 ```json
 {
@@ -187,7 +189,7 @@ Model Context Protocol: connect to a remote MCP server. Requires `type: "mcp"`, 
 }
 ```
 
-With service connector (one of the fixed `connector_id` values):
+使用服务连接器，选择固定 `connector_id` 值之一：
 
 ```json
 {
@@ -198,21 +200,21 @@ With service connector (one of the fixed `connector_id` values):
 }
 ```
 
-`connector_id` examples: `connector_dropbox`, `connector_gmail`, `connector_googlecalendar`, `connector_googledrive`, `connector_microsoftteams`, `connector_outlookcalendar`, `connector_outlookemail`, `connector_sharepoint`.
+`connector_id` 示例：`connector_dropbox`、`connector_gmail`、`connector_googlecalendar`、`connector_googledrive`、`connector_microsoftteams`、`connector_outlookcalendar`、`connector_outlookemail`、`connector_sharepoint`。
 
-`allowed_tools`: array of tool names, or a filter object `{ "read_only": true }` / `{ "tool_names": ["a", "b"] }`.
+`allowed_tools`：工具名称数组，或过滤对象 `{ "read_only": true }` / `{ "tool_names": ["a", "b"] }`。
 
-`require_approval`: `"always"`, `"never"`, or a filter object.
+`require_approval`：`"always"`、`"never"` 或过滤对象。
 
-**Insight:** Your app owns **OAuth tokens** and refresh for `authorization`; the API does not complete the auth UI for you. `require_approval` plus `allowed_tools` filters are the main levers for **least privilege** when MCP exposes many server tools.
+**要点：** 应用负责 `authorization` 的 **OAuth token** 及刷新，API 不会替你完成认证界面。MCP 暴露大量服务端工具时，`require_approval` 与 `allowed_tools` 是实现**最小权限**的主要控制手段。
 
 ---
 
 ## 6. `CodeInterpreter`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L213)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L213)
 
-Runs Python code. Requires `type: "code_interpreter"` and `container` (container ID string or config object).
+运行 Python 代码。要求 `type: "code_interpreter"` 和 `container`，后者为容器 ID 字符串或配置对象。
 
 ```json
 {
@@ -221,7 +223,7 @@ Runs Python code. Requires `type: "code_interpreter"` and `container` (container
 }
 ```
 
-With container config (file IDs, memory, network policy):
+使用容器配置，包括文件 ID、内存和网络策略：
 
 ```json
 {
@@ -235,17 +237,17 @@ With container config (file IDs, memory, network policy):
 }
 ```
 
-`network_policy` can be `{ "type": "disabled" }` or `{ "type": "allowlist", "allowed_domains": ["https://api.example.com"] }`.
+`network_policy` 可为 `{ "type": "disabled" }` 或 `{ "type": "allowlist", "allowed_domains": ["https://api.example.com"] }`。
 
-**Insight:** Passing a **container id** string reuses state (files, installs) across turns; `type: "auto"` with `file_ids` is better for one-off runs with uploaded inputs. Treat `network_policy` as your egress boundary—`disabled` is the default-safe choice for untrusted prompts.
+**要点：** 传入**容器 ID** 字符串可跨轮次复用文件和安装状态；`type: "auto"` 与 `file_ids` 更适合带上传输入的一次性运行。应将 `network_policy` 作为出站边界；面对不可信提示词，`disabled` 是默认安全选择。
 
 ---
 
 ## 7. `ImageGeneration`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L241)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L241)
 
-Generates or edits images. Type is `image_generation`.
+生成或编辑图像，类型为 `image_generation`。
 
 ```json
 {
@@ -263,7 +265,7 @@ Generates or edits images. Type is `image_generation`.
 }
 ```
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -271,7 +273,7 @@ Minimal:
 }
 ```
 
-Edit with mask:
+使用蒙版编辑：
 
 ```json
 {
@@ -284,17 +286,17 @@ Edit with mask:
 }
 ```
 
-**Insight:** `partial_images` is for **streaming** partial previews; `input_fidelity` and some `model` values are documented as mutually constrained in the SDK—validate the combo for your image model. Edits with `input_image_mask` need a coherent mask + base image pairing or you get wasted generations.
+**要点：** `partial_images` 用于**流式**局部预览。SDK 说明 `input_fidelity` 与部分 `model` 值存在相互约束，应验证所用图像模型组合。`input_image_mask` 编辑需要蒙版与基础图像正确配对，否则会浪费生成。
 
 ---
 
 ## 8. `LocalShell`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L304)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L304)
 
-Executes shell commands in a local environment. Only `type` is required.
+在本地环境执行 shell 命令，仅要求 `type`。
 
-**Insight:** This implies **commands run in your trust boundary** (developer machine or your runner)—treat it like `eval` on user-influenced strings: sandbox, allowlists, and audit logs matter more than for hosted code interpreter.
+**要点：** 这意味着**命令在你的信任边界内执行**，例如开发机器或运行器。应像对用户影响的字符串执行 `eval` 一样对待，沙箱、白名单和审计日志比托管代码解释器更重要。
 
 ```json
 {
@@ -306,9 +308,9 @@ Executes shell commands in a local environment. Only `type` is required.
 
 ## 9. `FunctionShellToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/function_shell_tool_param.py#L17)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/function_shell_tool_param.py#L17)
 
-Shell tool (remote container or local). Type is `shell`. Optional `environment`.
+Shell 工具，可用于远程容器或本地。类型为 `shell`，`environment` 可选。
 
 ```json
 {
@@ -316,7 +318,7 @@ Shell tool (remote container or local). Type is `shell`. Optional `environment`.
 }
 ```
 
-With auto container:
+使用自动容器：
 
 ```json
 {
@@ -329,7 +331,7 @@ With auto container:
 }
 ```
 
-With local environment:
+使用本地环境：
 
 ```json
 {
@@ -340,7 +342,7 @@ With local environment:
 }
 ```
 
-With container reference:
+引用已有容器：
 
 ```json
 {
@@ -352,15 +354,15 @@ With container reference:
 }
 ```
 
-**Insight:** `container_auto` spins up an isolated environment per session pattern; `container_reference` attaches to an existing container (faster warm reuse); `local` runs on the host—use when latency matters and you accept the risk tradeoff.
+**要点：** `container_auto` 按会话模式启动隔离环境；`container_reference` 连接已有容器，便于更快热复用；`local` 在宿主机运行，适合重视延迟且接受风险取舍的情况。
 
 ---
 
 ## 10. `CustomToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/custom_tool_param.py#L12)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/custom_tool_param.py#L12)
 
-Custom tool with optional input format. Requires `type: "custom"` and `name`.
+支持可选输入格式的自定义工具，要求 `type: "custom"` 和 `name`。
 
 ```json
 {
@@ -371,7 +373,7 @@ Custom tool with optional input format. Requires `type: "custom"` and `name`.
 }
 ```
 
-With grammar format:
+使用语法格式：
 
 ```json
 {
@@ -386,17 +388,17 @@ With grammar format:
 }
 ```
 
-`format.syntax`: `"lark"` or `"regex"`.
+`format.syntax`：`"lark"` 或 `"regex"`。
 
-**Insight:** Custom tools are how you get **non-JSON or grammar-constrained** tool inputs (e.g. DSLs); the model still returns a structured payload matching `format`, so your executor should validate before side effects.
+**要点：** 自定义工具可接受**非 JSON 或语法约束**输入，例如 DSL。模型仍返回匹配 `format` 的结构化载荷，执行器应在执行副作用前验证。
 
 ---
 
 ## 11. `WebSearchPreviewToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/web_search_preview_tool_param.py#L36)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/web_search_preview_tool_param.py#L36)
 
-Preview web search. Type is `web_search_preview` or `web_search_preview_2025_03_11`. Optional `search_content_types` controls which result kinds to return (for example text and/or images). If you include `user_location`, the SDK marks `type: "approximate"` as **required** on that nested object.
+预览版网页搜索，类型为 `web_search_preview` 或 `web_search_preview_2025_03_11`。可选 `search_content_types` 控制结果种类，如文本和/或图像。包含 `user_location` 时，SDK 将该嵌套对象的 `type: "approximate"` 标为**必填**。
 
 ```json
 {
@@ -413,7 +415,7 @@ Preview web search. Type is `web_search_preview` or `web_search_preview_2025_03_
 }
 ```
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -421,17 +423,17 @@ Minimal:
 }
 ```
 
-**Insight:** Preview variants are useful when experimenting or when your integration targets a **specific dated tool behavior**; `search_content_types` avoids paying for image search when you only need text snippets.
+**要点：** 预览变体适合试验，或集成明确面向**某个日期版本的工具行为**。仅需文本片段时，`search_content_types` 可避免支付图像搜索费用。
 
 ---
 
 ## 12. `ApplyPatchToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/apply_patch_tool_param.py#L10)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/apply_patch_tool_param.py#L10)
 
-Allows the model to apply unified diffs (create/update/delete files). Only `type` is required.
+允许模型应用统一差异补丁，创建、更新或删除文件，仅要求 `type`。
 
-**Insight:** Treat patches like automated PRs: apply in a **clean git worktree** or copy, run tests, and reject on conflict—models can produce malformed or overlapping hunks. Ideal for coding agents with human or CI review, not blind production writes.
+**要点：** 应将补丁视为自动 PR：在**干净 Git worktree** 或副本中应用，运行测试，冲突时拒绝。模型可能生成畸形或重叠补丁块。适合有人工或 CI 评审的编码 Agent，不适合不经检查直接写入生产。
 
 ```json
 {
@@ -443,11 +445,11 @@ Allows the model to apply unified diffs (create/update/delete files). Only `type
 
 ## 13. `NamespaceToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/namespace_tool_param.py#L31)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/namespace_tool_param.py#L31)
 
-Groups `function` and `custom` tools under one namespace so tool calls can be scoped (for example `crm.lookup_contact`). Requires `type`, `name`, `description`, and `tools`.
+将 `function` 和 `custom` 工具分组到一个命名空间，使调用可限定范围，例如 `crm.lookup_contact`。要求 `type`、`name`、`description` 和 `tools`。
 
-**Insight:** Namespacing reduces **tool-name collisions** when merging tools from multiple products or teams; your router must accept qualified names end-to-end (logs, metrics, and your dispatcher).
+**要点：** 合并多产品或团队工具时，命名空间减少**工具名冲突**。路由器应端到端接受限定名称，包括日志、指标和分派器。
 
 ```json
 {
@@ -481,11 +483,11 @@ Groups `function` and `custom` tools under one namespace so tool calls can be sc
 
 ## 14. `ToolSearchToolParam`
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_search_tool_param.py#L11)
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_search_tool_param.py#L11)
 
-Configuration for **deferred** tools: the model can discover functions later via hosted or client-executed tool search. Pair with `defer_loading` on individual tools when applicable.
+用于**延迟加载**工具的配置：模型可稍后通过托管或客户端执行的工具搜索发现函数。适用时与单个工具的 `defer_loading` 配套。
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -493,7 +495,7 @@ Minimal:
 }
 ```
 
-Client-executed search with a small parameter schema:
+带小型参数 schema 的客户端执行搜索：
 
 ```json
 {
@@ -510,42 +512,44 @@ Client-executed search with a small parameter schema:
 }
 ```
 
-`execution`: `"server"` or `"client"`.
+`execution`：`"server"` 或 `"client"`。
 
-**Insight:** With `execution: "client"`, **your code** implements search over the deferred tool catalog and returns only the subset to load—plan for latency and auth on that path. `execution: "server"` shifts discovery to the hosted side (check model and account support).
-
----
-
-## Tool choice configuration (`tool_choice`)
-
-`tools` defines **what** the model may call; **`tool_choice`** (on the same Responses request) defines **how** it may choose among them—e.g. free choice, required tool use, force a specific function, force a built-in tool type, or restrict to an allowlist.
-
-**Official docs**
-
-- [Create a response](https://platform.openai.com/docs/api-reference/responses/create) — request body includes `tool_choice` next to `tools`.
-- [Function calling](https://platform.openai.com/docs/guides/function-calling) — patterns for tools and tool selection with the Responses API.
-- [Using tools](https://platform.openai.com/docs/guides/tools?api-mode=responses) — built-in tools plus how they interact with function tools.
-
-**Python SDK (permalinks)**
-
-- Request field **`tool_choice`** on create-params: [source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/response_create_params.py#L222-L227)
-- **`ToolChoice` union** (options string, `allowed_tools`, hosted `type`, `function`, MCP, custom, shell, apply_patch, …): [source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/response_create_params.py#L313-L322)
-- Shorthand literals **`"none"` / `"auto"` / `"required"`**: [source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_options.py#L7)
-- **Allowlist** object `type: "allowed_tools"` with `mode` + `tools`: [source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_allowed_param.py#L11-L38)
-- **Force a function** `type: "function"` + `name`: [source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_function_param.py#L10-L17)
-- **Force a built-in tool** by `type` (e.g. `file_search`, `web_search_preview`, `code_interpreter`, …): [source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_types_param.py#L10-L43)
-
-**Insight:** **`tool_choice`** controls *which tools the model is allowed or required to invoke*; **`strict`** on a function (or related types) controls *how tightly arguments are validated*. Those are separate knobs. The **response** may include **`parallel_tool_calls`**—if true, one assistant turn can contain multiple tool calls; your client should handle zero, one, or many per response.
+**要点：** `execution: "client"` 时，由**你的代码**搜索延迟工具目录，仅返回待加载子集，应规划此路径的延迟和认证。`execution: "server"` 将发现工作移到托管侧，需检查模型和账号支持。
 
 ---
 
-## Summary: `type` discriminator
+<a id="tool-choice-configuration-tool_choice"></a>
+## 工具选择配置（`tool_choice`）
 
-[source](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L311-L327)
+`tools` 定义模型可调用的**内容**；同一 Responses 请求中的 **`tool_choice`** 定义模型**如何**选择，例如自由选择、必须使用工具、强制特定函数、强制某种内置工具，或限定白名单。
 
-**Insight:** Built-in tools are identified by the `type` string in the table. User-defined **function** tools use `type: "function"`; **custom** tools use `type: "custom"`. Log the tool `type` and `name` in telemetry so you can correlate behavior, billing, and latency with the right tool definition.
+**官方文档**
 
-| `type` value | Python type (SDK) |
+- [创建响应](https://platform.openai.com/docs/api-reference/responses/create)：请求体在 `tools` 旁包含 `tool_choice`。
+- [函数调用](https://platform.openai.com/docs/guides/function-calling)：Responses API 的工具及选择模式。
+- [使用工具](https://platform.openai.com/docs/guides/tools?api-mode=responses)：内置工具及其与函数工具的交互。
+
+**Python SDK（永久链接）**
+
+- 创建参数中的请求字段 **`tool_choice`**： [源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/response_create_params.py#L222-L227)
+- **`ToolChoice` 联合类型**，包括选项字符串、`allowed_tools`、托管 `type`、`function`、MCP、custom、shell、apply_patch 等: [源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/response_create_params.py#L313-L322)
+- 简写字面量 **`"none"` / `"auto"` / `"required"`**: [源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_options.py#L7)
+- **白名单**对象 `type: "allowed_tools"`，包含 `mode` + `tools`: [源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_allowed_param.py#L11-L38)
+- **强制函数** `type: "function"` + `name`: [源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_function_param.py#L10-L17)
+- 通过 `type` **强制内置工具**，例如 `file_search`、`web_search_preview`、`code_interpreter` 等: [源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_choice_types_param.py#L10-L43)
+
+**要点：** **`tool_choice`** 控制**允许或要求模型调用哪些工具**；函数或相关类型的 **`strict`** 控制**参数验证严格程度**。两者相互独立。**响应**可能包含 **`parallel_tool_calls`**，为 true 时，单次助手轮次可包含多个工具调用；客户端应处理每个响应零次、一次或多次调用。
+
+---
+
+<a id="summary-type-discriminator"></a>
+## 汇总：`type` 判别字段
+
+[源码](https://github.com/openai/openai-python/blob/58184ad545ee2abd98e171ee09766f259d7f38cd/src/openai/types/responses/tool_param.py#L311-L327)
+
+**要点：** 内置工具通过表中 `type` 字符串标识。用户定义的**函数**工具用 `type: "function"`；**自定义**工具用 `type: "custom"`。遥测中应记录工具 `type` 和 `name`，将行为、计费和延迟关联到正确工具定义。
+
+| `type` 值 | Python 类型（SDK） |
 |--------------|---------------------|
 | `function` | `FunctionToolParam` |
 | `file_search` | `FileSearchToolParam` |
@@ -565,13 +569,14 @@ Client-executed search with a small parameter schema:
 
 ---
 
-## See also (vendor docs)
+<a id="see-also-vendor-docs"></a>
+## 另请参阅（提供商文档）
 
-Official behavior, pricing, and model availability change over time; confirm in the links below.
+官方行为、价格和模型可用性会随时间变化，请通过下列链接确认。
 
-- [Structured model outputs](https://developers.openai.com/docs/guides/structured-outputs) — JSON Schema / `strict` tooling and reliability.
-- [New tools and features in the Responses API](https://openai.com/index/new-tools-and-features-in-the-responses-api/) — product-level overview of built-in tools and MCP-related capabilities.
-- [File search](https://developers.openai.com/api/docs/guides/tools-file-search) — vector stores, hybrid search, metadata filters.
-- [Web search](https://developers.openai.com/api/docs/guides/tools-web-search) — citations, search modes, grounding behavior.
-- [Remote MCP](https://platform.openai.com/docs/guides/tools-remote-mcp) — connectors, OAuth, and server URL tools.
-- [Create a response](https://platform.openai.com/docs/api-reference/responses/create) — includes `tool_choice` next to `tools`.
+- [结构化模型输出](https://developers.openai.com/docs/guides/structured-outputs)：JSON Schema / `strict` 工具和可靠性。
+- [Responses API 新工具和功能](https://openai.com/index/new-tools-and-features-in-the-responses-api/)：内置工具和 MCP 能力的产品概览。
+- [文件搜索](https://developers.openai.com/api/docs/guides/tools-file-search)：向量存储、混合搜索和元数据过滤。
+- [网页搜索](https://developers.openai.com/api/docs/guides/tools-web-search)：引用、搜索模式和依据支持行为。
+- [远程 MCP](https://platform.openai.com/docs/guides/tools-remote-mcp)：连接器、OAuth 和服务端 URL 工具。
+- [创建响应](https://platform.openai.com/docs/api-reference/responses/create)：在 `tools` 旁包含 `tool_choice`。

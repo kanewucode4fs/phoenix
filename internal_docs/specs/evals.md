@@ -1,38 +1,45 @@
-# Evals
+<a id="evals"></a>
+# 评估
 
-Authors: @mikeldking
+作者：@mikeldking
 
-## Core Pillars
+<a id="core-pillars"></a>
+## 核心原则
 
-- **Speed** - Speed should be a distinct advantage of using phoenix evals over others. This may come at a trade-off of accuracy at times and should be weighed but in general speed of iteration should be heavily weighed and speed should always be able to be tuned.
-- **Transparency** - What's happening under the hood is not abstracted away, anything and everything that is done under the hood should be configurable via parameters, configuration, or other mechanisms. The library should be natively instrumented so that traces from the library can be leveraged for observability and improvement.
-- **Customizability** - Prompts, models, parameters - all should be easily swappable with custom code or setups
-- **Extensible** - There should be sufficient utility in the framework such that a user could create a custom metric and leverage the "structure" of the framework to build a good eval for custom tasks
-- **Benchmarked** - All evaluations within the framework that are built-in should be benchmarked and these benchmarks should be made publicly available.
-- **Vendor Agnostic** - The evals should not be married to any one provider / platform. It should espouse platform independence.
-- **Batteries Semi-Included** - There's enough utility in the package itself such that I can get up and running with evals without another library. The library should also foster contributions.
-- **Pluggable** - Evals should be easily usable with any platform (Phoenix etc.) or framework (pytest), or prompt management system.
-- **Phoenix.Evals Inside** - Phoenix Server evaluators should entirely rely on this library as its engine. The phoenix platform should dogfood the evals library as it's mechanism to run evals.
-- **Open-Source** - The entire evals library and its dependencies must stay open-source.
+- **速度**：与其他方案相比，速度应是 Phoenix evals 的明显优势。有时这可能需要牺牲准确性，应权衡取舍；但总体上应高度重视迭代速度，并且始终允许调整速度。
+- **透明性**：不应通过抽象隐藏内部行为；内部执行的一切都应能通过参数、配置或其他机制调整。库应原生提供插桩，使其追踪可用于观测和改进。
+- **可定制性**：提示词、模型和参数都应能轻松替换为自定义代码或配置。
+- **可扩展性**：框架应提供足够的实用功能，让用户创建自定义指标，并借助框架的结构为自定义任务构建良好的评估。
+- **基准验证**：框架内置的所有评估都应经过基准测试，并公开这些基准结果。
+- **提供商无关**：评估不应绑定任何单一提供商或平台，应保持平台独立性。
+- **适度开箱即用**：包本身应提供足够的功能，无需其他库即可开始评估，也应鼓励社区贡献。
+- **可插拔**：评估应能轻松用于任意平台（如 Phoenix）、框架（如 pytest）或提示词管理系统。
+- **内置 Phoenix.Evals**：Phoenix 服务端评估器应完全以此库为引擎；Phoenix 平台应亲自使用评估库来运行评估。
+- **开源**：整个评估库及其依赖必须保持开源。
 
-## What is an Eval
+<a id="what-is-an-eval"></a>
+## 什么是评估
 
-An Eval is simply a function by which you can "evaluate" the generation of an LLM or AI system. By this definition many different strategies can be used. Evals in general should result in human digestable output in the form of a "metric" and these metrics should be used to benchmark and improve the AI system under test.
+评估本质上是一个用于评价 LLM 或 AI 系统生成结果的函数。按此定义，可以采用许多不同策略。评估通常应以指标形式产出便于人理解的结果，并用这些指标衡量和改进被测 AI 系统。
 
-## Evaluation Methods
+<a id="evaluation-methods"></a>
+## 评估方法
 
-Phoenix Evals will support multiple evaluation methodologies to comprehensively assess AI system performance across different dimensions and use cases.
+Phoenix Evals 将支持多种评估方法，全面衡量 AI 系统在不同维度和使用场景下的表现。
 
-### LLM Evaluations
+<a id="llm-evaluations"></a>
+### LLM 评估
 
-These evaluations use large language models to assess the quality of AI-generated content, leveraging the reasoning capabilities of advanced models to provide nuanced evaluation. These should be leveraged in conjunction with human judgement and be tuned for human alignment.
+这类评估使用大语言模型评价 AI 生成内容的质量，借助先进模型的推理能力进行细致判断。应结合人工判断使用，并进行调优以与人类判断保持一致。
 
-### Heuristic Evaluations (Code Evaluations)
+<a id="heuristic-evaluations-code-evaluations"></a>
+### 启发式评估（代码评估）
 
-Rule-based and algorithmic evaluations that provide fast, deterministic assessments.
+基于规则和算法的评估，可提供快速、确定性的判断。
 
-Examples: `Levenshtein Distance`, `Exact Match`
+例如：`Levenshtein Distance`、`Exact Match`。
 
-### Pairwise Evaluations
+<a id="pairwise-evaluations"></a>
+### 成对评估
 
-This evaluation method involves comparing two responses side-by-side to determine which one better meets a specific criteria, rather than scoring responses individually. For example, reinforcement learning from human feedback (RLHF) employs pairwise evaluation in LLM alignment where human trainers are presented with pairs of LLM responses for the same input and select which one better aligns with certain criteria (e.g., helpfulness, informativeness, or safety). This approach is often more intuitive for humans than assigning absolute scores and can be implemented through human annotation, LLM-as-a-judge, or automated metrics.
+这种方法并排比较两个回复，判断哪个更符合特定标准，而不是分别打分。例如，基于人类反馈的强化学习（RLHF）在 LLM 对齐中采用成对评估：人工训练者查看同一输入对应的两个 LLM 回复，选择更符合有用性、信息量或安全性等标准的回复。与给出绝对分数相比，这种方式通常对人更直观，可通过人工标注、LLM 裁判或自动化指标实现。

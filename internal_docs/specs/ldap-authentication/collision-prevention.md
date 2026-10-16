@@ -1,86 +1,102 @@
-# Collision Prevention Analysis
+<a id="collision-prevention-analysis"></a>
 
-## Why `\ue000LDAP(stopgap)` Cannot Collide with OAuth2 Client IDs
+# 冲突预防分析
 
-**Claim**: Using Unicode Private Use Area (PUA) character U+E000 + "LDAP" prefix guarantees no collision with legitimate OAuth2 client IDs.
+<a id="why-ue000ldapstopgap-cannot-collide-with-oauth2-client-ids"></a>
 
-**Proof by Multiple Independent Guarantees**:
+## 为什么 `\ue000LDAP(stopgap)` 不会与 OAuth2 客户端 ID 冲突
 
----
+**主张**：使用 Unicode 私用区（PUA）字符 U+E000 加上“LDAP”前缀，可保证不与合法 OAuth2 客户端 ID 冲突。
 
-### Guarantee 1: Unicode Standard
-
-Unicode Consortium designates U+E000-U+F8FF as "Private Use Area":
-- **Purpose**: Reserved for application-specific characters
-- **Guarantee**: These codepoints will **never** be assigned by Unicode Standard
-- **Duration**: Permanent guarantee (30+ year track record)
-- **Source**: Unicode Standard, Chapter 23 "Special Areas and Format Characters"
-
-**Implication**: U+E000 will never appear in any standard character set or encoding.
+**通过多重独立保证证明**：
 
 ---
 
-### Guarantee 2: OAuth2 RFC 6749 Specification
+<a id="guarantee-1-unicode-standard"></a>
 
-OAuth2 RFC 6749 Section 2.2 defines `client_id`:
+### 保证 1：Unicode 标准
+
+Unicode 联盟将 U+E000-U+F8FF 指定为“私用区”：
+- **用途**：为应用专用字符保留
+- **保证**：Unicode 标准**永远不会**分配这些码点
+- **期限**：永久保证，已有 30 多年记录
+- **来源**：Unicode 标准第 23 章“特殊区域和格式字符”
+
+**含义**：U+E000 永远不会出现在任何标准字符集或编码中。
+
+---
+
+<a id="guarantee-2-oauth2-rfc-6749-specification"></a>
+
+### 保证 2：OAuth2 RFC 6749 规范
+
+OAuth2 RFC 6749 第 2.2 节定义 `client_id`：
 
 ```
 client_id = *VSCHAR
 VSCHAR    = %x20-7E  ; visible (printing) characters
 ```
 
-**Translation**: `client_id` can only contain ASCII characters 0x20-0x7E (space through tilde).
+**解释**：`client_id` 只能包含 ASCII 字符 0x20-0x7E，即从空格到波浪号。
 
-**Range**:
-- Min: 0x20 (space)
-- Max: 0x7E (tilde ~)
-- U+E000: 0xE000 (57344 in decimal)
+**范围**：
+- 最小值：0x20（空格）
+- 最大值：0x7E（波浪号 ~）
+- U+E000：0xE000（十进制 57344）
 
-**Mathematical Proof**: 0xE000 > 0x7E, therefore U+E000 cannot appear in any RFC-compliant OAuth2 client_id.
+**数学证明**：0xE000 > 0x7E，因此 U+E000 不可能出现在任何符合 RFC 的 OAuth2 client_id 中。
 
-**Implication**: By specification, OAuth2 client IDs cannot contain Unicode characters outside ASCII range.
-
----
-
-## Collision Probability Calculation
-
-**Formal Analysis**:
-
-Given:
-- OAuth2 client_id space: ASCII 0x20-0x7E (95 characters)
-- LDAP marker: U+E000 (outside OAuth2 space)
-
-**Probability of collision**: P(collision) = 0 (zero)
-
-**Why**: The sets are disjoint. There is no overlap between valid OAuth2 client_ids and the LDAP marker.
+**含义**：根据规范，OAuth2 客户端 ID 不得包含 ASCII 范围之外的 Unicode 字符。
 
 ---
 
-## Conclusion
+<a id="collision-probability-calculation"></a>
 
-**Four independent guarantees** ensure collision-free operation:
-1. ✅ Unicode Standard (permanent PUA reservation)
-2. ✅ OAuth2 RFC 6749 (ASCII-only specification)
-3. ✅ Real-world evidence (no provider uses Unicode)
-4. ✅ Active validation (defense in depth)
+## 冲突概率计算
 
-**Risk Assessment**: Very Low (<5% from unforeseen edge cases, not collision risk)
+**形式化分析**：
 
-**Note**: This is a one-way door decision, but extensive validation reduces risk to near-zero.
+已知：
+- OAuth2 client_id 空间：ASCII 0x20-0x7E（95 个字符）
+- LDAP 标记：U+E000（位于 OAuth2 空间之外）
+
+**冲突概率**：P(collision) = 0（零）
+
+**原因**：两个集合互不相交，有效 OAuth2 client_id 与 LDAP 标记之间没有重叠。
 
 ---
 
-## Cross-Database Compatibility (SQLite and PostgreSQL)
+<a id="conclusion"></a>
 
-**Question**: Does the Unicode marker approach work on both SQLite and PostgreSQL?
+## 结论
 
-**Answer**: **Yes**, fully tested and proven.
+**四项独立保证**确保无冲突运行：
+1. ✅ Unicode 标准，永久保留 PUA
+2. ✅ OAuth2 RFC 6749，仅允许 ASCII 的规范
+3. ✅ 实际证据，没有提供方使用 Unicode
+4. ✅ 主动校验，纵深防御
 
-**Evidence from Phoenix Codebase**:
+**风险评估**：极低（不可预见边界情况造成的风险低于 5%，并非冲突风险）
 
-### 1. Existing Unicode Tests Pass on Both Databases
+**说明**：这是一项不可逆决策，但充分校验将风险降至接近零。
 
-Phoenix's test suite (`tests/unit/db/test_models.py`) already tests extensive Unicode scenarios on both SQLite and PostgreSQL:
+---
+
+<a id="cross-database-compatibility-sqlite-and-postgresql"></a>
+
+## 跨数据库兼容性（SQLite 和 PostgreSQL）
+
+**问题**：Unicode 标记方案是否同时适用于 SQLite 和 PostgreSQL？
+
+**回答**：**是的**，已经充分测试验证。
+
+**Phoenix 代码库中的证据**：
+
+<a id="1-existing-unicode-tests-pass-on-both-databases"></a>
+
+### 1. 现有 Unicode 测试在两种数据库上均通过
+
+Phoenix 测试套件（`tests/unit/db/test_models.py`）已在 SQLite 和 PostgreSQL 上测试大量 Unicode 场景：
 
 ```python
 # From Phoenix's existing test suite
@@ -93,39 +109,45 @@ test_data = [
 ]
 ```
 
-These tests pass on both databases, proving Unicode handling is identical.
+这些测试在两种数据库上均通过，证明 Unicode 处理一致。
 
-### 2. Database-Specific Implementation
+<a id="2-database-specific-implementation"></a>
 
-**PostgreSQL**:
-- Native UTF-8 encoding for `VARCHAR` columns
-- Query: `oauth2_client_id = E'\uE000LDAP'` works correctly
+### 2. 数据库特定实现
 
-**SQLite**:
-- Stores strings as UTF-8 by default in `TEXT` columns
-- Same query pattern works identically
+**PostgreSQL**：
+- `VARCHAR` 列原生支持 UTF-8 编码
+- 查询 `oauth2_client_id = E'\uE000LDAP'` 可正常工作
 
-### 3. Column Mapping
+**SQLite**：
+- `TEXT` 列默认以 UTF-8 存储字符串
+- 相同查询模式具有一致行为
+
+<a id="3-column-mapping"></a>
+
+### 3. 列映射
 
 ```python
 # src/phoenix/db/models.py
 oauth2_client_id: Mapped[Optional[str]]
 ```
 
-Maps to:
-- **PostgreSQL**: `VARCHAR` (UTF-8)
-- **SQLite**: `TEXT` (UTF-8)
+映射为：
+- **PostgreSQL**：`VARCHAR`（UTF-8）
+- **SQLite**：`TEXT`（UTF-8）
 
-Both support full Unicode range including Private Use Area (U+E000-U+F8FF).
+两者均支持完整 Unicode 范围，包括私用区 U+E000-U+F8FF。
 
-### 4. Proven in Production
+<a id="4-proven-in-production"></a>
 
-Phoenix already uses Unicode extensively in:
-- Project descriptions with international characters
-- User names with accents and non-Latin scripts
-- Case-insensitive search across Unicode text
+### 4. 已经生产验证
 
-All functionality works identically on SQLite and PostgreSQL.
+Phoenix 已在以下场景广泛使用 Unicode：
+- 包含国际字符的项目描述
+- 包含重音和非拉丁文字的用户名
+- 跨 Unicode 文本的不区分大小写搜索
 
-**Conclusion**: The Unicode marker approach (`\ue000LDAP(stopgap)`) is **database-agnostic** and works correctly on both SQLite and PostgreSQL with zero compatibility issues. No special handling or conditional logic required.
+所有功能在 SQLite 和 PostgreSQL 上行为一致。
+
+**结论**：Unicode 标记方案（`\ue000LDAP(stopgap)`）**不依赖数据库**，在 SQLite 和 PostgreSQL 上均可正常工作，没有兼容性问题，无需特殊处理或条件逻辑。
 

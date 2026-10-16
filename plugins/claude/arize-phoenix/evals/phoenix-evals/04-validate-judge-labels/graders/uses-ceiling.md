@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: validate_judge.py}
 weight: 0.5
 ---
-The user has 80 examples that two analysts labeled by hand, plus their LLM judge's predictions over the same 80, and wants to decide whether the judge is trustworthy.
+用户有 80 个由两位分析人员人工标注的示例，以及 LLM 裁判对同一批 80 个示例的预测，希望判断裁判是否可信。
 
-Grade exactly one claim. PASS if the claim below holds for the file, FAIL otherwise. Ignore everything else about the file.
+只评定下面这一条判断条件。文件满足条件则为 PASS，否则为 FAIL；忽略文件中的其他内容。
 
-Claim: The script treats the agreement between the two human analysts as the ceiling the judge is measured against — e.g. it computes how often the two analysts agree, or addresses what to do when they disagree — rather than assuming the human labels are a single perfect ground truth.
+判断条件：脚本将两位人工分析人员之间的一致性作为衡量裁判模型的上限，例如计算两人一致的频率，或说明两人意见不一致时如何处理，而非假定人工标签是单一且完美的标准答案。

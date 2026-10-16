@@ -1,49 +1,57 @@
-# Phoenix OTEL Documentation
+<a id="phoenix-otel-documentation"></a>
 
-This directory contains the Sphinx documentation for the `arize-phoenix-otel` package.
+# Phoenix OTEL 文档
 
-## Setup
+本目录包含 `arize-phoenix-otel` 包的 Sphinx 文档。
 
-To build the documentation locally:
+<a id="setup"></a>
 
-1. Install dependencies:
+## 配置
+
+在本地构建文档：
+
+1. 安装依赖：
    ```bash
    pip install -r requirements.txt
    pip install -e ..  # Install phoenix-otel package in development mode
    ```
 
-2. Build the documentation:
+2. 构建文档：
    ```bash
    make html
    ```
 
-3. View the documentation:
+3. 查看文档：
    ```bash
    open build/html/index.html
    ```
 
-## Structure
+<a id="structure"></a>
 
-- `source/conf.py` - Sphinx configuration
-- `source/index.md` - Main documentation page
-- `source/api/` - API reference files
-- `source/_static/` - Static assets (CSS, images, etc.)
-- `requirements.txt` - Python dependencies for building docs
+## 结构
+
+- `source/conf.py` - Sphinx 配置
+- `source/index.md` - 文档主页
+- `source/api/` - API 参考文件
+- `source/_static/` - 静态资源（CSS、图片等）
+- `requirements.txt` - 构建文档的 Python 依赖
 
 ## Read the Docs
 
-This documentation is automatically built and deployed to Read the Docs when:
-- Changes are pushed to the main branch
-- New tags are created
+以下情况会自动构建本文档并部署到 Read the Docs：
+- 变更推送到 main 分支
+- 创建新标签
 
-The Read the Docs configuration is in `.readthedocs.yaml` in the package root.
+Read the Docs 配置位于包根目录的 `.readthedocs.yaml`。
 
-## Updating Documentation
+<a id="updating-documentation"></a>
 
-To update the API documentation:
+## 更新文档
 
-1. If adding new modules, run `sphinx-apidoc` to generate new `.rst` files
-2. Update `source/api/otel.rst` to include new classes/functions
-3. Update `source/index.md` if needed
-4. Test locally with `make html`
-5. Commit and push changes 
+更新 API 文档：
+
+1. 若添加新模块，运行 `sphinx-apidoc` 生成新的 `.rst` 文件
+2. 更新 `source/api/otel.rst`，纳入新类/函数
+3. 根据需要更新 `source/index.md`
+4. 使用 `make html` 在本地测试
+5. 提交并推送变更

@@ -37,6 +37,6 @@
 - `make -C examples/langgraph_phoenix_demo test`：`test_demo.py` 共 4 项、通过 4、失败 0、跳过 0；Python 3.12.13、pytest 8.4.2，0.32 秒。场景包括 Phoenix 问答含“追踪／评测”、LangGraph 问答含“节点／状态”、未知问题明确无相关信息，以及真实框架埋点的单 Trace 连通性／单模型 Span／模型输入。
 - `uv --no-config tool run --managed-python --python 3.12 --from pip-audit==2.9.0 pip-audit --requirement examples/langgraph_phoenix_demo/requirements.txt --progress-spinner off`：1 次扫描通过，无已知漏洞。
 - UTF-8、尾空白、JSON 解析、89 个本地 Markdown 链接及常见 Key／私钥模式检查：10 个文件未发现问题；`git diff --check` 通过。这些静态检查不等同完整秘密检测或渗透测试。
-- [部署验证记录](../04-部署文档/源码Docker运行.md)：8 项构建／运行检查通过，包含 PostgreSQL 直接入库和容器重启后 8 个 Span 保留。
+- [部署验证记录](../04-部署文档/部署指南.md#source-docker-verification)：8 项构建／运行检查通过，包含 PostgreSQL 直接入库和容器重启后 8 个 Span 保留。原独立源码 Docker 文档现已整合至部署指南，审计范围保留当时的文件名。
 
 仍有 3 条 LangChain 依赖弃用警告；未执行全仓测试、浏览器 E2E、真实模型调用、全镜像漏洞扫描或独立人工审查。截图错误未通过修改产品代码修复，当前项目 GraphQL 查询已实际返回 `FirstAgent` 且无 errors。

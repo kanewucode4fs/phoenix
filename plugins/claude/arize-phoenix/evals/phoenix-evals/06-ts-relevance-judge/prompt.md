@@ -5,4 +5,4 @@ allowed_tools: [Skill, Read, Write]
 runs: 3
 tags: [phoenix-evals]
 ---
-I have a TypeScript RAG app built on the Vercel AI SDK with OpenAI. I want an evaluator that judges whether the assistant's answer is relevant to the user's question, so I can run it over my traced interactions. Save it as `relevanceEvaluator.ts`.
+我有一个基于 Vercel AI SDK 和 OpenAI 构建的 TypeScript RAG 应用。我需要一个评估器，判断助手答案是否与用户问题相关，以便对记录下来的交互运行评估。请保存为 `relevanceEvaluator.ts`。

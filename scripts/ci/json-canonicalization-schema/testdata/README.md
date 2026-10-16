@@ -1,25 +1,25 @@
-## Test Data
+<a id="test-data"></a>
 
-The [input](input) directory contains files with non-canonicalized data which is
-supposed be transformed as specified by the corresponding file in the
-[output](output) directory.  In the [outhex](outhex) directory the expected
-output is expressed in hexadecimal byte notation.
+## 测试数据
 
-## ES6 Numbers
+[input](input) 目录包含尚未规范化的数据文件，应按照 [output](output) 目录中对应文件的内容进行转换。[outhex](outhex) 目录以十六进制字节表示法给出预期输出。
 
-For testing ES6 number serialization there is a GZIP file hosted at
+<a id="es6-numbers"></a>
+
+## ES6 数字
+
+用于测试 ES6 数字序列化的 GZIP 文件位于
 https://github.com/cyberphone/json-canonicalization/releases/download/es6testfile/es6testfile100m.txt.gz
-containing a test vector of 100 million of random and edge-case values.
-The test file consists of lines
+其中包含由一亿个随机值和边界值组成的测试向量。测试文件的每行格式如下：
+
 ```code
 hex-ieee,expected\n
 ```
-where `hex-ieee` holds 1-16 ASCII hexadecimal characters
-representing an IEEE-754 double precision value
-while `expected` holds the expected serialized value.
-Each line is terminated by a single new-line character.
 
-Sample lines:
+其中，`hex-ieee` 包含 1 到 16 个 ASCII 十六进制字符，表示一个 IEEE-754 双精度值；`expected` 包含预期的序列化值。每行以单个换行符结束。
+
+示例行：
+
 ```code
 4340000000000001,9007199254740994
 4340000000000002,9007199254740996
@@ -30,8 +30,8 @@ Sample lines:
 0,0
 ```
 
-The sequence of IEEE-754 double precision values is deterministically generated
-according to the following algorithm:
+IEEE-754 双精度值序列按照以下算法确定性生成：
+
 ```js
 const crypto = require("crypto")
 
@@ -117,13 +117,13 @@ while (true) {
     console.log(u64[0].toString(16))
 }
 ```
-Deterministic generation of the test inputs allows an implementation to verify
-correctness of ES6 number formatting without requiring any network bandwidth by
-generating the test file locally and computing its hash.
 
-The following table records the expected hashes:
-| SHA-256 checksum                                                 | Number of lines | Size in bytes |
-| ---------------------------------------------------------------- | --------------- | ------------- |
+确定性生成测试输入，使实现能够在本地生成测试文件并计算哈希，从而验证 ES6 数字格式是否正确，无需消耗网络带宽。
+
+下表记录预期哈希值：
+
+| SHA-256 校验和 | 行数 | 字节数 |
+| --- | --- | --- |
 | be18b62b6f69cdab33a7e0dae0d9cfa869fda80ddc712221570f9f40a5878687 | 1000            | 37967         |
 | b9f7a8e75ef22a835685a52ccba7f7d6bdc99e34b010992cbc5864cd12be6892 | 10000           | 399022        |
 | 22776e6d4b49fa294a0d0f349268e5c28808fe7e0cb2bcbe28f63894e494d4c7 | 100000          | 4031728       |
@@ -131,8 +131,6 @@ The following table records the expected hashes:
 | b9f8a44a91d46813b21b9602e72f112613c91408db0b8341fb94603d9db135e0 | 10000000        | 403630048     |
 | 0f7dda6b0837dde083c5d6b896f7d62340c8a2415b0c7121d83145e08a755272 | 100000000       | 4036326174    |
 
-The entries in the table are determined apart from GZIP compression.
-The `SHA-256 checksum` is a hash of the generated output file for the
-first `Number of lines` in the sequence.
+表中各项均基于未经过 GZIP 压缩的数据计算。`SHA-256 checksum` 是序列中前 `Number of lines` 行所生成输出文件的哈希。
 
-Both `numgen.go` and `numgen.js` can generate `es6testfile100m.txt`.
+`numgen.go` 和 `numgen.js` 都可以生成 `es6testfile100m.txt`。

@@ -1,22 +1,30 @@
-# Background LDAP Sync (Future)
+<a id="background-ldap-sync-future"></a>
 
-**Comprehensive design for optional background LDAP synchronization** - A future enhancement for enterprise deployments.
+# 后台 LDAP 同步（未来）
 
-## Overview
+**可选后台 LDAP 同步的完整设计** — 面向企业部署的未来增强功能。
 
-Background LDAP sync is a **post-MVP feature** that automatically synchronizes all LDAP users with the directory on a scheduled basis (e.g., nightly). This is based on Grafana's Enterprise-only background sync feature.
+<a id="overview"></a>
 
-## What It Does
+## 概述
 
-1. **Scheduled Execution**: Runs on a cron schedule (e.g., daily at 1 AM)
-2. **User Synchronization**: Iterates through all LDAP users in the database
-3. **Attribute Updates**: Syncs email, name, and role from LDAP directory
-4. **Automatic Deprovisioning**: Disables users removed from LDAP and revokes their sessions
-5. **Re-enabling**: Re-activates previously disabled users found in LDAP
+后台 LDAP 同步是一项 **MVP 之后的功能**，按计划（例如每晚）自动将所有 LDAP 用户与目录同步。它参考 Grafana 仅企业版提供的后台同步功能。
 
-## Implementation Pattern
+<a id="what-it-does"></a>
 
-Phoenix would use the existing `DaemonTask` pattern (same as `TraceDataSweeper`, `TokenStore`, etc.):
+## 功能
+
+1. **计划执行**：按 cron 计划运行（例如每天凌晨 1 点）
+2. **用户同步**：遍历数据库中的所有 LDAP 用户
+3. **属性更新**：从 LDAP 目录同步邮箱、姓名和角色
+4. **自动停用**：禁用已从 LDAP 移除的用户并撤销其会话
+5. **重新启用**：重新激活在 LDAP 中找到的已禁用用户
+
+<a id="implementation-pattern"></a>
+
+## 实现模式
+
+Phoenix 将采用现有 `DaemonTask` 模式，与 `TraceDataSweeper`、`TokenStore` 等相同：
 
 ```python
 class LDAPUserSynchronizer(DaemonTask):
@@ -28,7 +36,9 @@ class LDAPUserSynchronizer(DaemonTask):
             await self._sync_all_ldap_users()
 ```
 
-## Configuration
+<a id="configuration"></a>
+
+## 配置
 
 ```bash
 # Enable background sync (default: false)
@@ -38,25 +48,29 @@ PHOENIX_LDAP_BACKGROUND_SYNC_ENABLED="true"
 PHOENIX_LDAP_BACKGROUND_SYNC_CRON="0 1 * * *"
 ```
 
-## When to Use
+<a id="when-to-use"></a>
 
-**Enable for**:
-- Large organizations (1000+ LDAP users)
-- Strict security policies requiring immediate deprovisioning
-- Users who don't login frequently
+## 使用场景
 
-**Skip for**:
-- Small deployments (<100 users)
-- Users login frequently (already synced on login)
-- LDAP server rate limits or network costs
+**适合启用**：
+- 大型组织（1000 名以上 LDAP 用户）
+- 要求立即停用账户的严格安全策略
+- 不经常登录的用户
 
-## Implementation Roadmap
+**适合跳过**：
+- 小规模部署（少于 100 名用户）
+- 用户经常登录，登录时已同步
+- LDAP 服务器限流或网络成本较高
 
-- **Phase 1 (MVP)**: Login-time sync only ✅
-- **Phase 2 (Post-MVP)**: Manual sync API endpoint
-- **Phase 3 (Future)**: Automatic background sync
+<a id="implementation-roadmap"></a>
 
-**Decision**: Defer until users request it. Most Phoenix installations are small-to-medium and login-time sync is sufficient.
+## 实现路线图
 
-**Note**: For complete implementation details (including detailed code examples, metrics, performance tuning, batch processing), see the "Phoenix Background Sync Design (Future)" section in the original comprehensive document (lines 1849-2356).
+- **阶段 1（MVP）**：仅登录时同步 ✅
+- **阶段 2（MVP 之后）**：手动同步 API 端点
+- **阶段 3（未来）**：自动后台同步
+
+**决策**：推迟至用户提出需求。大多数 Phoenix 部署规模为中小型，登录时同步已经足够。
+
+**说明**：完整实现详情，包括详细代码示例、指标、性能调优和批处理，见原完整文档中的“Phoenix 后台同步设计（未来）”章节（第 1849—2356 行）。
 

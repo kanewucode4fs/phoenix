@@ -1,4 +1,1 @@
-Create an evaluator for the dataset "banking_saas_dataset_clean". It should pass only when
-the output exactly matches the example's reference SQL query or refusal string, ignoring
-surrounding code fences and whitespace. Attach it to the dataset so it scores every
-experiment run there.
+为数据集 "banking_saas_dataset_clean" 创建一个评估器。只有输出与示例的参考 SQL 查询或拒绝字符串完全一致时才应通过，比较时忽略外围代码围栏和空白字符。将评估器关联到该数据集，使其为该数据集中的每次实验运行评分。

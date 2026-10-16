@@ -1,94 +1,114 @@
-# Advisory Lock Analysis
+<a id="advisory-lock-analysis"></a>
+
+# 建议锁分析
 
 *2026-03-03*
 
-## Table of contents
+<a id="table-of-contents"></a>
 
-1. [Decision](#decision)
-   - [Why the lock isn't needed today](#why-the-lock-isnt-needed-today)
-   - [Why the PR's approach adds risk](#why-the-prs-approach-adds-risk)
-   - [When to revisit](#when-to-revisit)
-   - [Migration authoring guidelines](#migration-authoring-guidelines)
-2. [How Alembic handles transactions](#how-alembic-handles-transactions)
-   - [The two settings](#the-two-settings)
-   - [Mode 1: All migrations in one transaction](#mode-1-all-migrations-in-one-transaction)
-   - [Mode 2: One transaction per migration](#mode-2-one-transaction-per-migration)
-   - [Mode 3: External transaction](#mode-3-external-transaction-overrides-everything)
-   - [Mode 1 vs Mode 3](#mode-1-vs-mode-3)
-   - [What Phoenix uses](#what-phoenix-uses)
+## 目录
+
+1. [决策](#decision)
+   - [当前为何无需此锁](#why-the-lock-isnt-needed-today)
+   - [PR 方案为何增加风险](#why-the-prs-approach-adds-risk)
+   - [何时重新评估](#when-to-revisit)
+   - [迁移编写准则](#migration-authoring-guidelines)
+2. [Alembic 如何处理事务](#how-alembic-handles-transactions)
+   - [两个设置](#the-two-settings)
+   - [模式 1：全部迁移共用事务](#mode-1-all-migrations-in-one-transaction)
+   - [模式 2：每个迁移独立事务](#mode-2-one-transaction-per-migration)
+   - [模式 3：外部事务](#mode-3-external-transaction-overrides-everything)
+   - [模式 1 与模式 3](#mode-1-vs-mode-3)
+   - [Phoenix 使用的模式](#what-phoenix-uses)
 3. [CREATE INDEX CONCURRENTLY](#create-index-concurrently)
-4. [The env.py architectural lever](#the-envpy-architectural-lever)
-   - [The change](#the-change)
-   - [What this enables](#what-this-enables)
-   - [What changes](#what-changes)
-   - [Interaction with lock approaches](#interaction-with-lock-approaches)
-   - [Should we change it?](#should-we-change-it)
-5. [Industry precedent](#industry-precedent)
-   - [Why session-level is the default](#why-session-level-is-the-industry-default-and-why-transaction-level-isnt)
-   - [How other tools handle this](#how-other-tools-handle-this)
-   - [Tradeoff summary](#tradeoff-summary)
-   - [Implication for Phoenix](#implication-for-phoenix)
-6. [Reference implementation](#reference-implementation)
-   - [Transaction-level approach](#modified-run_migrations-in-envpy)
-   - [Session-level alternative](#alternative-session-level-lock--phoenix_migration_database_url)
-   - [Honest assessment](#honest-assessment)
-7. [Schema scoping](#schema-scoping)
+4. [env.py 的架构调节点](#the-envpy-architectural-lever)
+   - [变更](#the-change)
+   - [带来的能力](#what-this-enables)
+   - [发生的变化](#what-changes)
+   - [与加锁方案的交互](#interaction-with-lock-approaches)
+   - [是否应该更改？](#should-we-change-it)
+5. [行业先例](#industry-precedent)
+   - [会话级锁为何是默认选择](#why-session-level-is-the-industry-default-and-why-transaction-level-isnt)
+   - [其他工具如何处理](#how-other-tools-handle-this)
+   - [取舍汇总](#tradeoff-summary)
+   - [对 Phoenix 的意义](#implication-for-phoenix)
+6. [参考实现](#reference-implementation)
+   - [事务级方案](#modified-run_migrations-in-envpy)
+   - [会话级替代方案](#alternative-session-level-lock--phoenix_migration_database_url)
+   - [如实评估](#honest-assessment)
+7. [Schema 作用域](#schema-scoping)
 
 ---
 
-# Decision
+<a id="decision"></a>
 
-## Why the lock isn't needed today
+# 决策
 
-All existing migrations are DDL-heavy. Every `INSERT` is paired with a `CREATE TABLE` in the same `upgrade()` function. Phoenix's env.py wraps all migrations in a single outer transaction (see [How Alembic handles transactions](#how-alembic-handles-transactions)), and `CREATE TABLE` takes `ACCESS EXCLUSIVE` — which serializes concurrent execution. The second replica's `CREATE TABLE` fails, the transaction rolls back (including any DML), and on restart it sees the database is at head.
+<a id="why-the-lock-isnt-needed-today"></a>
 
-The correctness issue that advisory locks prevent — non-idempotent DML against a **pre-existing** table with no DDL in the same migration step — does not exist in this codebase. Phoenix's established pattern (create table + backfill in the same step) is structurally safe under concurrent execution.
+## 当前为何无需此锁
 
-Without the lock, concurrent startup is noisy (errors like `relation "foo" already exists`) but self-healing. For clean startup in multi-replica deployments, the standard pattern is running migrations in a Kubernetes init container or Helm pre-upgrade hook.
+现有迁移均大量使用 DDL。每个 `INSERT` 都与同一 `upgrade()` 函数中的 `CREATE TABLE` 配对。Phoenix 的 env.py 将全部迁移包围在单个外层事务中，参见 [Alembic 如何处理事务](#how-alembic-handles-transactions)；`CREATE TABLE` 获取 `ACCESS EXCLUSIVE`，将并发执行串行化。第二个副本的 `CREATE TABLE` 失败，事务连同 DML 一起回滚，重启后便看到数据库已达 head。
 
-## Why the PR's approach adds risk
+建议锁所防止的正确性问题，即对**已存在**表执行非幂等 DML，且同一迁移步骤无 DDL，在此代码库并不存在。Phoenix 既有模式为同一步骤中创建表并回填，在并发执行下结构上安全。
 
-The PR used `pg_advisory_lock` (session-level), acquiring the lock outside Alembic and calling `conn.commit()` before passing the connection in. This forced session-level because a transaction-level lock would be released by that commit. An alternative — acquiring a transaction-level lock inside env.py's existing outer transaction — would avoid the risks below (see [Reference implementation](#reference-implementation)), but wasn't the approach taken.
+不加锁时，并发启动会产生 `relation "foo" already exists` 等噪声错误，但可自愈。多副本部署若需干净启动，标准做法是在 Kubernetes init container 或 Helm pre-upgrade hook 中运行迁移。
 
-Session-level locks are tied to the PostgreSQL backend connection, not the client connection. This breaks when those two are decoupled:
+<a id="why-the-prs-approach-adds-risk"></a>
 
-- **PgBouncer transaction mode with `DISCARD ALL` (the default):** After `conn.commit()`, PgBouncer returns the backend to its pool and runs `DISCARD ALL`, which releases the lock. The lock silently does nothing.
-- **PgBouncer transaction mode without `DISCARD ALL`:** The lock persists on the idle backend in PgBouncer's pool. Other replicas block for 300s, time out, crash. The cluster is stuck for 10–60 minutes until PgBouncer closes that backend. This is a regression from the no-lock behavior.
-- **OOM-kill / SIGKILL (any deployment):** If a pod is killed while holding the lock, PostgreSQL doesn't detect the dead connection until TCP keepalive fires (~6 minutes on RDS defaults, up to ~2 hours on bare-metal OS defaults). All other replicas block until then.
+## PR 方案为何增加风险
 
-These risks could be mitigated with a direct connection that bypasses the pooler (the way Prisma uses `DIRECT_URL`). But Phoenix uses a single `PHOENIX_SQL_DATABASE_URL` for both runtime queries and migrations, so users behind poolers (Supabase, Neon, PgBouncer sidecars) have no way to opt into a direct connection for migrations today.
+PR 使用会话级 `pg_advisory_lock`，在 Alembic 外获取锁，传入连接前调用 `conn.commit()`。这迫使其使用会话级锁，因为该提交会释放事务级锁。另一方案是在 env.py 既有外层事务内部获取事务级锁，可避免以下风险，参见[参考实现](#reference-implementation)，但 PR 未采用。
 
-## When to revisit
+会话级锁绑定 PostgreSQL 后端连接，而非客户端连接。两者分离时会出问题：
 
-Reopen this if either of the following happen:
+- **PgBouncer 事务模式，使用默认 `DISCARD ALL`：**`conn.commit()` 后，PgBouncer 将后端归还池并运行 `DISCARD ALL`，释放锁。锁静默失效。
+- **PgBouncer 事务模式，不使用 `DISCARD ALL`：**锁保留在 PgBouncer 池中的空闲后端。其他副本阻塞 300 秒后超时、崩溃。集群卡住 10—60 分钟，直到 PgBouncer 关闭该后端。这比不加锁更差。
+- **OOM-kill / SIGKILL，任何部署：**pod 持锁时被杀死，PostgreSQL 要等 TCP keepalive 触发才检测到连接失效；RDS 默认约 6 分钟，裸机操作系统默认最长约 2 小时。其他全部副本持续阻塞。
 
-1. **A migration adds non-idempotent DML against an existing table** — e.g., `INSERT INTO existing_table ...` without `ON CONFLICT` and without a `CREATE TABLE` in the same step. Concurrent execution would silently duplicate data.
+可通过绕过连接池的直连缓解，如 Prisma 的 `DIRECT_URL`。但 Phoenix 的运行时查询和迁移共用一个 `PHOENIX_SQL_DATABASE_URL`，因此使用 Supabase、Neon、PgBouncer sidecar 等连接池的用户，目前无法为迁移单独选择直连。
 
-A transaction-level lock (see [Reference implementation](#reference-implementation)) can be added without any new configuration — it works through PgBouncer as-is. A session-level lock would additionally require `PHOENIX_MIGRATION_DATABASE_URL` (a separate direct connection string, analogous to Prisma's `DIRECT_URL`) so users behind poolers can route migrations safely.
+<a id="when-to-revisit"></a>
 
-See the [Reference implementation](#reference-implementation) for how to do this, and [Industry precedent](#industry-precedent) for context on how other tools approach it.
+## 何时重新评估
 
-## Migration authoring guidelines
+以下任一情况发生时重新讨论：
 
-Regardless of locking, these conventions keep migrations safe under concurrent execution:
+1. **迁移向已有表添加非幂等 DML**，例如 `INSERT INTO existing_table ...` 未使用 `ON CONFLICT`，同一步骤也没有 `CREATE TABLE`。并发执行会静默产生重复数据。
 
-- **Pair DML with DDL.** Inserts into newly created tables are safe — `CREATE TABLE` serializes the step.
-- **Make standalone DML idempotent.** Use `INSERT ... ON CONFLICT DO NOTHING` or `WHERE NOT EXISTS` for any DML against existing tables.
+事务级锁无需新增配置，可直接通过 PgBouncer 工作，参见[参考实现](#reference-implementation)。会话级锁还要求 `PHOENIX_MIGRATION_DATABASE_URL`，即类似 Prisma `DIRECT_URL` 的独立直连字符串，供连接池后方用户安全路由迁移。
+
+具体实现参见[参考实现](#reference-implementation)；其他工具的处理背景参见[行业先例](#industry-precedent)。
+
+<a id="migration-authoring-guidelines"></a>
+
+## 迁移编写准则
+
+无论是否加锁，以下约定都可保证并发迁移安全：
+
+- **DML 与 DDL 配对。**向新建表插入数据安全，`CREATE TABLE` 会串行化该步骤。
+- **独立 DML 应幂等。**对已有表执行 DML 时使用 `INSERT ... ON CONFLICT DO NOTHING` 或 `WHERE NOT EXISTS`。
 
 ---
 
-# How Alembic handles transactions
+<a id="how-alembic-handles-transactions"></a>
 
-Alembic's transaction behavior is controlled by two things: the settings passed to `context.configure()` and whether an external transaction is already open when Alembic starts. The interaction between these is subtle and directly relevant to advisory locking.
+# Alembic 如何处理事务
 
-### The two settings
+Alembic 事务行为由两方面控制：传给 `context.configure()` 的设置，以及启动时是否已有打开的外部事务。两者交互较微妙，与建议锁直接相关。
 
-- **`transactional_ddl`** (default `True`): Whether the database supports DDL inside transactions. PostgreSQL does; MySQL does not. When `True`, Alembic wraps DDL in transactions. When `False`, DDL runs outside transactions (auto-committed by the database).
-- **`transaction_per_migration`** (default `False`): Whether each migration step gets its own transaction or all steps share one.
+<a id="the-two-settings"></a>
 
-### Mode 1: All migrations in one transaction (`transaction_per_migration=False`)
+### 两个设置
 
-This is Alembic's default. All migration steps run in a single transaction. If any step fails, everything rolls back.
+- **`transactional_ddl`**，默认 `True`：数据库是否支持事务内 DDL。PostgreSQL 支持，MySQL 不支持。为 `True` 时，Alembic 将 DDL 包围在事务内；为 `False` 时，DDL 在事务外执行，由数据库自动提交。
+- **`transaction_per_migration`**，默认 `False`：每个迁移步骤使用独立事务，或全部步骤共享事务。
+
+<a id="mode-1-all-migrations-in-one-transaction-transaction_per_migrationfalse"></a>
+
+### 模式 1：全部迁移共用事务（`transaction_per_migration=False`）
+
+这是 Alembic 默认模式。全部迁移步骤在单事务执行，任一步骤失败则全部回滚。
 
 ```
 BEGIN
@@ -99,9 +119,11 @@ BEGIN
   └── (or if all succeed) ─── COMMIT (all 3 committed atomically)
 ```
 
-### Mode 2: One transaction per migration (`transaction_per_migration=True`)
+<a id="mode-2-one-transaction-per-migration-transaction_per_migrationtrue"></a>
 
-Each migration step gets its own transaction. Steps are committed independently. If step 3 fails, steps 1 and 2 are already committed.
+### 模式 2：每个迁移独立事务（`transaction_per_migration=True`）
+
+每个迁移步骤独立事务，单独提交。若步骤 3 失败，步骤 1 和 2 已提交。
 
 ```
   ┌── BEGIN ── migration 1 ── COMMIT ──┐
@@ -113,20 +135,22 @@ Each migration step gets its own transaction. Steps are committed independently.
   └────────────────────────────────────┘
 ```
 
-**Drawbacks of Mode 2:**
+**模式 2 的缺点：**
 
-- **Partial application on failure.** If migration 3 out of 5 fails, migrations 1 and 2 are already committed and cannot be rolled back. The database is in an intermediate schema state. On restart, Alembic picks up from migration 3 (since `alembic_version` was updated per-commit), but the failing migration must be idempotent enough to retry cleanly.
-- **Incompatible with transaction-level advisory locks.** A `pg_advisory_xact_lock` is released when its transaction commits. In Mode 2, that means the lock is released after migration 1's `COMMIT` — the remaining migrations run unprotected. Holding a lock across the entire run requires either a session-level lock (with PgBouncer risks) or Mode 3.
-- **Mid-run version visibility.** Each committed step makes its `alembic_version` update visible to other connections immediately. A concurrent process checking "am I at head?" mid-run could see a partial version and start running application code against an incomplete schema.
-- **No caller-controlled injection point.** Like Mode 1, Alembic owns each per-step transaction. The caller can't inject logic (locks, session parameters) *inside* each transaction — only before or after the entire `run_migrations()` call.
+- **失败时部分应用。**5 个迁移中的第 3 个失败时，第 1、2 个已提交，无法回滚，数据库处于中间结构状态。重启后 Alembic 从第 3 个继续，因为每次提交更新了 `alembic_version`，但失败迁移必须足够幂等，才能顺利重试。
+- **不兼容事务级建议锁。**`pg_advisory_xact_lock` 在事务提交时释放。模式 2 中，第 1 个迁移 `COMMIT` 后锁即释放，剩余迁移不受保护。覆盖整次运行需要会话级锁，承受 PgBouncer 风险，或使用模式 3。
+- **运行期间版本可见。**每个提交步骤的 `alembic_version` 更新立即对其他连接可见。并发进程中途检查“是否到达 head”时，可能看到部分版本，并在不完整结构上运行应用。
+- **无调用方控制的注入点。**与模式 1 类似，Alembic 控制每步事务。调用方无法在每个事务*内部*注入锁、会话参数等逻辑，只能在整个 `run_migrations()` 调用之前或之后处理。
 
-Mode 2 trades atomicity for granularity. It's useful when individual migrations are large and you want to avoid holding long transactions (common in production `ALTER TABLE` scenarios). For Phoenix — where migrations run at startup before the app serves traffic — the all-or-nothing semantics of Mode 1/3 are strictly better, since a partial schema state at startup is harder to reason about than a clean rollback-and-retry.
+模式 2 用原子性换取粒度。当单个迁移很大、希望避免长事务时有用，常见于生产 `ALTER TABLE`。Phoenix 在启动、对外服务前运行迁移，模式 1/3 的全有或全无语义更好：启动时部分结构比完整回滚后重试更难推理。
 
-### Mode 3: External transaction (overrides everything)
+<a id="mode-3-external-transaction-overrides-everything"></a>
 
-If the connection already has an open transaction when `context.configure()` is called, Alembic detects this via `connection.in_transaction()` and sets `_in_external_transaction = True` (verified in Alembic source: `alembic/runtime/migration.py` line 159). This causes **every** call to `begin_transaction()` — including the per-migration calls — to return `nullcontext()`. Alembic defers all transaction management to the caller.
+### 模式 3：外部事务（覆盖全部设置）
 
-`transaction_per_migration` has **no effect** in this mode — all steps run in the caller's transaction.
+调用 `context.configure()` 时，若连接已有事务，Alembic 通过 `connection.in_transaction()` 检测并设置 `_in_external_transaction = True`，已在 Alembic 源码 `alembic/runtime/migration.py` 第 159 行验证。此后**每次** `begin_transaction()` 调用，包括每迁移调用，均返回 `nullcontext()`。Alembic 将全部事务管理交给调用方。
+
+此模式下 `transaction_per_migration` **不生效**，全部步骤运行在调用方事务。
 
 ```
 caller: connection.begin() ──► BEGIN
@@ -149,9 +173,11 @@ caller: transaction.commit() ──► COMMIT  (all steps committed atomically)
 caller: transaction.rollback() ► ROLLBACK (all steps rolled back)
 ```
 
-### Mode 1 vs Mode 3
+<a id="mode-1-vs-mode-3"></a>
 
-Mode 1 and Mode 3 produce identical database behavior — all migrations run in a single transaction. The difference is **who controls the transaction**:
+### 模式 1 与模式 3
+
+模式 1 和模式 3 的数据库行为相同，全部迁移在单事务执行。区别是**由谁控制事务**：
 
 ```
 Mode 1 (Alembic controls):
@@ -174,34 +200,38 @@ Mode 3 (caller controls):
   env.py: transaction.commit() ──► COMMIT
 ```
 
-In Mode 1, Alembic owns the transaction lifecycle. In Mode 3, the caller owns it and can inject logic before/after Alembic within the same transaction — such as acquiring an advisory lock, setting session parameters, or custom error handling. This is why Phoenix uses Mode 3: it gives env.py explicit control over the transaction, including `try`/`except`/`rollback`.
+模式 1 由 Alembic 控制事务生命周期。模式 3 由调用方控制，可在同一事务内、Alembic 前后注入获取建议锁、设置会话参数或自定义错误处理等逻辑。Phoenix 因此使用模式 3，使 env.py 显式控制事务，包括 `try`/`except`/`rollback`。
 
-The practical consequence: Mode 3 is the prerequisite for the transaction-level advisory lock approach (acquiring `pg_advisory_xact_lock` inside the caller's transaction). Mode 1 doesn't offer a way to inject the lock inside Alembic's transaction.
+实际影响：模式 3 是事务级建议锁方案的前提，可在调用方事务内获取 `pg_advisory_xact_lock`。模式 1 无法将锁注入 Alembic 事务内部。
 
-### What Phoenix uses
+<a id="what-phoenix-uses"></a>
 
-Phoenix's `env.py` uses **Mode 3**. It calls `connection.begin()` before `context.configure()`, opening an external transaction. Even though it passes `transaction_per_migration=True`, this setting is overridden — all migrations run in the single outer transaction.
+### Phoenix 使用的模式
 
-This is relevant because:
+Phoenix `env.py` 使用**模式 3**，在 `context.configure()` 前调用 `connection.begin()`，打开外部事务。虽然传入 `transaction_per_migration=True`，该设置被覆盖，全部迁移仍在单个外层事务中执行。
 
-1. A `pg_advisory_xact_lock` acquired inside this outer transaction is held for the entire migration run — not released after the first step.
-2. If a migration fails, all prior steps in the run are rolled back (not just the failing step).
-3. The `alembic_version` table is updated per-step inside the transaction, but those updates are only visible to other connections after the final `COMMIT`.
+这很重要，因为：
+
+1. 在外层事务内获取的 `pg_advisory_xact_lock` 覆盖整次迁移运行，不会在第一步后释放。
+2. 迁移失败时，运行中全部先前步骤都会回滚，而非仅失败步骤。
+3. `alembic_version` 表在事务内逐步更新，但仅在最终 `COMMIT` 后对其他连接可见。
 
 ---
 
+<a id="create-index-concurrently"></a>
+
 # CREATE INDEX CONCURRENTLY
 
-Phoenix's only concurrent index migration (`f1a6b2f0c9d5`) makes `CONCURRENTLY` **opt-in** via the `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true` environment variable. By default, the index is created normally inside the transaction — fully protected by any advisory lock.
+Phoenix 唯一的并发索引迁移（`f1a6b2f0c9d5`）通过 `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true` 环境变量**显式启用** `CONCURRENTLY`。默认在事务内普通建索引，受任何建议锁完整保护。
 
-When opted in, the migration escapes env.py's transaction by calling `dbapi_conn.commit()` on the raw psycopg connection, then setting `dbapi_conn.autocommit = True`. This has two consequences for advisory locking:
+显式启用时，迁移在原始 psycopg 连接上调用 `dbapi_conn.commit()`，再设置 `dbapi_conn.autocommit = True`，跳出 env.py 事务。这对建议锁有两点影响：
 
-- A **transaction-level** lock (`pg_advisory_xact_lock`) would be released by the `dbapi_conn.commit()` — the underlying transaction is committed before the concurrent index build starts, so the lock no longer protects it.
-- A **session-level** lock (`pg_advisory_lock`) would survive the commit, but the migration itself runs outside any transaction, so a failure mid-build isn't rolled back regardless.
+- **事务级**锁（`pg_advisory_xact_lock`）被 `dbapi_conn.commit()` 释放；并发建索引开始前底层事务已提交，锁不再保护它。
+- **会话级**锁（`pg_advisory_lock`）跨提交保留，但迁移自身位于任何事务之外，中途失败无论如何都不会回滚。
 
-The `dbapi_conn.commit()` also commits all prior migrations in the same run, and `_disable_autocommit()` restores `autocommit = False` afterward. This splits the migration run into two transactions.
+`dbapi_conn.commit()` 还会提交本次运行的全部先前迁移，之后 `_disable_autocommit()` 恢复 `autocommit = False`，将迁移运行拆为两个事务。
 
-**When `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true` (opt-in):**
+**设置 `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true` 时，显式启用：**
 
 ```
 connection.begin() ──► Transaction T1
@@ -226,16 +256,16 @@ connection.begin() ──► Transaction T1
 transaction.commit() ──► T2 committed
 ```
 
-- **T1**: All migrations before the concurrent index. Committed by `dbapi_conn.commit()`. A `pg_advisory_xact_lock` acquired in T1 is released at this point.
-- **T2**: Implicitly started by psycopg when the next migration's first SQL executes (psycopg starts an implicit transaction on the first statement after `autocommit = False`). Subsequent migrations run here **without** the advisory lock. Committed by env.py's final `transaction.commit()`.
+- **T1**：并发索引之前的所有迁移，由 `dbapi_conn.commit()` 提交。T1 中获取的 `pg_advisory_xact_lock` 在此释放。
+- **T2**：下个迁移第一条 SQL 执行时由 psycopg 隐式启动；`autocommit = False` 后首条语句会开启隐式事务。后续迁移在此**没有**建议锁保护，由 env.py 最终 `transaction.commit()` 提交。
 
-If a migration in T2 fails, only T2 is rolled back — migrations in T1 were already committed. env.py's SQLAlchemy `transaction` object is unaware of this split (it believes one continuous transaction is open).
+T2 中迁移失败时，仅回滚 T2，T1 已提交。env.py 的 SQLAlchemy `transaction` 对象不知道这种拆分，仍以为单个连续事务处于打开状态。
 
-**When `PHOENIX_MIGRATE_INDEX_CONCURRENTLY` is unset (default):** The index is created normally inside the transaction. No transaction split occurs — the migration run behaves identically to the reference implementation diagram (single transaction, lock held throughout).
+**未设置 `PHOENIX_MIGRATE_INDEX_CONCURRENTLY` 时，默认：**在事务内普通建索引，不拆分事务，整次运行与参考实现图一致，单事务且始终持锁。
 
-Concurrency is handled by `IF NOT EXISTS`: two replicas running the same migration simultaneously are serialized by PostgreSQL's catalog locks — one registers the index name first, the other sees it via `IF NOT EXISTS` and skips.
+并发通过 `IF NOT EXISTS` 处理：两个副本同时运行相同迁移时，由 PostgreSQL 系统目录锁串行化。一个先注册索引名称，另一个通过 `IF NOT EXISTS` 看到后跳过。
 
-The real risk with `CONCURRENTLY` is crash mid-build, not concurrency: a failed build leaves an **INVALID** index in `pg_class` that `IF NOT EXISTS` silently skips on subsequent runs. The index exists by name but is not used by the query planner. This is inherent to how `CONCURRENTLY` works in PostgreSQL and is identical with or without the advisory lock. Recovery requires manual intervention:
+`CONCURRENTLY` 的真正风险是构建中途崩溃，而非并发。失败构建会在 `pg_class` 留下 **INVALID** 索引，后续运行被 `IF NOT EXISTS` 静默跳过。索引名称存在，但查询规划器不会使用。此为 PostgreSQL `CONCURRENTLY` 固有行为，与是否存在建议锁无关。恢复需要人工介入：
 
 ```sql
 -- Check for invalid indexes
@@ -248,13 +278,17 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_spans_session_id ...;
 
 ---
 
-# The env.py architectural lever
+<a id="the-envpy-architectural-lever"></a>
 
-Phoenix's env.py currently uses Mode 3 (external transaction). This is a choice, not a requirement. Switching to Mode 2 (per-migration transactions) would change the locking tradeoff landscape significantly.
+# env.py 的架构调节点
 
-### The change
+Phoenix env.py 当前使用模式 3，即外部事务。这是选择，而非要求。切换至模式 2 的每迁移独立事务，会显著改变加锁取舍。
 
-Remove `connection.begin()` from env.py and let Alembic manage transactions per-step:
+<a id="the-change"></a>
+
+### 变更
+
+从 env.py 移除 `connection.begin()`，让 Alembic 按步骤管理事务：
 
 ```python
 # Current (Mode 3 — external transaction, transaction_per_migration has no effect)
@@ -292,9 +326,11 @@ def run_migrations(connection: Connection) -> None:
         connection.close()
 ```
 
-### What this enables
+<a id="what-this-enables"></a>
 
-With Mode 2, a session-level lock acquired before `run_migrations()` works cleanly with no edge cases:
+### 带来的能力
+
+模式 2 下，在 `run_migrations()` 前获取会话级锁可以干净工作，没有边界情况：
 
 ```
 engine.connect() ──────► Connection
@@ -311,11 +347,13 @@ engine.connect() ──────► Connection
 connection.close() ──────► lock released
 ```
 
-The CONCURRENTLY problem disappears. In Mode 3, `dbapi_conn.commit()` commits the shared outer transaction and releases the xact lock. In Mode 2, there is no shared outer transaction — each migration has its own, and the session-level lock is independent of all of them.
+CONCURRENTLY 问题消失。模式 3 中，`dbapi_conn.commit()` 提交共享外层事务并释放 xact 锁。模式 2 没有共享外层事务，每个迁移自有事务，会话级锁独立于全部事务。
 
-### What changes
+<a id="what-changes"></a>
 
-**Rollback behavior.** This is the main tradeoff.
+### 发生的变化
+
+**回滚行为。**这是主要取舍。
 
 ```
 Mode 3 (current — all-or-nothing):
@@ -335,68 +373,82 @@ Mode 2 (modified — partial progress):
   restart: resumes from migration 3
 ```
 
-- **Mode 3**: All-or-nothing. A failure anywhere undoes everything. Clean but wasteful on restart (re-runs already-successful steps).
-- **Mode 2**: Partial progress preserved. Alembic resumes from the failed step. More efficient, but the database can be in a partially-migrated state between steps.
+- **模式 3**：全有或全无。任意位置失败都撤销全部内容。干净，但重启时重复已成功步骤，存在浪费。
+- **模式 2**：保留部分进度。Alembic 从失败步骤恢复。更高效，但步骤之间数据库可能处于部分迁移状态。
 
-Partial-migration visibility is the standard behavior for most migration tools (Flyway, Prisma, Django). It's not inherently dangerous — each migration step is individually self-consistent — but it's a behavior change for existing Phoenix deployments.
+部分迁移可见是 Flyway、Prisma、Django 等多数工具的标准行为。它本身并不危险，每个步骤各自保持一致，但对已有 Phoenix 部署属于行为变化。
 
-### Interaction with lock approaches
+<a id="interaction-with-lock-approaches"></a>
 
-| | Mode 3 (current) | Mode 2 (modified) |
+### 与加锁方案的交互
+
+| | 模式 3（当前） | 模式 2（修改后） |
 |---|---|---|
-| Transaction-level lock | Held for entire run, but defeated by CONCURRENTLY | Not viable — released after first step |
-| Session-level lock | Requires direct URL; survives CONCURRENTLY | Requires direct URL; survives CONCURRENTLY; **cleanest fit** |
-| No lock | Crash-loop safe for DDL | Crash-loop safe for DDL; partial progress preserved |
+| 事务级锁 | 整次运行持有，但被 CONCURRENTLY 破坏 | 不可用，第一步后释放 |
+| 会话级锁 | 需要直连 URL；跨 CONCURRENTLY 保留 | 需要直连 URL；跨 CONCURRENTLY 保留；**最合适** |
+| 无锁 | DDL 可通过崩溃重试恢复 | DDL 可通过崩溃重试恢复；保留部分进度 |
 
-Mode 2 makes the session-level lock the natural and only viable advisory lock approach. This is simpler to reason about — one approach instead of two — at the cost of requiring `PHOENIX_MIGRATION_DATABASE_URL` for users behind poolers.
+模式 2 使会话级锁成为自然且唯一可行的建议锁方案，更容易推理，从两种方案变为一种；代价是连接池后方用户需要 `PHOENIX_MIGRATION_DATABASE_URL`。
 
-### Should we change it?
+<a id="should-we-change-it"></a>
 
-Not as part of adding advisory locks. The env.py mode affects all migrations (rollback semantics, `alembic_version` visibility, error recovery) regardless of locking. It's a broader architectural decision that should be evaluated on its own merits — locking is one input, not the driver.
+### 是否应该更改？
 
-If we do switch to Mode 2 in the future, the session-level lock + `PHOENIX_MIGRATION_DATABASE_URL` becomes the clear choice: no CONCURRENTLY edge case, no T1/T2 split, no subtle transaction interactions. The reference implementation below (transaction-level lock in Mode 3) would no longer apply.
+不应作为添加建议锁的一部分。无论是否加锁，env.py 模式都影响全部迁移的回滚语义、`alembic_version` 可见性和错误恢复。这是更广泛架构决策，应独立评估，加锁仅是输入因素，不是驱动原因。
+
+未来若切换模式 2，会话级锁加 `PHOENIX_MIGRATION_DATABASE_URL` 成为明确选择：无 CONCURRENTLY 边界情况、无 T1/T2 拆分、无微妙事务交互。下文模式 3 中的事务级锁参考实现将不再适用。
 
 ---
 
-# Industry precedent
+<a id="industry-precedent"></a>
 
-Advisory locks for migration serialization are the industry standard. There are two flavors:
+# 行业先例
 
-- **Transaction-level** (`pg_advisory_xact_lock`): Released on `COMMIT`/`ROLLBACK`. Works through PgBouncer transaction mode because the lock lifetime is contained within a single transaction — exactly the window PgBouncer guarantees backend affinity. Waiting replicas block (not crash-loop), then check the schema history and skip completed steps. Clean.
-- **Session-level** (`pg_advisory_lock`): Survives commits, released on connection close. Required when the lock must span multiple transactions — but breaks PgBouncer transaction mode because `COMMIT` causes PgBouncer to reassign the backend.
+使用建议锁串行化迁移是行业标准，分两类：
 
-### Why session-level is the industry default (and why transaction-level isn't)
+- **事务级**（`pg_advisory_xact_lock`）：在 `COMMIT`/`ROLLBACK` 时释放。可通过 PgBouncer 事务模式，因为锁生命周期包含于单事务，正好对应 PgBouncer 保证后端连接亲和性的窗口。等待副本会阻塞，而非反复崩溃，之后检查结构历史并跳过已完成步骤，行为清晰。
+- **会话级**（`pg_advisory_lock`）：跨提交保留，连接关闭时释放。锁需要跨多个事务时必需，但不兼容 PgBouncer 事务模式，因为 `COMMIT` 会使 PgBouncer 重新分配后端。
 
-Most migration tools chose session-level locks for three reasons:
+<a id="why-session-level-is-the-industry-default-and-why-transaction-level-isnt"></a>
 
-1. **Multi-transaction architecture.** Tools like Prisma perform multiple operations across a connection's lifecycle — introspect schema, diff against target, apply DDL, update version table, verify. These span multiple transactions. A transaction-level lock releases at the first `COMMIT`, leaving the remaining steps unprotected. Session-level locks survive `COMMIT` boundaries.
+### 会话级锁为何是行业默认选择，而事务级不是
 
-2. **`CREATE INDEX CONCURRENTLY` incompatibility.** This DDL statement cannot run inside a transaction. A `pg_advisory_xact_lock` is by definition inside a transaction, so they are mutually exclusive. Tools that support concurrent index creation need session-level locks (or must release the lock before the concurrent operation).
+多数迁移工具选择会话级锁，原因有三：
 
-3. **Historical inertia and simplicity.** Session-level locks are straightforward: acquire once, close connection to release. Transaction-level locks require the tool to keep all protected work inside a single transaction, constraining the architecture. Most tools chose the simpler path and solve the PgBouncer problem out-of-band (e.g., Prisma's `directUrl`).
+1. **多事务架构。**Prisma 等工具在连接生命周期中执行结构探查、目标差异比较、应用 DDL、更新版本表和验证等多项操作，跨多个事务。事务级锁在首个 `COMMIT` 释放，剩余步骤不受保护；会话级锁跨 `COMMIT` 保留。
 
-Flyway is the notable exception — it switched to transaction-level locks in 9.1.2 specifically for PgBouncer compatibility (see details below).
+2. **不兼容 `CREATE INDEX CONCURRENTLY`。**该 DDL 语句无法在事务内运行，而 `pg_advisory_xact_lock` 按定义位于事务内，两者互斥。支持并发建索引的工具需要会话级锁，或在并发操作前释放锁。
 
-### How other tools handle this
+3. **历史惯性和简单性。**会话级锁做法直接：获取一次，关闭连接释放。事务级锁要求全部受保护工作在单事务内，限制架构。多数工具选择更简单路径，并在外部解决 PgBouncer 问题，例如 Prisma 的 `directUrl`。
 
-- **Flyway** (verified from source) defaults to transaction-level advisory locks (`pg_try_advisory_xact_lock`) via `postgresql.transactional.lock=true`. This works because Flyway controls its own transaction lifecycle end-to-end, keeping the lock and all DDL in the same transaction — no special connection config needed for PgBouncer. Session-level locks are opt-in via `postgresql.transactional.lock=false` (needed for `CREATE INDEX CONCURRENTLY`, which can't run inside a transaction).
-- **Prisma** (verified from source: `prisma-engines` `postgres.rs` line 367) uses session-level `pg_advisory_lock(72707369)` with a 10-second timeout. There is no explicit unlock — the lock is released when the connection is disposed. Prisma requires a separate `directUrl` / `DIRECT_URL` for migrations to bypass transaction-mode poolers. Users can disable locking entirely via `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK`.
-- **Liquibase** (verified from docs) uses a table-based lock (`DATABASECHANGELOGLOCK`) instead of advisory locks. Works through poolers, but if a pod crashes mid-migration, the row stays locked until cleared via `liquibase release-locks` or manual `UPDATE ... SET locked = 0`.
-- **Django** (verified from docs) does not lock migrations by default (relies on crash-loop recovery). Community packages like `django-pglock` provide general-purpose advisory lock primitives (not migration-specific). It defaults to session-level locks but warns about PgBouncer in its docs and offers `xact=True` for transaction-level locks as a pooler-safe alternative.
+Flyway 是明显例外，它在 9.1.2 专为 PgBouncer 兼容性切换至事务级锁，详情见下文。
 
-### Tradeoff summary
+<a id="how-other-tools-handle-this"></a>
 
-| | Session-level (`pg_advisory_lock`) | Transaction-level (`pg_advisory_xact_lock`) |
+### 其他工具如何处理
+
+- **Flyway**，已从源码验证，通过 `postgresql.transactional.lock=true` 默认使用事务级建议锁（`pg_try_advisory_xact_lock`）。它端到端控制自身事务生命周期，使锁和全部 DDL 位于同一事务，因此 PgBouncer 无需特殊连接配置。通过 `postgresql.transactional.lock=false` 显式启用会话级锁，用于无法在事务内运行的 `CREATE INDEX CONCURRENTLY`。
+- **Prisma**，已从 `prisma-engines` 的 `postgres.rs` 第 367 行验证，使用会话级 `pg_advisory_lock(72707369)`，超时 10 秒。不显式解锁，连接释放时锁随之释放。Prisma 要求迁移使用独立 `directUrl` / `DIRECT_URL` 绕过事务模式连接池。用户可通过 `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK` 完全禁用加锁。
+- **Liquibase**，已从文档验证，使用表锁（`DATABASECHANGELOGLOCK`）而非建议锁，可通过连接池。但 pod 在迁移中崩溃时，行会保持锁定，直到通过 `liquibase release-locks` 或手动 `UPDATE ... SET locked = 0` 清除。
+- **Django**，已从文档验证，默认不为迁移加锁，依赖崩溃重试恢复。`django-pglock` 等社区包提供通用建议锁原语，不专用于迁移。它默认使用会话级锁，但文档警告 PgBouncer 风险，并提供 `xact=True` 事务级锁，作为连接池安全替代。
+
+<a id="tradeoff-summary"></a>
+
+### 取舍汇总
+
+| | 会话级（`pg_advisory_lock`） | 事务级（`pg_advisory_xact_lock`） |
 |---|---|---|
-| Multi-transaction workflows | Works — lock survives commits | Breaks — lock released at first commit |
-| `CREATE INDEX CONCURRENTLY` | Works — lock spans outside txn | Breaks — can't run inside a txn |
-| PgBouncer transaction mode | Breaks — orphaned/released locks | Works — lock contained in txn window |
-| Simplicity | Acquire once, close to release | Requires single-txn architecture |
-| Used by | Prisma, Django (community) | Flyway (default since 9.1.2) |
+| 多事务工作流 | 可用，跨提交保留锁 | 不可用，首次提交释放锁 |
+| `CREATE INDEX CONCURRENTLY` | 可用，锁覆盖事务外操作 | 不可用，无法在事务内运行 |
+| PgBouncer 事务模式 | 不可用，锁孤留或被释放 | 可用，锁包含于事务窗口 |
+| 简单性 | 获取一次，关闭连接释放 | 要求单事务架构 |
+| 使用工具 | Prisma、Django 社区包 | Flyway，自 9.1.2 起默认 |
 
-### Implication for Phoenix
+<a id="implication-for-phoenix"></a>
 
-The PR chose session-level locks, following the Prisma pattern. It called `conn.commit()` after acquiring the lock to clear the transaction state so Alembic could manage its own transactions cleanly. (Session-level locks are unaffected by `COMMIT`/`ROLLBACK` — they persist until the session ends.)
+### 对 Phoenix 的意义
+
+PR 遵循 Prisma 模式，选择会话级锁。获取锁后调用 `conn.commit()` 清除事务状态，让 Alembic 干净管理事务。会话级锁不受 `COMMIT`/`ROLLBACK` 影响，持续至会话结束。
 
 ```
 engine.connect() ──────► Connection
@@ -414,15 +466,17 @@ engine.connect() ──────► Connection
 connection.close() ──────► session lock released
 ```
 
-This isn't the only option. Phoenix's env.py wraps all migrations in a single outer transaction (see [How Alembic handles transactions](#how-alembic-handles-transactions)). A transaction-level lock (`pg_advisory_xact_lock`) acquired inside that outer transaction would be held for the entire migration run and released automatically on commit — the Flyway pattern. This would work through PgBouncer without needing a separate `PHOENIX_MIGRATION_DATABASE_URL`.
+这并非唯一选项。Phoenix env.py 将全部迁移包围于单个外层事务，参见 [Alembic 如何处理事务](#how-alembic-handles-transactions)。在该外层事务内获取事务级锁（`pg_advisory_xact_lock`），即可覆盖整次迁移，提交时自动释放，属于 Flyway 模式。可直接通过 PgBouncer，无需独立 `PHOENIX_MIGRATION_DATABASE_URL`。
 
-If we revisit, try the transaction-level approach first — it covers all current migrations (including the index migration in its default non-concurrent mode) and is PgBouncer-safe. The one edge case is when a user opts into `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true`, which escapes the transaction and releases the lock early. From that point the behavior falls back to unlocked — subsequent migrations rely on the authoring guidelines for safety (see [CREATE INDEX CONCURRENTLY](#create-index-concurrently) for the full analysis).
+若重新评估，先尝试事务级方案，它覆盖当前全部迁移，包括默认非并发模式的索引迁移，且对 PgBouncer 安全。唯一边界情况是用户显式开启 `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true`，跳出事务并提前释放锁。此后回退为无锁，后续迁移依赖编写准则保证安全，完整分析参见 [CREATE INDEX CONCURRENTLY](#create-index-concurrently)。
 
 ---
 
-# Reference implementation
+<a id="reference-implementation"></a>
 
-If we decide to add advisory locking, the most practical approach under the current env.py (Mode 3) is a transaction-level lock acquired inside the existing outer transaction (the Flyway pattern). This avoids the session-level risks described above and works through PgBouncer with no additional configuration.
+# 参考实现
+
+若决定添加建议锁，在当前 env.py 模式 3 下，最实用方案是在既有外层事务中获取事务级锁，即 Flyway 模式。它避免上述会话级风险，无需额外配置即可通过 PgBouncer。
 
 ```
 connection.begin() ──► Transaction
@@ -437,7 +491,9 @@ connection.begin() ──► Transaction
 transaction.commit() ──► lock released, all migrations committed atomically
 ```
 
-### Modified `run_migrations()` in env.py
+<a id="modified-run_migrations-in-envpy"></a>
+
+### env.py 中修改后的 `run_migrations()`
 
 ```python
 from zlib import crc32
@@ -479,56 +535,66 @@ def _acquire_migration_lock(connection: Connection) -> None:
     )
 ```
 
-### What this gets right
+<a id="what-this-gets-right"></a>
 
-1. **PgBouncer-safe** — the lock lifetime is contained within a single transaction, which is exactly the window PgBouncer guarantees backend affinity. No `PHOENIX_MIGRATION_DATABASE_URL` needed.
-2. **OOM-kill safe** — if the process dies, PostgreSQL rolls back the transaction and releases the lock immediately (no TCP keepalive wait).
-3. **Schema-scoped** — the two-argument form prevents independent deployments on different schemas from blocking each other.
-4. **No-op for SQLite** — the dialect check skips locking entirely on SQLite.
+### 正确之处
 
-### Where it falls short
+1. **对 PgBouncer 安全** — 锁生命周期包含于单事务，正好是 PgBouncer 保证后端亲和性的窗口，无需 `PHOENIX_MIGRATION_DATABASE_URL`。
+2. **对 OOM-kill 安全** — 进程死亡时 PostgreSQL 回滚事务并立即释放锁，无需等待 TCP keepalive。
+3. **Schema 作用域** — 双参数形式防止不同 schema 上的独立部署互相阻塞。
+4. **SQLite 不执行操作** — 通过方言检查，在 SQLite 上完全跳过加锁。
 
-The lock is defeated when a migration opts into `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true`. The concurrent index migration calls `dbapi_conn.commit()` to escape the transaction, which releases the `pg_advisory_xact_lock` and commits all prior migrations. From that point forward, the lock is fully gone — the concurrent index build and all subsequent migrations fall back to unlocked behavior (see [CREATE INDEX CONCURRENTLY](#create-index-concurrently) for the full transaction-splitting diagram):
+<a id="where-it-falls-short"></a>
 
-- The concurrent index itself is safe — `IF NOT EXISTS` handles the race.
-- Subsequent DDL migrations are crash-loop safe — the second replica fails and retries.
-- Subsequent non-idempotent DML against existing tables is **not safe** — the same risk as having no lock at all.
+### 不足之处
 
-By default (without `CONCURRENTLY` opt-in), the lock covers the entire run. But the existence of the escape hatch means the lock is best-effort, not a guarantee.
+迁移显式启用 `PHOENIX_MIGRATE_INDEX_CONCURRENTLY=true` 时，锁会被破坏。并发索引迁移调用 `dbapi_conn.commit()` 跳出事务，释放 `pg_advisory_xact_lock`，并提交全部先前迁移。此后锁完全消失，并发建索引和全部后续迁移回退为无锁行为；完整事务拆分图参见 [CREATE INDEX CONCURRENTLY](#create-index-concurrently)：
 
-### Alternative: Session-level lock + `PHOENIX_MIGRATION_DATABASE_URL`
+- 并发索引本身安全，`IF NOT EXISTS` 处理竞态。
+- 后续 DDL 迁移可通过崩溃重试恢复，第二副本失败并重试。
+- 后续针对已有表的非幂等 DML **不安全**，与完全无锁风险相同。
 
-A session-level lock (`pg_advisory_lock`) on a direct connection (bypassing the pooler) has one advantage the transaction-level approach does not: **it survives `CONCURRENTLY`**. The lock is held at the connection level, so `dbapi_conn.commit()` doesn't release it. No T1/T2 split, no defeated lock. Full coverage for all migrations.
+默认未显式启用 `CONCURRENTLY` 时，锁覆盖整次运行。但此出口的存在意味着锁只能尽力保护，不是保证。
 
-The tradeoff is different, not strictly worse:
+<a id="alternative-session-level-lock--phoenix_migration_database_url"></a>
 
-| | Transaction-level (above) | Session-level + direct URL |
+### 替代方案：会话级锁 + `PHOENIX_MIGRATION_DATABASE_URL`
+
+直连并绕过连接池的会话级锁（`pg_advisory_lock`）具有事务级方案没有的优势：**可跨 `CONCURRENTLY` 保留**。锁位于连接级，`dbapi_conn.commit()` 不会释放它。无 T1/T2 拆分、无锁失效，完整覆盖全部迁移。
+
+这是不同取舍，并非严格更差：
+
+| | 事务级（上文） | 会话级 + 直连 URL |
 |---|---|---|
-| `CONCURRENTLY` opt-in | Defeated — lock released | Survives — lock held |
-| PgBouncer | Works (no config needed) | Works (direct URL bypasses pooler) |
-| OOM-kill | Safe — txn rolls back, lock released | Blocks — until TCP keepalive (~6 min RDS) |
-| Config burden | None | Requires `PHOENIX_MIGRATION_DATABASE_URL` |
+| 显式启用 `CONCURRENTLY` | 失效，锁被释放 | 保留，继续持锁 |
+| PgBouncer | 可用，无需配置 | 可用，直连 URL 绕过连接池 |
+| OOM-kill | 安全，事务回滚、锁释放 | 阻塞至 TCP keepalive，RDS 约 6 分钟 |
+| 配置负担 | 无 | 需要 `PHOENIX_MIGRATION_DATABASE_URL` |
 
-With a direct connection (no pooler), the OOM-kill risk is less severe than the scenarios described in the main body — other replicas simply wait on a direct connection to PostgreSQL, with no pooler backend contamination or cluster-wide deadlock. It's comparable to any other "process died holding a resource" scenario.
+直连无连接池时，OOM-kill 风险低于正文所述场景：其他副本仅通过直连等待 PostgreSQL，不会污染连接池后端，也不会造成集群级死锁，类似其他“进程持有资源时死亡”的场景。
 
-If full coverage matters more than zero-config, the session-level approach with a direct URL is the stronger choice.
+若完整覆盖比零配置更重要，使用直连 URL 的会话级方案更强。
 
-### Honest assessment
+<a id="honest-assessment"></a>
 
-The migration authoring guidelines (pair DML with DDL, make standalone DML idempotent) are the primary safety mechanism in all scenarios — with or without either lock approach, with or without `CONCURRENTLY`. Advisory locking adds defense-in-depth for the common case but:
+### 如实评估
 
-- It solves a problem that doesn't currently exist (no migration has non-idempotent DML against a pre-existing table).
-- The transaction-level approach is defeated in the `CONCURRENTLY` edge case, falling back to the same authoring guidelines.
-- The session-level approach requires additional configuration (`PHOENIX_MIGRATION_DATABASE_URL`) and has OOM-kill exposure.
-- Both approaches add code complexity that future contributors would need to understand.
-- Code review is a more reliable gate for catching dangerous migrations than a runtime lock.
+迁移编写准则，即 DML 与 DDL 配对、独立 DML 幂等，是所有场景的主要安全机制，无论采用哪种锁或不加锁，也无论是否使用 `CONCURRENTLY`。建议锁为常见情况增加纵深防御，但：
 
-These implementations are here as a reference if we ever decide the defense-in-depth is worth the complexity. Neither should be shipped preemptively.
+- 它解决当前并不存在的问题，没有迁移对已有表执行非幂等 DML。
+- 事务级方案在 `CONCURRENTLY` 边界情况下失效，回退至相同编写准则。
+- 会话级方案要求额外配置（`PHOENIX_MIGRATION_DATABASE_URL`），并暴露于 OOM-kill 风险。
+- 两种方案都增加未来贡献者需要理解的代码复杂度。
+- 相比运行时锁，代码评审更能可靠拦截危险迁移。
+
+这些实现仅供未来认为纵深防御值得复杂度时参考，均不应预先发布。
 
 ---
 
-# Schema scoping
+<a id="schema-scoping"></a>
 
-PostgreSQL advisory locks are database-scoped, not schema-scoped. If two independent Phoenix deployments share the same database with different schemas (via `PHOENIX_DATABASE_SCHEMA`), a naive single-key `pg_advisory_lock(key)` would cause them to serialize against each other unnecessarily — each blocking the other's migrations on startup.
+# Schema 作用域
 
-This can be addressed via the two-argument form `pg_advisory_lock(key, schema_hash)`, using `crc32` of the schema name as the second argument.
+PostgreSQL 建议锁作用于数据库，而非 schema。若两个独立 Phoenix 部署通过 `PHOENIX_DATABASE_SCHEMA` 在同一数据库使用不同 schema，简单单键 `pg_advisory_lock(key)` 会不必要地使两者串行，启动时互相阻塞迁移。
+
+可使用双参数形式 `pg_advisory_lock(key, schema_hash)` 解决，第二参数使用 schema 名称的 `crc32`。

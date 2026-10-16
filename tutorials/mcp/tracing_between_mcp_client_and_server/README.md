@@ -1,75 +1,75 @@
-# How to Implement End-to-End Tracing for MCP Client-Server Applications
+# 为 MCP 客户端与服务端应用实现端到端追踪
 
-This tutorial shows you how to propagate OpenTelemetry (OTEL) context between an MCP client and server for complete observability. The `openinference-instrumentation-mcp` package makes this possible by providing instrumentation for both client and server components.
+本教程介绍如何在 MCP 客户端与服务端之间传播 OpenTelemetry（OTEL）上下文，实现完整的可观测性。`openinference-instrumentation-mcp` 包为客户端和服务端组件提供埋点支持。
 
-## What is MCP and Why Do You Need Distributed Tracing?
+## 什么是 MCP，为什么需要分布式追踪？
 
-One of the main benefits of Anthropic's Model Context Protocol (MCP) architecture is connecting AI models with information across different services, machines, and programming languages. This distributed approach delivers several advantages:
+Anthropic 的模型上下文协议（MCP）架构的一项主要优势，是将 AI 模型与不同服务、机器和编程语言中的信息连接起来。这种分布式方式有以下优点：
 
-1. **Expanded AI Capabilities**: Connect models to specialized knowledge and data sources beyond their training data
-2. **Plug-and-Play Components**: Add new context providers without retraining your models
-3. **Multi-Language Support**: Implement context providers in any programming language while maintaining compatibility
+1. **扩展 AI 能力**：让模型连接训练数据之外的专业知识与数据源。
+2. **即插即用的组件**：无需重新训练模型，即可添加新的上下文提供方。
+3. **多语言支持**：使用不同编程语言实现上下文提供方，同时保持兼容。
 
-The challenge? When requests flow through multiple services, debugging becomes difficult. How do you track a request's complete journey to identify where problems occur?
+当请求经过多个服务时，调试会变得困难。如何跟踪请求的完整路径，定位问题发生的位置？
 
-### How to Use OpenTelemetry for MCP Tracing
+### 使用 OpenTelemetry 追踪 MCP 调用
 
-OpenTelemetry solves cross-service tracing challenges by:
+OpenTelemetry 通过以下机制解决跨服务追踪问题：
 
-- **Preserving Context Across Services**: Maintaining trace IDs and relationships between different components
-- **Working Across Network Boundaries**: Automatically handling context in network requests
-- **Supporting Multiple Languages**: Using standardized formats compatible with any programming language
+- **跨服务保留上下文**：维持追踪 ID 与不同组件之间的关系。
+- **跨网络边界传播**：自动处理网络请求中的上下文。
+- **支持多种语言**：使用与不同编程语言兼容的标准格式。
 
-When your client calls the server with proper instrumentation:
-1. The client creates a span to track the operation
-2. OTEL context automatically travels with the MCP request
-3. The server continues the same trace without interruption
-4. All context providers inherit this trace context
-5. You see the complete interaction as one connected trace in Phoenix
+正确接入埋点后，客户端调用服务端时：
+1. 客户端创建 Span，记录该操作。
+2. OTEL 上下文随 MCP 请求自动传播。
+3. 服务端延续同一条追踪。
+4. 所有上下文提供方继承该追踪上下文。
+5. 在 Phoenix 中可以将整个交互查看为一条连通的追踪。
 
-This visibility is essential for troubleshooting complex AI systems, optimizing performance bottlenecks, and understanding how different components affect your application's behavior.
+这些信息有助于排查复杂 AI 系统的问题、优化性能瓶颈，并理解不同组件如何影响应用行为。
 
 
-## Setup
+## 环境准备
 
-When properly instrumented, trace context is automatically propagated across the MCP client-server boundary, allowing you to:
+正确接入埋点后，追踪上下文会自动跨越 MCP 客户端与服务端边界，从而：
 
-- Track requests from client to server in a single trace
-- Observe latency at different stages of the request lifecycle
-- Debug issues that span across service boundaries
+- 在同一条追踪中跟踪从客户端到服务端的请求。
+- 观察请求生命周期各阶段的时延。
+- 调试跨服务边界的问题。
 
-### Env Setup
+### 配置环境
 
-1. Open this directory independent of the rest of the Phoenix repo. This is critical to avoid shadowing the `agents` package name used by OpenAI.
+1. 将此目录作为独立项目打开，避免与 Phoenix 仓库其他目录混用，以防遮蔽 OpenAI 使用的 `agents` 包。
 
-2. Install the required dependencies:
+2. 安装所需依赖：
    ```bash
    pip install -r requirements.txt
    ```
 
-### Running the Example
+### 运行示例
 
-1. Run Phoenix locally, or connect to an [instance online](https://app.phoenix.arize.com)
+1. 在本地运行 Phoenix，或连接[在线实例](https://app.phoenix.arize.com)。
 
-2. Update your .env file with `OPENAI_API_KEY`, and your `PHOENIX_COLLECTOR_ENDPOINT`. If you're using an online Phoenix instance or have auth enabled, also set your `PHOENIX_API_KEY`.
+2. 在 `.env` 中配置 `OPENAI_API_KEY` 和 `PHOENIX_COLLECTOR_ENDPOINT`。如果使用在线实例或启用了认证，还需设置 `PHOENIX_API_KEY`。
 
-3. Run the MCP client. The client code will spin up the server at run time in a separate process.
+3. 运行 MCP 客户端。客户端会在运行时通过独立进程启动服务端。
    ```bash
    python client.py
    ```
 
-4. Ask questions of the agent.
+4. 向 Agent 提问。
 
-5. View the traces in Phoenix:
-![mcp-traces](https://storage.googleapis.com/arize-phoenix-assets/assets/images/mcp-instrumentation.png)
+5. 在 Phoenix 中查看追踪：
+![MCP 追踪](https://storage.googleapis.com/arize-phoenix-assets/assets/images/mcp-instrumentation.png)
 
-### How It Works
+### 工作原理
 
-The `openinference-instrumentation-mcp` package automatically:
+`openinference-instrumentation-mcp` 包会自动：
 
-1. Creates spans for MCP client operations
-2. Injects trace context into MCP requests
-3. Extracts and continues the trace context on the server side
-4. Associates the context with any OTEL spans created on the server side
+1. 为 MCP 客户端操作创建 Span。
+2. 向 MCP 请求注入追踪上下文。
+3. 在服务端提取并延续追踪上下文。
+4. 将上下文关联到服务端创建的 OTEL Span。
 
-This allows you to see the complete request flow as a single trace, even though it crosses service boundaries.
+这样，即使请求跨越服务边界，也能通过一条追踪查看完整流程。

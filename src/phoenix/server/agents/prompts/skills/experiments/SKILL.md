@@ -1,91 +1,58 @@
 ---
 name: experiments
 description: >
-  Run, read, and compare dataset-backed experiments to find evidence that a prompt or pipeline is improving. Trigger when the user wants to iterate over a dataset with experiments, compare experiment runs, read experiment quality/latency/cost, or decide whether a change actually helped. Running a prompt over a dataset is implicitly an experiment — load this skill when dataset-backed work begins, before authoring evaluators for the experiment and before starting the recorded run, not only when reading results. Do NOT trigger on: (1) manual prompt drafting with no dataset-backed evaluation in scope (use `playground`), (2) authoring or refining an evaluator's logic or rubric (use `evaluators`), (3) cross-trace failure diagnosis with no experiment in scope (use `phoenix-error-analysis`).
-summary: Iterate over a dataset with experiments — run, read results across quality, latency, and cost, and compare candidates to drive improvement.
+  运行、阅读和比较基于数据集的实验，寻找提示词或流水线改进的证据。用户希望通过实验迭代数据集、比较实验运行、查看质量/延迟/费用，或判断改动是否有效时触发。对数据集运行提示词本身就是实验；应在基于数据集的工作开始时加载，在编写实验评估器及开始记录运行之前加载，而非只在读取结果时加载。以下情况不触发：（1）不涉及数据集评估的手动提示词编写，使用 `playground`；（2）编写或改进评估器逻辑或评分规则，使用 `evaluators`；（3）不涉及实验的跨追踪故障诊断，使用 `phoenix-error-analysis`。
+summary: 通过实验迭代数据集，运行并从质量、延迟和费用三个方面解读结果，比较候选方案以推动改进。
 ---
 
-# Experiments
+<a id="experiments"></a>
 
-An experiment is one run of a prompt or pipeline over every example in a dataset, captured with its
-outputs and any evaluator annotations so it can be reviewed and compared later. Experiments turn
-"this prompt feels better" into evidence: a per-example record you can score, aggregate, and diff
-against an earlier run.
+# 实验
 
-Reading, comparing, recording, and evaluating are run-path agnostic: they apply equally to
-experiments created through the SDK or REST API and to experiments culled from traces. Only the run
-step binds to playground capabilities — the `playground` skill owns prompt authoring and the
-mechanics of starting a recorded run. The `evaluators` skill owns how the scores you read here are
-designed. Route dataset evolution and hardening to `datasets`.
+实验是对数据集中每个示例运行一次提示词或流水线，并记录输出及评估器标注，以供后续审查和比较。实验将“感觉这个提示词更好”转化为证据：可评分、汇总并与先前运行对比的逐示例记录。
 
-## Before You Start: Read What Already Ran
+读取、比较、记录和评估不依赖运行方式：既适用于通过 SDK 或 REST API 创建的实验，也适用于从追踪记录整理出的实验。只有运行步骤依赖 Playground 能力；`playground` 技能负责提示词编写和启动已记录运行的具体操作。`evaluators` 技能负责设计此处读取的分数。数据集演进和完善交给 `datasets`。
 
-Before designing a new experiment on a dataset, read the experiments already run against it. Each
-carries scaffolding written at creation — a hypothesis, the variable changed, the baseline it built
-on — plus observations appended afterward. Reading that record avoids re-running a comparison a
-previous session settled and tells you which hypotheses are still open. Inventory the dataset's
-existing evaluators at the same time: what is already scored shapes what the next run can measure.
+<a id="before-you-start-read-what-already-ran"></a>
 
-## Workflow: Iterate Over A Dataset
+## 开始前先阅读已有运行
 
-The loop's only user touchpoints are defining the goal and accepting a tradeoff; everything between
-is drivable end-to-end, pausing only when one of those two conditions is genuinely underdetermined.
+为数据集设计新实验前，先读取此前在该数据集上运行的实验。每个实验都带有创建时写入的基本信息，包括假设、改动变量和所基于的基线，以及之后追加的观察。读取这些记录可避免重复前一会话已解决的比较，也能明确哪些假设仍待验证。同时盘点数据集现有评估器，已有评分内容决定下一次运行能衡量什么。
 
-1. Confirm the dataset represents the task: the input fields the run consumes, the expected outputs,
-   and the failure modes worth catching. Context the prompt must consume — a schema, retrieved
-   documents, a policy boundary — belongs in `input`, never in `reference`, which the run under test
-   must not see. When reading a dataset's `reference`, triage its provenance before trusting it as an
-   answer key — it may be golden, a baseline-snapshot, or absent (reference-free); the `evaluators`
-   skill owns that taxonomy.
-2. Make sure the starting prompt is well formed before running it — task, variables, output format,
-   and the constraints needed for consistent scoring. An ill-formed baseline wastes a run.
-3. Run the prompt over the dataset as a recorded experiment, staging the scaffold (hypothesis,
-   changed variable, baseline) at creation so a later session can read the comparison rather than
-   guess at it. A playground experiment is one LLM completion per example; to test multi-turn or
-   read-then-write behavior, prime the example's input with a multi-turn message history so the run
-   scores the completion the model emits next.
-4. Read the results across all three axes together — output quality (evaluator annotations, including
-   each judgment's explanation), latency, and cost — rather than fixating on a single score. Trust
-   aggregates only when the run is complete with zero errors; a half-finished or error-laden run
-   produces misleading summaries.
-5. Score what you observe. Anything example-level and scorable defaults to an evaluator at the moment
-   of observation — scores are reviewable, sortable columns a human can scan; observations are not.
-   Derive the judgment from the experiment's stated purpose, inventory the dataset's existing
-   evaluators, reuse one that matches, and create only on a gap (`evaluators` covers the design).
-6. Form one specific hypothesis for the next candidate — a named failure mode and the single change
-   expected to fix it — and change exactly one axis: prompt, model, invocation params, tool-guidance,
-   or dataset-scope. Changing several axes at once makes the comparison uninterpretable.
-7. Compare the new experiment against its baseline per-example and aligned, not by aggregate means
-   alone or from memory — an averaged metric hides the example a change broke. Splits may carry
-   different success criteria per split; never average a guarded holdout back into the headline
-   number. Use repetitions greater than one when you need a consistency read, not a point estimate.
-8. Report what the comparison showed: a verdict on the hypothesis, a summary across quality, latency,
-   and cost, and the evaluator explanations cited as evidence for the verdict.
-9. Continue hypothesis → run → compare → report until the evidence meets the stated goal, then save
-   the prompt version the evidence supports or the accepted tradeoff selects.
+<a id="workflow-iterate-over-a-dataset"></a>
 
-## Recording What You Learned
+## 工作流：围绕数据集迭代
 
-There are two moments to write back, and they capture different things. Stage the scaffold before the
-run, while the framing is fresh — the hypothesis, the changed variable, the baseline — as part of
-starting the recorded run. After reading results, route by kind: experiment-level narrative —
-hypothesis verdicts, decisions taken, one-off drifts — belongs in the experiment's observations;
-anything example-level and scorable defaults to an evaluator the moment you observe it (step 5), not
-to an observation deferred until it recurs. To append an observation without losing what is already
-there, read the experiment's current metadata first, then write back the whole object with a new
-timestamped observation added and every existing key — hypothesis, changed variable, baseline among
-them — left intact; a write that omits them erases the scaffold the next session depends on.
+循环中只有定义目标和接受取舍需要用户参与；中间步骤可以端到端推进，仅当这两项之一确实不明确时才暂停。
 
-## Boundaries
+1. 确认数据集代表目标任务，包括运行读取的输入字段、预期输出和需要发现的失败模式。提示词必须读取的上下文，如模式、检索文档或政策边界，应放在 `input`，绝不能放在被测运行不可见的 `reference`。读取数据集 `reference` 时，应先判断来源，再决定是否可作为答案标准：可能是黄金答案、基线快照，或完全缺失（无参考）；此分类由 `evaluators` 技能负责。
+2. 运行前确保起始提示词结构完善，包括任务、变量、输出格式和一致评分所需的约束。结构不完善的基线会浪费一次运行。
+3. 将提示词对数据集的运行记录为实验，在创建时写入基本信息（假设、改动变量、基线），便于后续会话阅读比较而非猜测。Playground 实验对每个示例执行一次 LLM 补全；要测试多轮或先读后写行为，可在示例输入中准备多轮消息历史，让运行评判模型接下来生成的补全。
+4. 同时从三个维度读取结果：输出质量（评估器标注，包含每次判断的解释）、延迟和费用，不要只盯着单个分数。只有运行完成且零错误时才能信任汇总结果；未完成或错误众多的运行会产生误导性总结。
+5. 为观察到的现象评分。凡是示例级且可评分的内容，应在观察时就默认交给评估器：分数是人类可审查、排序和浏览的列，普通观察笔记不是。从实验既定目的推导判断，盘点数据集已有评估器，匹配时复用，存在缺口时才创建；设计由 `evaluators` 负责。
+6. 为下一个候选方案形成一个具体假设：指明失败模式和预期能解决它的单项改动。只改变一个维度：提示词、模型、调用参数、工具指导或数据集范围。同时改变多个维度会使比较无法解释。
+7. 将新实验与基线按示例对齐比较，不能仅比较汇总均值，也不能凭记忆。平均指标会掩盖改动破坏的具体示例。各划分可以有不同成功标准，不能把受保护的留出集混回总体指标。需要了解一致性而非单点估计时，应使用大于一次的重复运行。
+8. 报告比较结论：对假设的判定、质量/延迟/费用汇总，以及支撑结论的评估器解释。
+9. 持续进行“假设 → 运行 → 比较 → 报告”，直到证据满足既定目标，再保存证据支持或用户接受取舍所选定的提示词版本。
 
-- When a needed write — a dataset edit, a run setting, an invocation parameter — has no available
-  path, surface the change you need to the user rather than improvising it through raw reads or
-  writes.
+<a id="recording-what-you-learned"></a>
 
-## Things To Avoid
+## 记录学到的内容
 
-- Don't trust an experiment's aggregates while it is in progress or has nonzero errors.
-- Don't change more than one axis between experiments you intend to compare.
-- Don't average a guarded holdout split back into the headline number.
-- Don't re-run a comparison a previous session already settled; read the scaffolding first.
-- Don't read quality in isolation — a higher score that doubled latency or cost is not a win.
+有两个写回时点，分别记录不同内容。运行前，在思路仍清晰时，作为启动记录运行的一部分，写入假设、改动变量和基线等基本信息。读取结果后，按内容类型处理：实验级叙述，如假设结论、决策和一次性偏差，写入实验观察；示例级且可评分的内容在观察时就默认交给评估器（步骤 5），不能作为笔记等待再次发生。追加观察且不丢失已有内容时，应先读取实验当前元数据，再写回整个对象，添加带时间戳的新观察，并保留全部既有键，包括假设、改动变量和基线；写入时省略这些键，会抹掉后续会话依赖的基本信息。
+
+<a id="boundaries"></a>
+
+## 边界
+
+- 所需写入，如数据集编辑、运行设置或调用参数，没有可用操作路径时，应向用户说明需要的改动，不能通过原始读写临时绕行。
+
+<a id="things-to-avoid"></a>
+
+## 应避免的做法
+
+- 实验仍在进行或错误数非零时就信任汇总结果。
+- 在拟比较的实验之间同时改变多个维度。
+- 将受保护的留出划分重新平均到总体指标中。
+- 不先读取基本信息，重复前一会话已经解决的比较。
+- 孤立看质量；分数提高但延迟或费用翻倍，并不代表胜出。

@@ -1,8 +1,12 @@
-# Agent Evaluation Harness
+<a id="agent-evaluation-harness"></a>
 
-Automated evaluation framework for the Phoenix Documentation Assistant CLI agent.
+# Agent 评测框架
 
-## Quick Start
+Phoenix 文档助手 CLI Agent 的自动化评测框架。
+
+<a id="quick-start"></a>
+
+## 快速开始
 
 ```bash
 # Run all evaluations
@@ -15,11 +19,15 @@ pnpm eval terminal
 pnpm eval:terminal-format
 ```
 
-## Available Evaluations
+<a id="available-evaluations"></a>
 
-- **Terminal Safe Format**: Calls the real agent and verifies outputs don't contain markdown syntax (bold, italic, code blocks, links, etc.)
+## 可用评估
 
-## Project Structure
+- **终端安全格式**：调用真实 Agent，验证输出不含 Markdown 语法（粗体、斜体、代码块、链接等）
+
+<a id="project-structure"></a>
+
+## 项目结构
 
 ```
 evals/
@@ -29,9 +37,11 @@ evals/
 └── utils/              # Shared utilities (camelCase)
 ```
 
-## Creating New Evaluators
+<a id="creating-new-evaluators"></a>
 
-1. **Create evaluator** in `evals/evaluators/myEvaluator.ts`:
+## 创建新评估器
+
+1. **创建评估器**，文件为 `evals/evaluators/myEvaluator.ts`:
 
 ```typescript
 import { createEvaluator } from "@arizeai/phoenix-evals";
@@ -46,7 +56,7 @@ export const myEvaluator = createEvaluator(
 );
 ```
 
-2. **Create dataset** in `evals/datasets/myExamples.ts`:
+2. **创建数据集**，文件为 `evals/datasets/myExamples.ts`:
 
 ```typescript
 export const myExamples = [
@@ -58,7 +68,7 @@ export const myExamples = [
 ];
 ```
 
-3. **Create experiment** in `evals/experiments/my-eval.eval.ts`:
+3. **创建实验**，文件为 `evals/experiments/my-eval.eval.ts`:
 
 ```typescript
 #!/usr/bin/env tsx
@@ -92,26 +102,27 @@ main().catch((error) => {
 });
 ```
 
-4. **Run it**: `pnpm eval my-eval` or `tsx evals/experiments/my-eval.eval.ts`
+4. **运行**： `pnpm eval my-eval` 或 `tsx evals/experiments/my-eval.eval.ts`
 
-## View Results
+<a id="view-results"></a>
+
+## 查看结果
 
 http://localhost:6006/datasets
 
 ---
 
-## Benchmarking Strategy: Evaluating the Evaluators
+<a id="benchmarking-strategy-evaluating-the-evaluators"></a>
 
-LLM-based evaluators are themselves models that can make mistakes. Before you rely on an evaluator
-to judge your agent's outputs, you should measure how accurate the evaluator is. This is called
-**evaluator benchmarking** (or "meta-evaluation").
+## 基准测试策略：评估评估器
 
-### The Core Idea
+基于 LLM 的评估器本身也是模型，也可能出错。依赖评估器判断 Agent 输出前，应先衡量其准确程度。这称为**评估器基准测试**（或“元评估”）。
 
-Create a **golden dataset** — a small set of hand-labeled examples where you know the correct
-answer — and run your evaluator against it. Measure how often the evaluator agrees with the ground
-truth. A well-calibrated evaluator should reach **>80% TPR and >80% TNR** before you trust it at
-scale.
+<a id="the-core-idea"></a>
+
+### 核心思路
+
+创建**黄金数据集**，即一小组已知正确答案的人工标注示例，然后对其运行评估器，衡量其与真实标签一致的频率。经过良好校准的评估器应达到 **TPR >80% 且 TNR >80%**，之后才能放心大规模使用。
 
 ```
 Golden dataset (hand-labeled)
@@ -124,14 +135,13 @@ Golden dataset (hand-labeled)
   Confusion matrix  →  TPR / TNR / Accuracy
 ```
 
-### Keeping Benchmark Experiments Separate from Task Experiments
+<a id="keeping-benchmark-experiments-separate-from-task-experiments"></a>
 
-When you run a normal experiment, Phoenix tracks it under the **task dataset**
-(e.g. `cli-agent-terminal-format`). Benchmark experiments use a **different dataset**
-(e.g. `cli-agent-terminal-format-benchmark`) so the two experiment histories stay independent in
-the Phoenix UI.
+### 将基准实验与任务实验分开
 
-To support this, each dataset definition in `evals/datasets/` carries two names:
+运行普通实验时，Phoenix 将其记录在**任务数据集**（如 `cli-agent-terminal-format`）下。基准实验使用**不同的数据集**（如 `cli-agent-terminal-format-benchmark`），使两种实验历史在 Phoenix UI 中保持独立。
+
+为支持这一点，`evals/datasets/` 中的每个数据集定义都包含两个名称：
 
 ```typescript
 export const terminalFormatDataset = {
@@ -143,11 +153,11 @@ export const terminalFormatDataset = {
 };
 ```
 
-The benchmark script creates or reuses the `benchmarkName` dataset, so every benchmark run
-appears as a new experiment under that dataset — completely separate from the experiments that
-measure the agent task.
+基准脚本创建或复用 `benchmarkName` 数据集，使每次基准运行都作为该数据集下的新实验出现，与衡量 Agent 任务的实验完全分开。
 
-### Project Structure
+<a id="project-structure-1"></a>
+
+### 项目结构
 
 ```
 evals/
@@ -158,7 +168,9 @@ evals/
 └── utils/               # Shared utilities (confusion matrix, stats)
 ```
 
-### Running a Benchmark
+<a id="running-a-benchmark"></a>
+
+### 运行基准测试
 
 ```bash
 # Run all benchmarks
@@ -168,19 +180,19 @@ pnpm eval:benchmark
 tsx evals/benchmarks/terminal-format.benchmark.ts
 ```
 
-### How the Benchmark Experiment Works
+<a id="how-the-benchmark-experiment-works"></a>
 
-In a benchmark experiment the roles are inverted compared to a normal experiment:
+### 基准实验的工作原理
 
-| Normal experiment                  | Benchmark experiment                         |
+与普通实验相比，基准实验中的角色互换：
+
+| 普通实验                  | 基准实验                         |
 | ---------------------------------- | -------------------------------------------- |
-| Task = agent logic                 | Task = run the evaluator                     |
-| Evaluators = judge agent output    | Evaluator = exact-match against ground truth |
-| Dataset = agent input/output pairs | Dataset = golden hand-labeled examples       |
+| 任务 = Agent 逻辑                 | 任务 = 运行评估器                     |
+| 评估器 = 评判 Agent 输出    | 评估器 = 与真实标签精确匹配 |
+| 数据集 = Agent 输入/输出对 | 数据集 = 人工标注的黄金示例       |
 
-The benchmark task calls the evaluator under test and returns its predicted label as the task
-output. The exact-match evaluator then compares that prediction to the `metadata.expectedSafe`
-ground truth from the golden dataset.
+基准任务调用被测评估器，将其预测标签作为任务输出返回。随后，精确匹配评估器将预测与黄金数据集中 `metadata.expectedSafe` 的真实标签比较。
 
 ```typescript
 // Task: run the evaluator being benchmarked
@@ -212,9 +224,11 @@ const exactMatchEvaluator = asExperimentEvaluator({
 });
 ```
 
-### Creating a New Benchmark
+<a id="creating-a-new-benchmark"></a>
 
-1. **Add ground truth labels** to your dataset examples via `metadata`:
+### 创建新基准测试
+
+1. 通过 `metadata` 为数据集示例**添加真实标签**：
 
 ```typescript
 export const myExamples = [
@@ -231,7 +245,7 @@ export const myExamples = [
 ];
 ```
 
-2. **Add `benchmarkName`** to your dataset definition:
+2. 为数据集定义**添加 `benchmarkName`**：
 
 ```typescript
 export const myDataset = {
@@ -243,7 +257,7 @@ export const myDataset = {
 };
 ```
 
-3. **Create a benchmark runner** in `evals/benchmarks/my-eval.benchmark.ts`:
+3. **创建基准运行器**，文件为 `evals/benchmarks/my-eval.benchmark.ts`:
 
 ```typescript
 #!/usr/bin/env tsx
@@ -327,25 +341,28 @@ main().catch((error) => {
 });
 ```
 
-### Reading the Confusion Matrix
+<a id="reading-the-confusion-matrix"></a>
 
-The benchmark prints a confusion matrix with three key metrics:
+### 解读混淆矩阵
 
-| Metric                                     | What it measures                                       | Target |
+基准测试会打印混淆矩阵，包含三个关键指标：
+
+| 指标                                     | 衡量内容                                       | 目标 |
 | ------------------------------------------ | ------------------------------------------------------ | ------ |
-| **TPR** (True Positive Rate / Sensitivity) | % of real positives the evaluator correctly identifies | > 80%  |
-| **TNR** (True Negative Rate / Specificity) | % of real negatives the evaluator correctly rejects    | > 80%  |
-| **Accuracy**                               | Overall % correct                                      | > 80%  |
+| **TPR** （真正率 / 灵敏度） | 评估器正确识别的真实正例比例 | > 80%  |
+| **TNR** （真负率 / 特异度） | 评估器正确拒绝的真实负例比例    | > 80%  |
+| **准确率**                               | 总体正确率                                      | > 80%  |
 
-A low TPR means the evaluator has too many false negatives (lets bad outputs through).
-A low TNR means the evaluator has too many false positives (flags good outputs as failures).
+TPR 较低表示评估器存在过多假负例（放过不良输出）。
+TNR 较低表示评估器存在过多假正例（将良好输出标记为失败）。
 
-### Phoenix UI: Two Separate Dataset Pages
+<a id="phoenix-ui-two-separate-dataset-pages"></a>
 
-Because benchmarks use a different dataset name, the Phoenix UI shows them on separate pages:
+### Phoenix UI：两个独立数据集页面
 
-- **`my-task-dataset`** → experiments where the agent task is evaluated
-- **`my-task-dataset-benchmark`** → experiments where the evaluator accuracy is measured
+由于基准测试使用不同的数据集名称，Phoenix UI 会在独立页面中展示：
 
-This separation lets you iterate on your evaluator (re-run benchmarks, track accuracy over time)
-without polluting the history of your agent task experiments.
+- **`my-task-dataset`** → 评估 Agent 任务的实验
+- **`my-task-dataset-benchmark`** → 衡量评估器准确率的实验
+
+这种分离使你能够迭代评估器（重新运行基准测试、跟踪准确率变化），同时不污染 Agent 任务实验的历史记录。

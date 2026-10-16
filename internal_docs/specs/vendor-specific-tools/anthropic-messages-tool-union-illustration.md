@@ -1,12 +1,13 @@
-# Anthropic Messages API: `ToolUnionParam` variants
+<a id="anthropic-messages-api-toolunionparam-variants"></a>
+# Anthropic Messages API：`ToolUnionParam` 变体
 
-Practical JSON examples for each shape you can pass in `tools` on `POST /v1/messages` (or `messages.create(..., tools=[...])` in the Python SDK). They follow the TypedDict names under `anthropic/types/`, which mirror the HTTP schema. Use a section's example as a starting point and drop fields you do not need.
+本文为 `POST /v1/messages` 的 `tools`，或 Python SDK 的 `messages.create(..., tools=[...])`，提供各类可传入结构的实用 JSON 示例。它们遵循 `anthropic/types/` 下的 TypedDict 名称，与 HTTP schema 对应。可从各节示例开始，删除不需要的字段。
 
-**Terms:** **`tool_use`** = an assistant message block where the model asks to run a tool (with `name`, `id`, `input`). **`tool_result`** = your next user message block that returns output for that call (with matching `tool_use_id`). **Server tools** (web search, bash, etc.) run on Anthropic’s side; **client tools** are the ones your code executes.
+**术语：** **`tool_use`** 是模型请求执行工具的助手消息块，包含 `name`、`id`、`input`。**`tool_result`** 是下一条用户消息中返回该调用输出的块，携带匹配的 `tool_use_id`。**服务端工具**，如网页搜索、Bash，在 Anthropic 一侧运行；**客户端工具**由你的代码执行。
 
-**Full union** (same order as the SDK):
+**完整联合类型**，顺序与 SDK 相同：
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_union_param.py#L27-L44)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_union_param.py#L27-L44)
 
 ```python
 ToolUnionParam: TypeAlias = Union[
@@ -29,19 +30,20 @@ ToolUnionParam: TypeAlias = Union[
 ]
 ```
 
-Permalinks below use commit `8496c50655999cbb2c871e71331996f87025e240` from a local clone of [anthropics/anthropic-sdk-python](https://github.com/anthropics/anthropic-sdk-python); re-run `git rev-parse HEAD` there after upgrading and replace the hash in URLs if you need an exact match to your installed version.
+下方永久链接使用本地克隆 [anthropics/anthropic-sdk-python](https://github.com/anthropics/anthropic-sdk-python) 的提交 `8496c50655999cbb2c871e71331996f87025e240`。升级后请在该仓库重新运行 `git rev-parse HEAD`；如需精确对应已安装版本，应替换 URL 中的哈希。
 
-**Built-in tools** (bash, web search, …): each entry includes a versioned **`type`** (e.g. `web_search_20260209`) and a fixed **`name`** (e.g. `web_search`) that must match the API. **User-defined tools** (`ToolParam`): required **`name`** and **`input_schema`**; top-level **`type` is omitted** unless you use the optional `"custom"` discriminator (see §1 examples).
+**内置工具**，如 Bash、网页搜索，每个条目包含带版本的 **`type`**，例如 `web_search_20260209`，以及必须与 API 匹配的固定 **`name`**，例如 `web_search`。**用户定义工具**（`ToolParam`）要求 **`name`** 和 **`input_schema`**；除非使用可选 `"custom"` 判别字段，否则**省略顶层 `type`**，见第 1 节示例。
 
-Shared optional fields on many tools: `allowed_callers`, `cache_control`, `defer_loading`, `strict`. See per-section notes.
+许多工具共有的可选字段：`allowed_callers`、`cache_control`、`defer_loading`、`strict`。见各节说明。
 
 ---
 
-## 1. `ToolParam` (user-defined / custom tool)
+<a id="1-toolparam-user-defined--custom-tool"></a>
+## 1. `ToolParam`（用户定义或自定义工具）
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_param.py#L33)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_param.py#L33)
 
-JSON Schema describes arguments the model emits in `tool_use` blocks. `description` is strongly recommended in practice.
+JSON Schema 描述模型在 `tool_use` 块中生成的参数。实际使用时强烈建议提供 `description`。
 
 ```json
 {
@@ -63,7 +65,7 @@ JSON Schema describes arguments the model emits in `tool_use` blocks. `descripti
 }
 ```
 
-Explicit custom discriminator (optional on API; SDK allows `type: "custom"`):
+显式自定义判别字段，在 API 中可选，SDK 允许 `type: "custom"`：
 
 ```json
 {
@@ -78,19 +80,19 @@ Explicit custom discriminator (optional on API; SDK allows `type: "custom"`):
 }
 ```
 
-Optional extras: `input_examples`, `defer_loading`, `allowed_callers`, `cache_control`, `eager_input_streaming`.
+额外可选字段：`input_examples`、`defer_loading`、`allowed_callers`、`cache_control`、`eager_input_streaming`。
 
-**Insight:** User tools surface as normal `tool_use` blocks—your runner executes them and must return **`tool_result` with matching `tool_use_id`**. Use `strict: true` when you want the API to enforce `input_schema` (and the tool name) so `tool_use` payloads are well-formed before handlers run that change real data or call external services—still validate auth and business rules in your own code.
+**要点：** 用户工具以普通 `tool_use` 块出现，由运行器执行，并必须返回 **`tool_use_id` 匹配的 `tool_result`**。希望 API 强制符合 `input_schema` 和工具名时，使用 `strict: true`，使修改真实数据或访问外部服务的处理器执行之前，`tool_use` 载荷已经格式正确。自己的代码仍需验证授权和业务规则。
 
 ---
 
 ## 2. `ToolBash20250124Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_bash_20250124_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_bash_20250124_param.py#L13)
 
-Shell/bash tool. Fixed `name` and `type`.
+Shell/Bash 工具，`name` 和 `type` 固定。
 
-**Insight:** Bash is **server-side** (Anthropic runs it)—you do not shell out on your own machine. Combine with `allowed_callers` when only certain tools (e.g. code execution) should invoke it.
+**要点：** Bash 在**服务端**执行，即由 Anthropic 运行，不在你的机器上调用 shell。仅希望代码执行等特定工具调用时，可结合 `allowed_callers`。
 
 ```json
 {
@@ -103,9 +105,9 @@ Shell/bash tool. Fixed `name` and `type`.
 
 ## 3. `CodeExecutionTool20250522Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/code_execution_tool_20250522_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/code_execution_tool_20250522_param.py#L13)
 
-**Insight:** Older code-execution revision; prefer newer `type` strings for new projects unless you must pin legacy behavior. Only one code-execution tool variant should appear per request.
+**要点：** 这是较旧代码执行版本。新项目优先使用较新 `type` 字符串，除非必须固定旧行为。每个请求只应包含一种代码执行工具变体。
 
 ```json
 {
@@ -118,9 +120,9 @@ Shell/bash tool. Fixed `name` and `type`.
 
 ## 4. `CodeExecutionTool20250825Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/code_execution_tool_20250825_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/code_execution_tool_20250825_param.py#L13)
 
-**Insight:** Common “stable” generation for Python/bash sandboxes; often paired with **web search** or **web fetch** in agent recipes so the model can pull facts then compute.
+**要点：** 这是 Python/Bash 沙箱常用的稳定一代，Agent 方案中常与**网页搜索**或**网页获取**搭配，让模型先获取事实再计算。
 
 ```json
 {
@@ -133,11 +135,11 @@ Shell/bash tool. Fixed `name` and `type`.
 
 ## 5. `CodeExecutionTool20260120Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/code_execution_tool_20260120_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/code_execution_tool_20260120_param.py#L13)
 
-Newer code execution (REPL persistence / daemon semantics per SDK docstring).
+较新代码执行版本，SDK 文档字符串说明其具有 REPL 持久化和守护进程语义。
 
-**Insight:** Use when you need **state across turns** inside the sandbox (variables, loaded data) or richer “agentic” execution semantics; confirm model and channel support (direct API vs cloud) before relying on it.
+**要点：** 需要沙箱内**跨轮次状态**，如变量和已加载数据，或更丰富的 Agent 执行语义时使用。依赖前应确认模型和渠道支持，包括直接 API 与云平台的差别。
 
 ```json
 {
@@ -150,9 +152,9 @@ Newer code execution (REPL persistence / daemon semantics per SDK docstring).
 
 ## 6. `MemoryTool20250818Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/memory_tool_20250818_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/memory_tool_20250818_param.py#L13)
 
-**Insight:** Geared toward **long-horizon** sessions where the model persists structured memory server-side—still treat retention, PII, and deletion as your compliance problem, not “free storage.”
+**要点：** 面向**长期**会话，模型在服务端持久化结构化记忆。但保留期、个人身份信息和删除仍是你的合规责任，不能当作免费存储。
 
 ```json
 {
@@ -165,9 +167,9 @@ Newer code execution (REPL persistence / daemon semantics per SDK docstring).
 
 ## 7. `ToolTextEditor20250124Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_text_editor_20250124_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_text_editor_20250124_param.py#L13)
 
-**Insight:** `str_replace_editor` is the **older editor surface**; migrate to newer `text_editor_*` types for new builds so prompts and training match current tool behavior.
+**要点：** `str_replace_editor` 是**旧版编辑器接口**。新构建应迁移到较新 `text_editor_*` 类型，使提示词和训练匹配当前工具行为。
 
 ```json
 {
@@ -180,9 +182,9 @@ Newer code execution (REPL persistence / daemon semantics per SDK docstring).
 
 ## 8. `ToolTextEditor20250429Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_text_editor_20250429_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_text_editor_20250429_param.py#L13)
 
-**Insight:** `str_replace_based_edit_tool` is the **modern default name** for patch-style edits; keep `name` exactly as the API expects or tool calls will not dispatch.
+**要点：** `str_replace_based_edit_tool` 是补丁式编辑的**当前默认名称**。`name` 必须与 API 预期完全一致，否则工具调用无法分派。
 
 ```json
 {
@@ -195,11 +197,11 @@ Newer code execution (REPL persistence / daemon semantics per SDK docstring).
 
 ## 9. `ToolTextEditor20250728Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_text_editor_20250728_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_text_editor_20250728_param.py#L13)
 
-Adds optional `max_characters` (view limit when displaying file contents).
+添加可选 `max_characters`，限制显示文件内容时的查看长度。
 
-**Insight:** Set `max_characters` to cap **read_file / view** payloads so huge files do not blow the context window; pair with code execution when you need summarization or chunk-wise processing.
+**要点：** 设置 `max_characters` 限制 **read_file / view** 载荷，避免大文件挤爆上下文窗口。需要摘要或分块处理时，可结合代码执行。
 
 ```json
 {
@@ -209,7 +211,7 @@ Adds optional `max_characters` (view limit when displaying file contents).
 }
 ```
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -222,7 +224,7 @@ Minimal:
 
 ## 10. `WebSearchTool20250305Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_search_tool_20250305_param.py#L15)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_search_tool_20250305_param.py#L15)
 
 ```json
 {
@@ -240,7 +242,7 @@ Minimal:
 }
 ```
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -249,19 +251,19 @@ Minimal:
 }
 ```
 
-`allowed_domains` and `blocked_domains` are mutually exclusive.
+`allowed_domains` 与 `blocked_domains` 互斥。
 
-**Insight:** `max_uses` is your **budget** per request—tune it to control cost and latency. Domain allow/block lists are a safety and relevance knob; they are mutually exclusive so the API never receives contradictory routing rules.
+**要点：** `max_uses` 是逐请求的**预算**，可调节费用和延迟。域名允许/阻止列表控制安全性和相关性；两者互斥，避免 API 收到矛盾路由规则。
 
 ---
 
 ## 11. `WebSearchTool20260209Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_search_tool_20260209_param.py#L15)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_search_tool_20260209_param.py#L15)
 
-Same fields as `web_search_20250305`; different `type` version string.
+字段与 `web_search_20250305` 相同，`type` 版本字符串不同。
 
-**Insight:** Bump the `type` when Anthropic ships search behavior or citation changes you need; newer models may **require** the newer string—check the tool-use docs for your model ID.
+**要点：** Anthropic 发布所需搜索行为或引用改动时，应升级 `type`。较新模型可能**要求**较新字符串，请检查对应模型 ID 的工具使用文档。
 
 ```json
 {
@@ -280,9 +282,9 @@ Same fields as `web_search_20250305`; different `type` version string.
 
 ## 12. `WebFetchTool20250910Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_fetch_tool_20250910_param.py#L15)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_fetch_tool_20250910_param.py#L15)
 
-Fetch URL content for the model. Optional `citations` and domain limits.
+为模型获取 URL 内容，可选 `citations` 和域名限制。
 
 ```json
 {
@@ -295,7 +297,7 @@ Fetch URL content for the model. Optional `citations` and domain limits.
 }
 ```
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -304,17 +306,17 @@ Minimal:
 }
 ```
 
-**Insight:** `max_content_tokens` prevents one huge page from dominating the prompt; enable `citations` when you want traceability back to fetched segments. Prefer **web search → shortlist URLs → web fetch** instead of fetching the whole open web.
+**要点：** `max_content_tokens` 防止单个大页面占满提示词；需要追溯获取片段时，启用 `citations`。优先采用**网页搜索 → 筛选 URL → 网页获取**，而非抓取整个开放网络。
 
 ---
 
 ## 13. `WebFetchTool20260209Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_fetch_tool_20260209_param.py#L15)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_fetch_tool_20260209_param.py#L15)
 
-Same shape as `web_fetch_20250910` with updated `type`.
+结构与 `web_fetch_20250910` 相同，更新了 `type`。
 
-**Insight:** Same knobs as `20250910`; migrate the `type` string when your model or docs require the newer revision—behavioral differences are in the service, not this stub.
+**要点：** 配置项与 `20250910` 相同。模型或文档要求较新版本时迁移 `type` 字符串；行为差异在服务中，不在类型桩中。
 
 ```json
 {
@@ -329,11 +331,11 @@ Same shape as `web_fetch_20250910` with updated `type`.
 
 ## 14. `WebFetchTool20260309Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_fetch_tool_20260309_param.py#L15)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/web_fetch_tool_20260309_param.py#L15)
 
-Same optional fields as the other `web_fetch_*` tools, with `type: "web_fetch_20260309"`. Adds **`use_cache`**: set to `false` when the user wants a fresh fetch (for example rapidly changing pages); default behavior uses cache when available.
+可选字段与其他 `web_fetch_*` 工具相同，采用 `type: "web_fetch_20260309"`。新增 **`use_cache`**：用户需要最新内容时，例如快速变化的页面，设为 `false`；默认在可用时使用缓存。
 
-Minimal:
+最小示例：
 
 ```json
 {
@@ -342,7 +344,7 @@ Minimal:
 }
 ```
 
-Bypass cache for this tool:
+对此工具绕过缓存：
 
 ```json
 {
@@ -353,15 +355,15 @@ Bypass cache for this tool:
 }
 ```
 
-**Insight:** Prefer `use_cache: false` only when freshness beats cost (live dashboards, incident pages); default caching cuts duplicate fetches when the model revisits the same URL in one session.
+**要点：** 仅当新鲜度优先于费用时，如实时仪表板、事故页面，才优先设置 `use_cache: false`。默认缓存能在同一会话重复访问相同 URL 时减少重复获取。
 
 ---
 
 ## 15. `ToolSearchToolBm25_20251119Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_search_tool_bm25_20251119_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_search_tool_bm25_20251119_param.py#L13)
 
-BM25 search over the registered tool set (for deferred / large tool lists). `type` may be the versioned string or alias `tool_search_tool_bm25`.
+对已注册工具集进行 BM25 搜索，用于延迟加载或大型工具列表。`type` 可以是带版本字符串，或别名 `tool_search_tool_bm25`。
 
 ```json
 {
@@ -377,13 +379,13 @@ BM25 search over the registered tool set (for deferred / large tool lists). `typ
 }
 ```
 
-**Insight:** BM25 favors **lexical** overlap with the query—great when tool names and descriptions contain distinctive keywords; less ideal when tools differ only by subtle metadata.
+**要点：** BM25 偏好与查询的**词汇**重合。工具名和描述包含独特关键词时效果好，仅细微元数据不同的工具则不太适合。
 
 ---
 
 ## 16. `ToolSearchToolRegex20251119Param`
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_search_tool_regex_20251119_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_search_tool_regex_20251119_param.py#L13)
 
 ```json
 {
@@ -399,37 +401,38 @@ BM25 search over the registered tool set (for deferred / large tool lists). `typ
 }
 ```
 
-**Insight:** Regex search shines when you can **name tools with predictable patterns** (prefixes, domains) or when BM25 misses short acronyms; keep regexes simple—expensive patterns add latency.
+**要点：** 工具能按前缀、领域等**可预测模式命名**，或 BM25 漏掉短缩写时，正则搜索表现突出。应保持正则简单，昂贵模式会增加延迟。
 
 ---
 
-## Appendix A: `tool_choice` (not part of `ToolUnionParam`)
+<a id="appendix-a-tool_choice-not-part-of-toolunionparam"></a>
+## 附录 A：`tool_choice`（不属于 `ToolUnionParam`）
 
-`tools` defines **what** the model may use; **`tool_choice`** on the same `POST /v1/messages` request defines **whether** it must use tools and **which** pattern. It is **not** a member of `ToolUnionParam`.
+`tools` 定义模型可用的**内容**；同一 `POST /v1/messages` 请求中的 **`tool_choice`** 定义**是否**必须使用工具及采用**哪种**模式。它**不是** `ToolUnionParam` 成员。
 
-| `tool_choice` shape | Effect (plain language) |
+| `tool_choice` 结构 | 效果（通俗说明） |
 |---------------------|-------------------------|
-| `{ "type": "auto" }` | Model may reply with plain text **or** call tools (default-style behavior). |
-| `{ "type": "any" }` | Model **must** call at least one tool (no text-only answer). |
-| `{ "type": "none" }` | Model **must not** use tools. |
-| `{ "type": "tool", "name": "…" }` | Model must use the tool whose **`name`** matches (must exist in `tools`). |
+| `{ "type": "auto" }` | 模型可回复纯文本**或**调用工具，为默认式行为。 |
+| `{ "type": "any" }` | 模型**必须**至少调用一个工具，不可仅回复文本。 |
+| `{ "type": "none" }` | 模型**不得**使用工具。 |
+| `{ "type": "tool", "name": "…" }` | 模型必须使用 **`name`** 匹配的工具，该工具必须存在于 `tools`。 |
 
-Optional on `auto`, `any`, and `tool`: **`disable_parallel_tool_use`** — when `true`, limits how many tool calls appear in a single assistant turn (see API reference for exact semantics).
+`auto`、`any` 和 `tool` 可选 **`disable_parallel_tool_use`**。为 `true` 时，限制单次助手轮次的工具调用数量，精确语义见 API 参考。
 
-**Official docs**
+**官方文档**
 
-- [Create a Message](https://docs.claude.com/claude/reference/messages_post) — request body documents `tool_choice` (`ToolChoiceAuto`, `ToolChoiceAny`, `ToolChoiceTool`, `ToolChoiceNone`) including `disable_parallel_tool_use`.
-- [Parallel tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/parallel-tool-use) — returning multiple `tool_result` blocks in one user turn and using `disable_parallel_tool_use` with `tool_choice`.
+- [创建消息](https://docs.claude.com/claude/reference/messages_post)：请求体说明 `tool_choice`，包括 `ToolChoiceAuto`、`ToolChoiceAny`、`ToolChoiceTool`、`ToolChoiceNone` 和 `disable_parallel_tool_use`。
+- [并行工具使用](https://platform.claude.com/docs/en/agents-and-tools/tool-use/parallel-tool-use)：在一个用户轮次返回多个 `tool_result` 块，以及组合 `disable_parallel_tool_use` 与 `tool_choice`。
 
-**Python SDK (permalinks)**
+**Python SDK（永久链接）**
 
-- **`ToolChoiceParam` union**: [source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_param.py#L15)
-- **`ToolChoiceAutoParam`** (`type: "auto"`, optional `disable_parallel_tool_use`): [source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_auto_param.py#L10)
-- **`ToolChoiceAnyParam`** (`type: "any"`): [source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_any_param.py#L10)
-- **`ToolChoiceNoneParam`** (`type: "none"`): [source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_none_param.py#L10)
-- **`ToolChoiceToolParam`** (`type: "tool"`, required `name`): [source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_tool_param.py#L10)
+- **`ToolChoiceParam` 联合类型**: [源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_param.py#L15)
+- **`ToolChoiceAutoParam`** (`type: "auto"`, 可选 `disable_parallel_tool_use`): [源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_auto_param.py#L10)
+- **`ToolChoiceAnyParam`** (`type: "any"`): [源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_any_param.py#L10)
+- **`ToolChoiceNoneParam`** (`type: "none"`): [源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_none_param.py#L10)
+- **`ToolChoiceToolParam`** (`type: "tool"`, 必需 `name`): [源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_choice_tool_param.py#L10)
 
-**Illustrative JSON** (`ToolChoiceParam` shapes):
+**JSON 示例**，对应 `ToolChoiceParam` 结构：
 
 ```json
 { "type": "auto" }
@@ -447,23 +450,24 @@ Optional on `auto`, `any`, and `tool`: **`disable_parallel_tool_use`** — when 
 { "type": "tool", "name": "get_weather" }
 ```
 
-Add `"disable_parallel_tool_use": true` inside the same object as `type` when you need it (allowed with `auto`, `any`, and `tool`).
+需要时，在 `type` 所在对象内添加 `"disable_parallel_tool_use": true`，允许用于 `auto`、`any` 和 `tool`。
 
-**Insight:** When the model emits **several** `tool_use` blocks, return **one user message** whose `content` lists a `tool_result` for each `tool_use_id` (see [Parallel tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/parallel-tool-use)). Use `disable_parallel_tool_use` when parallel calls would race on shared state. `tool: { name }` helps in **tests or fixed pipelines**; prefer `auto` for open-ended chat.
+**要点：** 模型发出**多个** `tool_use` 块时，应返回**一条用户消息**，其 `content` 为每个 `tool_use_id` 列出一个 `tool_result`，见[并行工具使用](https://platform.claude.com/docs/en/agents-and-tools/tool-use/parallel-tool-use)。并行调用可能竞争共享状态时，使用 `disable_parallel_tool_use`。`tool: { name }` 适合**测试或固定流水线**；开放式聊天优先使用 `auto`。
 
 ---
 
-## Appendix B: Beta-only `BetaToolUnionParam` extras
+<a id="appendix-b-beta-only-betatoolunionparam-extras"></a>
+## 附录 B：仅 Beta 的 `BetaToolUnionParam` 扩展
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/beta/beta_tool_union_param.py#L33-L56)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/beta/beta_tool_union_param.py#L33-L56)
 
-The SDK's `beta_tool_union_param.py` extends the stable union with older tool versions (e.g. `bash_20241022`, `text_editor_20241022`), **computer use**, and **MCP toolsets**. These require the appropriate beta API features and headers per Anthropic docs.
+SDK 的 `beta_tool_union_param.py` 在稳定联合类型上增加旧工具版本，如 `bash_20241022`、`text_editor_20241022`，以及**计算机操作**和 **MCP 工具集**。按 Anthropic 文档，它们需要对应 Beta API 功能和请求头。
 
-**Insight:** Beta tools are **not** interchangeable with stable ones—headers, model allowlists, and org settings gate them. Ship behind feature flags and re-test whenever Anthropic bumps beta version strings.
+**要点：** Beta 工具**不能**与稳定工具互换，受请求头、模型白名单和组织设置控制。应置于功能开关后发布，并在 Anthropic 升级 Beta 版本字符串时重新测试。
 
-**Computer use (example: `BetaToolComputerUse20251124Param`):**
+**计算机操作，示例：`BetaToolComputerUse20251124Param`：**
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/beta/beta_tool_computer_use_20251124_param.py#L13)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/beta/beta_tool_computer_use_20251124_param.py#L13)
 
 ```json
 {
@@ -476,11 +480,11 @@ The SDK's `beta_tool_union_param.py` extends the stable union with older tool ve
 }
 ```
 
-**Insight:** Display width/height affect **screenshot resolution and click coordinates**; wrong numbers produce misaligned actions. Treat `enable_zoom` as a capability bit that may change how the model plans UI navigation.
+**要点：** 显示宽高影响**截图分辨率和点击坐标**，数值错误会导致操作错位。应将 `enable_zoom` 视为能力位，它可能改变模型规划界面导航的方式。
 
-**MCP toolset (`BetaMCPToolsetParam`):**
+**MCP 工具集（`BetaMCPToolsetParam`）：**
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/beta/beta_mcp_toolset_param.py#L15)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/beta/beta_mcp_toolset_param.py#L15)
 
 ```json
 {
@@ -493,19 +497,20 @@ The SDK's `beta_tool_union_param.py` extends the stable union with older tool ve
 }
 ```
 
-**Insight:** `default_config` vs per-tool `configs` is how you **defer** heavy MCP tools until referenced—mirror the pattern of `defer_loading` on user tools so only enabled paths hit the server.
+**要点：** `default_config` 与逐工具 `configs` 可将大型 MCP 工具**延迟**至引用时加载。遵循用户工具 `defer_loading` 的模式，让只有已启用路径访问服务端。
 
 ---
 
-## Summary: discriminating `type` (`ToolUnionParam`)
+<a id="summary-discriminating-type-toolunionparam"></a>
+## 汇总：判别字段 `type`（`ToolUnionParam`）
 
-[source](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_union_param.py#L27-L44)
+[源码](https://github.com/anthropics/anthropic-sdk-python/blob/8496c50655999cbb2c871e71331996f87025e240/src/anthropic/types/tool_union_param.py#L27-L44)
 
-**Insight:** Built-in tools need **both** a versioned `type` and the exact fixed `name`—logging only `name` misses the revision (`web_search_20250305` vs `web_search_20260209`) that explains behavior changes.
+**要点：** 内置工具**同时**需要带版本的 `type` 和精确固定的 `name`。只记录 `name` 会漏掉解释行为变化的版本，例如 `web_search_20250305` 与 `web_search_20260209`。
 
-| `type` value | Python param (representative) | Fixed `name` (if any) |
+| `type` 值 | Python 参数（代表类型） | 固定 `name`（如有） |
 |--------------|-------------------------------|------------------------|
-| *(absent or `"custom"`)* | `ToolParam` | *(your tool name)* |
+| *（省略或 `"custom"`）* | `ToolParam` | *（你的工具名）* |
 | `bash_20250124` | `ToolBash20250124Param` | `bash` |
 | `code_execution_20250522` | `CodeExecutionTool20250522Param` | `code_execution` |
 | `code_execution_20250825` | `CodeExecutionTool20250825Param` | `code_execution` |
@@ -522,19 +527,20 @@ The SDK's `beta_tool_union_param.py` extends the stable union with older tool ve
 | `tool_search_tool_bm25_20251119` / `tool_search_tool_bm25` | `ToolSearchToolBm25_20251119Param` | `tool_search_tool_bm25` |
 | `tool_search_tool_regex_20251119` / `tool_search_tool_regex` | `ToolSearchToolRegex20251119Param` | `tool_search_tool_regex` |
 
-Union members and version strings change between SDK releases; compare your installed package with `tool_union_param.py` or the permalink above.
+联合成员和版本字符串随 SDK 发布变化，请将已安装包与 `tool_union_param.py` 或上述永久链接比较。
 
 ---
 
-## See also (vendor docs)
+<a id="see-also-vendor-docs"></a>
+## 另请参阅（提供商文档）
 
-Official behavior, pricing, and which tools run on which channels (API vs cloud) change over time; confirm in the links below.
+官方行为、价格及各工具可用渠道（API 或云平台）会随时间变化，请通过下列链接确认。
 
-- [Create a Message (API reference)](https://docs.claude.com/claude/reference/messages_post) — includes `tool_choice` and `tools` on the request body.
-- [How tool use works](https://console.anthropic.com/docs/en/agents-and-tools/tool-use/how-tool-use-works) — `tool_use` / `tool_result` loop and message shape.
-- [Parallel tool use](https://console.anthropic.com/docs/en/agents-and-tools/tool-use/parallel-tool-use) — batching `tool_result` blocks and `disable_parallel_tool_use`.
-- [Tool combinations](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-combinations) — supported pairings and platform caveats.
-- [Web search tool](https://docs.claude.com/en/docs/agents-and-tools/tool-use/web-search-tool) — citations, domains, versioning.
-- [Web fetch tool](https://docs.claude.com/en/docs/agents-and-tools/tool-use/web-fetch-tool) — fetching URL bodies (often paired with web search).
-- [Code execution tool](https://docs.claude.com/en/docs/agents-and-tools/tool-use/code-execution-tool) — sandbox, versions (`code_execution_*`), and limits.
-- [Tool search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool) — BM25 / regex deferred tool loading.
+- [创建消息（API 参考）](https://docs.claude.com/claude/reference/messages_post)：包含请求体中的 `tool_choice` 和 `tools`。
+- [工具使用原理](https://console.anthropic.com/docs/en/agents-and-tools/tool-use/how-tool-use-works)：`tool_use` / `tool_result` 循环和消息结构。
+- [并行工具使用](https://console.anthropic.com/docs/en/agents-and-tools/tool-use/parallel-tool-use)：批量 `tool_result` 块和 `disable_parallel_tool_use`。
+- [工具组合](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-combinations)：支持的组合和平台注意事项。
+- [网页搜索工具](https://docs.claude.com/en/docs/agents-and-tools/tool-use/web-search-tool)：引用、域名和版本管理。
+- [网页获取工具](https://docs.claude.com/en/docs/agents-and-tools/tool-use/web-fetch-tool)：获取 URL 正文，常与网页搜索搭配。
+- [代码执行工具](https://docs.claude.com/en/docs/agents-and-tools/tool-use/code-execution-tool)：沙箱、版本（`code_execution_*`）和限制。
+- [工具搜索工具](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool)：BM25 / 正则延迟工具加载。

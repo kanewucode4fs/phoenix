@@ -1,26 +1,32 @@
-# Security Deep-Dive
+<a id="security-deep-dive"></a>
 
-## Threat Model
+# 安全详解
 
-| Threat | Attack Vector | Impact | Likelihood | Mitigation |
+<a id="threat-model"></a>
+
+## 威胁模型
+
+| 威胁 | 攻击途径 | 影响 | 可能性 | 防护 |
 |--------|---------------|--------|-----------|------------|
-| **LDAP Injection** | Malicious input in username field | Unauthorized access, data leak | Medium | Input escaping, parameterized filters |
-| **Credential Exposure** | Logs, network sniffing | Account compromise | Medium | TLS encryption, credential sanitization |
-| **Timing Attacks** | Measure response times | Username enumeration | Low | Dummy bind on user-not-found, generic errors |
-| **Brute Force** | Automated login attempts | Account compromise | High | Rate limiting, account lockout |
-| **MITM** | Network interception | Credential theft | Medium | TLS with cert validation |
-| **Event Loop DoS** | Slow LDAP connections | Service unavailability | Medium | Thread pool isolation, timeouts |
-| **Regex DoS** | CVE-2024-47764 in python-ldap | Service degradation | Very Low | Use ldap3 (not python-ldap) |
-| **Misconfiguration** | Wrong group mappings | Privilege escalation | Medium | Validation on startup, dry-run mode |
-| **Referral Credential Leak** | Malicious referral to attacker server | Service account compromise | Medium | Disable referral following |
-| **Email Recycling Attack** | Recycled email hijacks old account | Data breach, privilege escalation | Medium | Unique ID conflict detection |
-| **UUID Case Mismatch** | Case-sensitive lookup misses user | Account lockout, duplicate accounts | Low | Case-insensitive lookup, lowercase normalization |
+| **LDAP 注入** | 用户名字段中的恶意输入 | 未授权访问、数据泄漏 | 中 | 输入转义、参数化过滤器 |
+| **凭证暴露** | 日志、网络嗅探 | 账户失陷 | 中 | TLS 加密、凭证清理 |
+| **时序攻击** | 测量响应时间 | 用户名枚举 | 低 | 用户不存在时执行虚拟绑定，使用通用错误 |
+| **暴力破解** | 自动登录尝试 | 账户失陷 | 高 | 限流、账户锁定 |
+| **中间人攻击** | 网络拦截 | 凭证窃取 | 中 | TLS 与证书校验 |
+| **事件循环 DoS** | 缓慢 LDAP 连接 | 服务不可用 | 中 | 线程池隔离、超时 |
+| **正则表达式 DoS** | python-ldap 中的 CVE-2024-47764 | 服务性能下降 | 极低 | 使用 ldap3，不使用 python-ldap |
+| **配置错误** | 错误组映射 | 权限提升 | 中 | 启动时校验、试运行模式 |
+| **转介凭证泄漏** | 恶意转介至攻击者服务器 | 服务账户失陷 | 中 | 禁止跟随转介 |
+| **邮箱回收攻击** | 回收邮箱劫持旧账户 | 数据泄漏、权限提升 | 中 | 唯一 ID 冲突检测 |
+| **UUID 大小写不匹配** | 区分大小写查找未命中用户 | 账户锁定、重复账户 | 低 | 不区分大小写查找、小写规范化 |
 
 ---
 
-## LDAP Injection Prevention
+<a id="ldap-injection-prevention"></a>
 
-**Attack Example**:
+## LDAP 注入防护
+
+**攻击示例**：
 ```python
 # Vulnerable code (DON'T DO THIS):
 username = request.username  # User input: "admin)(uid=*"
@@ -29,7 +35,7 @@ filter_str = f"(&(objectClass=user)(uid={username}))"
 # Attacker bypasses authentication!
 ```
 
-**Mitigation**:
+**防护**：
 ```python
 from ldap3.utils.conv import escape_filter_chars
 
@@ -38,14 +44,14 @@ username = escape_filter_chars(request.username)
 filter_str = f"(&(objectClass=user)(uid={username}))"
 ```
 
-**Escaping Rules (RFC 4515)**:
+**转义规则（RFC 4515）**：
 - `\` → `\5c`
 - `*` → `\2a`
 - `(` → `\28`
 - `)` → `\29`
 - `\x00` → `\00`
 
-**Test Cases**:
+**测试用例**：
 ```python
 from ldap3.utils.conv import escape_filter_chars
 
@@ -59,21 +65,23 @@ def test_ldap_injection_prevention():
     assert escape_filter_chars("user\x00admin") == "user\\00admin"
 ```
 
-**Implementation**: Phoenix uses `ldap3.utils.conv.escape_filter_chars()` directly for RFC 4515-compliant escaping. See `src/phoenix/server/ldap.py`.
+**实现**：Phoenix 直接使用 `ldap3.utils.conv.escape_filter_chars()` 进行符合 RFC 4515 的转义。参见 `src/phoenix/server/ldap.py`。
 
 ---
 
-## Timing Attack Prevention
+<a id="timing-attack-prevention"></a>
 
-**Attack**: Attacker measures response times to determine if username exists.
+## 时序攻击防护
 
-**Attack Scenario**:
-1. Attacker sends login request with "admin" / "wrongpass"
-2. If "admin" exists: search succeeds → bind attempted → ~150ms response
-3. If "admin" doesn't exist: search fails → immediate return → ~50ms response
-4. Attacker measures response times to enumerate valid usernames
+**攻击**：攻击者通过测量响应时间判断用户名是否存在。
 
-**Vulnerable Code**:
+**攻击场景**：
+1. 攻击者使用“admin”/“wrongpass”发送登录请求
+2. 若“admin”存在：搜索成功 → 尝试绑定 → 响应约 150ms
+3. 若“admin”不存在：搜索失败 → 立即返回 → 响应约 50ms
+4. 攻击者测量响应时间以枚举有效用户名
+
+**有漏洞的代码**：
 ```python
 # DON'T DO THIS:
 user_dn = search_user(username)
@@ -84,7 +92,7 @@ if not authenticate(user_dn, password):
     return {"error": "Invalid password"}  # Slow response (LDAP bind attempt)
 ```
 
-**Mitigation** (Phoenix implementation):
+**防护**（Phoenix 实现）：
 ```python
 # Phoenix performs a dummy bind when user is not found to equalize timing
 def _dummy_bind_for_timing(self, server: Server, password: str) -> None:
@@ -111,19 +119,21 @@ def _authenticate(self, username: str, password: str) -> Optional[LDAPUserInfo]:
         return None
 ```
 
-**Why Dummy Bind (Not Sleep)**:
-- `asyncio.sleep()` is predictable and doesn't account for network variance
-- A real bind attempt has variable latency (TLS handshake, network RTT, server load)
-- Dummy bind performs identical I/O operations, making timing indistinguishable
-- Randomized DN (`token_hex(8)`) prevents LDAP server from caching/optimizing the response
+**使用虚拟绑定而非休眠的原因**：
+- `asyncio.sleep()` 可预测，无法反映网络波动
+- 真实绑定尝试具有可变延迟，包括 TLS 握手、网络 RTT 和服务器负载
+- 虚拟绑定执行相同 I/O 操作，使时序难以区分
+- 随机 DN（`token_hex(8)`）防止 LDAP 服务器缓存或优化响应
 
-**Result**: Both code paths (user exists vs. not found) perform search + bind operations, making response times statistically indistinguishable
+**结果**：用户存在和未找到两条代码路径均执行搜索与绑定，使响应时间在统计上不可区分。
 
 ---
 
-## Rate Limiting
+<a id="rate-limiting"></a>
 
-**Implementation** (Phoenix uses a custom `ServerRateLimiter`):
+## 限流
+
+**实现**（Phoenix 使用自定义 `ServerRateLimiter`）：
 ```python
 from phoenix.server.rate_limiters import ServerRateLimiter, fastapi_ip_rate_limiter
 
@@ -153,7 +163,7 @@ auth_dependencies = [Depends(login_rate_limiter)] if not get_env_disable_rate_li
 router = APIRouter(prefix="/auth", dependencies=auth_dependencies)
 ```
 
-**Account Lockout** (future enhancement, not yet implemented):
+**账户锁定**（未来增强，尚未实现）：
 ```python
 # Track failed attempts per username
 failed_attempts = {}  # In production: use Redis
@@ -170,35 +180,37 @@ if not success:
 
 ---
 
-## Referral Credential Leakage Prevention
+<a id="referral-credential-leakage-prevention"></a>
 
-**Threat**: ldap3's default configuration follows LDAP referrals and sends credentials to any server.
+## 防止转介凭证泄漏
 
-**Attack Scenario**:
-1. Attacker compromises or sets up a rogue LDAP server
-2. Legitimate LDAP server sends a referral: `ldap://attacker.com/...`
-3. ldap3 follows the referral and sends service account credentials to attacker
-4. Attacker captures `bind_dn` and `bind_password`
+**威胁**：ldap3 默认配置会跟随 LDAP 转介，并向任意服务器发送凭证。
 
-**ldap3 Default Behavior** (VULNERABLE):
+**攻击场景**：
+1. 攻击者入侵或架设恶意 LDAP 服务器
+2. 合法 LDAP 服务器发送转介：`ldap://attacker.com/...`
+3. ldap3 跟随转介，将服务账户凭证发送给攻击者
+4. 攻击者捕获 `bind_dn` 和 `bind_password`
+
+**ldap3 默认行为**（存在漏洞）：
 ```python
 # ldap3/core/server.py - DEFAULT allows ANY host with credentials!
 if allowed_referral_hosts is None:
     allowed_referral_hosts = [("*", True)]  # Allow all hosts, send credentials
 ```
 
-**Additional Risk with STARTTLS**:
+**STARTTLS 的额外风险**：
 ```python
 # ldap3/strategy/base.py - Referral TLS config ignores original settings!
 tls = Tls(...) if selected_referral["ssl"] else None  # STARTTLS referrals get NO TLS config!
 ```
 
-For STARTTLS referrals to `ldap://` URLs:
-- Original connection: `Tls(validate=ssl.CERT_REQUIRED)` ✅
-- Referral creates: `Tls()` with default `validate=ssl.CERT_NONE` ❌
-- Result: MITM possible on referral connections!
+对于指向 `ldap://` URL 的 STARTTLS 转介：
+- 原连接：`Tls(validate=ssl.CERT_REQUIRED)` ✅
+- 转介创建：`Tls()`，默认 `validate=ssl.CERT_NONE` ❌
+- 结果：转介连接可能遭受中间人攻击！
 
-**Mitigation** (Phoenix implementation):
+**防护**（Phoenix 实现）：
 ```python
 # Disable referral following on ALL Connection objects
 Connection(
@@ -210,21 +222,23 @@ Connection(
 )
 ```
 
-**Why Disable Instead of Restrict?**
-- Phoenix already has multi-server failover for high availability
-- Referrals are typically used for cross-domain queries (not needed for authentication)
-- No legitimate use case for following referrals in Phoenix's LDAP flow
+**为什么禁用而非限制？**
+- Phoenix 已有多服务器故障转移，可实现高可用
+- 转介通常用于跨域查询，身份验证不需要
+- Phoenix LDAP 流程没有跟随转介的合法使用场景
 
-**Affected Connections** (all three):
-1. Service account connection (`_establish_connection`)
-2. Anonymous bind connection (`_establish_connection`)
-3. User password verification (`_verify_user_password`)
+**受影响连接**（全部三种）：
+1. 服务账户连接（`_establish_connection`）
+2. 匿名绑定连接（`_establish_connection`）
+3. 用户密码验证（`_verify_user_password`）
 
 ---
 
-## TLS Configuration
+<a id="tls-configuration"></a>
 
-**Phoenix TLS Implementation** (see `_create_servers()` in `ldap.py`):
+## TLS 配置
+
+**Phoenix TLS 实现**（参见 `ldap.py` 中的 `_create_servers()`）：
 ```python
 # Certificate validation configuration
 tls_kwargs: dict[str, Any] = {"validate": ssl.CERT_REQUIRED if config.tls_verify else ssl.CERT_NONE}
@@ -241,18 +255,19 @@ if config.tls_client_cert_file and config.tls_client_key_file:
 tls_config = Tls(**tls_kwargs)
 ```
 
-**Recommendation**: Enable TLS (`PHOENIX_LDAP_TLS_MODE=starttls` or `ldaps`) and certificate validation
-(`PHOENIX_LDAP_TLS_VERIFY=true`) in production environments to prevent credential interception.
+**建议**：生产环境启用 TLS（`PHOENIX_LDAP_TLS_MODE=starttls` 或 `ldaps`）和证书校验（`PHOENIX_LDAP_TLS_VERIFY=true`），防止凭证被截获。
 
-**STARTTLS Security**: See [Protocol Compliance - STARTTLS Implementation](./protocol-compliance.md#7-starttls-implementation--security) for critical sequencing requirements and adversarial testing methodology.
+**STARTTLS 安全**：关键执行顺序要求和对抗测试方法，参见[协议合规性 — STARTTLS 实现](./protocol-compliance.md#7-starttls-implementation--security)。
 
 ---
 
-## Logging
+<a id="logging"></a>
 
-**MVP Approach**: Error-only logging for operational debugging, zero PII.
+## 日志
 
-**Events Logged** (actual implementation in `ldap.py`):
+**MVP 方案**：仅记录用于运维调试的错误，不包含任何个人身份信息。
+
+**记录的事件**（实际实现在 `ldap.py` 中）：
 ```python
 # Empty credentials rejected (warning - security event)
 logger.warning("LDAP authentication rejected: empty username")
@@ -281,26 +296,28 @@ logger.debug("User not found in LDAP directory")
 logger.debug("LDAP password verification failed")
 ```
 
-**Rationale**: Only log errors administrators need to debug operational issues (server connectivity, TLS problems, misconfigurations). No success/failure logging to avoid PII complexity.
+**原因**：仅记录管理员排查运维问题所需的错误，例如服务器连接、TLS 问题和配置错误。不记录成功或失败事件，避免个人身份信息处理复杂度。
 
-**DO NOT Log**:
-- ❌ Usernames (PII)
-- ❌ Passwords (never log credentials)
-- ❌ Bind DN passwords (service account credentials)
-- ❌ Email addresses (PII)
-- ❌ Group DNs (PII, reveals org structure)
-- ❌ User-specific failures (e.g., "invalid credentials for user X")
-- ❌ Successful authentications
+**禁止记录**：
+- ❌ 用户名，属于个人身份信息
+- ❌ 密码，绝不记录凭证
+- ❌ 绑定 DN 密码，即服务账户凭证
+- ❌ 邮箱地址，属于个人身份信息
+- ❌ 组 DN，属于个人身份信息，会暴露组织结构
+- ❌ 用户特定失败，例如“用户 X 的凭证无效”
+- ❌ 成功的身份验证
 
-**Future Enhancement**: Add opt-in security audit logging with username hashing, PII controls, retention policies, and compliance documentation (GDPR, SOC2) post-MVP.
+**未来增强**：MVP 之后添加可选安全审计日志，包括用户名哈希、个人身份信息控制、保留策略和 GDPR、SOC2 合规文档。
 
 ---
 
-## Event Loop DoS Prevention
+<a id="event-loop-dos-prevention"></a>
 
-**Threat**: LDAP operations are network-bound and can block the FastAPI event loop if not properly isolated.
+## 事件循环 DoS 防护
 
-**Attack Scenario**:
+**威胁**：LDAP 操作受网络限制，如未适当隔离，会阻塞 FastAPI 事件循环。
+
+**攻击场景**：
 ```
 1. Attacker opens multiple slow LDAP connections
 2. Each connection blocks an async worker thread
@@ -308,9 +325,9 @@ logger.debug("LDAP password verification failed")
 4. Service degradation even with rate limiting
 ```
 
-**Root Cause**: The `ldap3` library is synchronous-only. All operations (connection, TLS handshake, bind, search) block the calling thread.
+**根因**：`ldap3` 库仅支持同步。连接、TLS 握手、绑定和搜索等所有操作都会阻塞调用线程。
 
-**Mitigation**:
+**防护**：
 ```python
 # Phoenix implementation: Thread pool isolation
 async def authenticate(self, username: str, password: str) -> Optional[LDAPUserInfo]:
@@ -323,42 +340,43 @@ def _authenticate(self, username: str, password: str) -> Optional[LDAPUserInfo]:
     conn = Connection(server, receive_timeout=30, ...)
 ```
 
-**Benefits**:
-- ✅ Main event loop remains responsive during LDAP operations
-- ✅ Slow LDAP servers don't starve FastAPI workers
-- ✅ Multiple concurrent LDAP authentications don't block each other
-- ✅ Standard pattern for wrapping synchronous I/O in async frameworks
+**收益**：
+- ✅ LDAP 操作期间主事件循环保持响应
+- ✅ 缓慢 LDAP 服务器不会耗尽 FastAPI 工作进程
+- ✅ 多个并发 LDAP 身份验证互不阻塞
+- ✅ 在异步框架中封装同步 I/O 的标准模式
 
-**Timeout Enforcement**:
-- **Real timeout**: `receive_timeout=30` (socket-level, terminates blocking operations)
-- **HTTP timeout**: `fail_after(60)` (prevents client hang, returns 500 error)
-- **Limitation**: Threads cannot be cancelled from outside (Python limitation)
-- **Result**: If socket timeout fails, thread becomes orphaned until natural completion
+**超时执行**：
+- **实际超时**：`receive_timeout=30`，socket 级，终止阻塞操作
+- **HTTP 超时**：`fail_after(60)`，防止客户端挂起，返回 500 错误
+- **限制**：无法从外部取消线程，这是 Python 限制
+- **结果**：若 socket 超时失效，线程会成为孤立线程，直到自然完成
 
-**Why Not ldap3.ASYNC**:
-The `ldap3` library offers an `ASYNC` strategy, but it is not compatible with Python's `asyncio`:
-- Uses background threads (not asyncio tasks)
-- Still performs blocking socket operations
-- Pre-dates Python's async/await (2013-era design)
+**为何不使用 ldap3.ASYNC**：`ldap3` 提供 `ASYNC` 策略，但不兼容 Python `asyncio`：
+- 使用后台线程，而非 asyncio 任务
+- 仍执行阻塞 socket 操作
+- 设计早于 Python async/await，属于 2013 年代
 
-Thread pool isolation via `anyio.to_thread.run_sync()` is the standard approach for integrating synchronous LDAP libraries with async frameworks.
+通过 `anyio.to_thread.run_sync()` 进行线程池隔离，是将同步 LDAP 库集成至异步框架的标准方式。
 
 ---
 
-## Email Recycling Attack Prevention
+<a id="email-recycling-attack-prevention"></a>
 
-**Threat**: In enterprise mode (unique_id configured), a new employee with a recycled email could hijack an old employee's account.
+## 防止邮箱回收攻击
 
-**Attack Scenario** (without protection):
-1. User A leaves company (DB: `email=john@corp.com`, `oauth2_user_id=UUID-A`)
-2. User B joins with recycled email (LDAP: `email=john@corp.com`, `unique_id=UUID-B`)
-3. User B logs in:
-   - unique_id lookup: `UUID-B` not found in DB
-   - email fallback: finds User A's account
-   - **Vulnerable code would update User A's `oauth2_user_id` to `UUID-B`**
-   - User B now has access to User A's data!
+**威胁**：企业模式下配置了 unique_id，使用回收邮箱的新员工可能劫持旧员工账户。
 
-**Mitigation** (Phoenix implementation):
+**攻击场景**（未防护时）：
+1. 用户 A 离职，数据库中为 `email=john@corp.com`、`oauth2_user_id=UUID-A`
+2. 用户 B 入职，使用回收邮箱，LDAP 中为 `email=john@corp.com`、`unique_id=UUID-B`
+3. 用户 B 登录：
+   - 按 unique_id 查找：数据库中未找到 `UUID-B`
+   - 邮箱回退：找到用户 A 的账户
+   - **有漏洞的代码会将用户 A 的 `oauth2_user_id` 更新为 `UUID-B`**
+   - 用户 B 由此可以访问用户 A 的数据！
+
+**防护**（Phoenix 实现）：
 ```python
 # Only migrate if user has no existing unique_id
 if user.oauth2_user_id is None:
@@ -372,71 +390,75 @@ elif user.oauth2_user_id.lower() != unique_id.lower():
     )
 ```
 
-**Why 403 Instead of Creating New Account?**
-- Email is unique in the database (`CREATE UNIQUE INDEX ix_users_email`)
-- Attempting to create a new user with the same email would fail with constraint violation
-- Explicit 403 gives users a clear error and directs them to admin
+**为什么返回 403，而不创建新账户？**
+- 邮箱在数据库中唯一（`CREATE UNIQUE INDEX ix_users_email`）
+- 使用相同邮箱创建新用户会因违反约束而失败
+- 明确的 403 为用户提供清晰错误，并引导其联系管理员
 
-**Resolution Options** (admin intervention required):
-1. Delete the old account (if user truly left)
-2. Update the old account's `oauth2_user_id` to the new UUID
-3. Change the old account's email to free it up
+**解决方案**（需要管理员介入）：
+1. 删除旧账户，确认原用户确实离职时使用
+2. 将旧账户的 `oauth2_user_id` 更新为新 UUID
+3. 修改旧账户邮箱，释放原邮箱
 
 ---
 
-## UUID Case Normalization
+<a id="uuid-case-normalization"></a>
 
-**Threat**: Case-sensitive UUID lookups can cause account lockout or duplicate accounts.
+## UUID 大小写规范化
 
-**Scenario**:
-1. Old Phoenix version stored: `oauth2_user_id = "550E8400-..."` (uppercase)
-2. New Phoenix normalizes to: `unique_id = "550e8400-..."` (lowercase)
-3. Case-sensitive lookup fails → user locked out or duplicate created
+**威胁**：区分大小写的 UUID 查找可能导致账户锁定或重复账户。
 
-**Mitigation**:
+**场景**：
+1. 旧版 Phoenix 存储：`oauth2_user_id = "550E8400-..."`，大写
+2. 新版 Phoenix 规范化为：`unique_id = "550e8400-..."`，小写
+3. 区分大小写查找失败 → 用户无法登录或产生重复账户
 
-1. **Normalize output to lowercase** (in `_get_unique_id`):
+**防护**：
+
+1. **将输出规范化为小写**（在 `_get_unique_id` 中）：
 ```python
 # UUIDs are case-insensitive per RFC 4122
 return decoded.lower()  # Normalize entryUUID
 return str(uuid.UUID(bytes_le=...))  # uuid.UUID always returns lowercase
 ```
 
-2. **Case-insensitive database lookup**:
+2. **不区分大小写的数据库查找**：
 ```python
 # Use func.lower() for case-insensitive comparison
 .where(func.lower(models.User.oauth2_user_id) == unique_id.lower())
 ```
 
-3. **Case-insensitive conflict detection**:
+3. **不区分大小写的冲突检测**：
 ```python
 # Compare lowercase to handle legacy data
 elif user.oauth2_user_id.lower() != unique_id.lower():
     raise HTTPException(403, ...)
 ```
 
-**Result**: Existing users with different UUID casing are found and updated on next login.
+**结果**：UUID 大小写不同的已有用户会在下次登录时被找到并更新。
 
 ---
 
-## Unique ID Extraction Robustness
+<a id="unique-id-extraction-robustness"></a>
 
-**Threat**: Malformed or edge-case LDAP attribute values could cause crashes or incorrect IDs.
+## 唯一 ID 提取健壮性
 
-**Edge Cases Handled**:
+**威胁**：格式错误或边界情况的 LDAP 属性值可能导致崩溃或错误 ID。
 
-| Input | Handling | Result |
+**已处理的边界情况**：
+
+| 输入 | 处理 | 结果 |
 |-------|----------|--------|
-| Missing attribute | `getattr(entry, attr_name, None)` | `None` |
-| Empty attribute (`values=[]`) | Check `attr is None` | `None` |
-| Empty bytes (`b""`) | Length check | `None` |
-| Whitespace-only (`b"   "`) | Strip then check | `None` |
-| 16-byte binary (objectGUID) | `uuid.UUID(bytes_le=...)` | Lowercase UUID |
-| String UUID as bytes (entryUUID) | UTF-8 decode, lowercase | Lowercase UUID |
-| Uppercase UUID | `.lower()` normalization | Lowercase UUID |
-| Invalid UTF-8 binary | `.hex()` fallback | Hex string |
+| 缺少属性 | `getattr(entry, attr_name, None)` | `None` |
+| 空属性（`values=[]`） | 检查 `attr is None` | `None` |
+| 空字节（`b""`） | 检查长度 | `None` |
+| 仅空白（`b"   "`） | 去除空白后检查 | `None` |
+| 16 字节二进制，objectGUID | `uuid.UUID(bytes_le=...)` | 小写 UUID |
+| 字节形式字符串 UUID，entryUUID | UTF-8 解码并转换为小写 | 小写 UUID |
+| 大写 UUID | `.lower()` 规范化 | 小写 UUID |
+| 无效 UTF-8 二进制 | `.hex()` 回退 | 十六进制字符串 |
 
-**Implementation** (defensive coding):
+**实现**（防御式编码）：
 ```python
 def _get_unique_id(entry: Any, attr_name: str) -> Optional[str]:
     attr = getattr(entry, attr_name, None)
@@ -466,19 +488,21 @@ def _get_unique_id(entry: Any, attr_name: str) -> Optional[str]:
 
 ---
 
-## Configuration Validation
+<a id="configuration-validation"></a>
 
-**Threat**: Typos in LDAP attribute names cause silent failures.
+## 配置校验
 
-**Scenario**:
+**威胁**：LDAP 属性名称拼写错误会导致静默失败。
+
+**场景**：
 ```bash
 # Typo: space in attribute name
 PHOENIX_LDAP_ATTR_UNIQUE_ID="object GUID"  # Should be "objectGUID"
 ```
 
-The LDAP server returns no results for `"object GUID"` (attribute doesn't exist), causing all users to fail authentication with "missing unique_id" errors.
+LDAP 服务器对 `"object GUID"` 不返回结果，因为该属性不存在，导致所有用户身份验证均以“missing unique_id”错误失败。
 
-**Mitigation** (startup validation in `config.py`):
+**防护**（`config.py` 中的启动校验）：
 ```python
 # Validate attribute names don't contain spaces
 for attr_var, attr_val in [
@@ -495,15 +519,17 @@ for attr_var, attr_val in [
         )
 ```
 
-**Result**: Configuration errors caught at startup with helpful suggestions.
+**结果**：启动时捕获配置错误，并提供有用建议。
 
 ---
 
-## Socket Leak Prevention
+<a id="socket-leak-prevention"></a>
 
-**Threat**: Failed LDAP operations can leak file descriptors if connections are not properly cleaned up.
+## 防止 socket 泄漏
 
-**Vulnerability**: Connection cleanup code that only runs conditionally can leave sockets open:
+**威胁**：连接未正确清理时，失败的 LDAP 操作可能泄漏文件描述符。
+
+**漏洞**：仅在满足条件时执行的连接清理代码可能使 socket 保持打开：
 ```python
 # VULNERABLE: Socket leak on bind failure
 try:
@@ -516,15 +542,15 @@ finally:
         conn.unbind()
 ```
 
-**Leak Scenarios**:
-1. `conn.open()` raises → socket opened, cleanup skipped → **LEAK**
-2. `conn.start_tls()` raises → socket opened, cleanup skipped → **LEAK**
-3. `conn.bind()` raises → socket opened, cleanup skipped → **LEAK**
-4. Wrong password → `conn.bound = False` → cleanup skipped → **LEAK**
+**泄漏场景**：
+1. `conn.open()` 抛出异常 → socket 已打开，跳过清理 → **泄漏**
+2. `conn.start_tls()` 抛出异常 → socket 已打开，跳过清理 → **泄漏**
+3. `conn.bind()` 抛出异常 → socket 已打开，跳过清理 → **泄漏**
+4. 密码错误 → `conn.bound = False` → 跳过清理 → **泄漏**
 
-**Impact**: Repeated failed logins exhaust file descriptors → process crash
+**影响**：重复登录失败耗尽文件描述符 → 进程崩溃
 
-**Mitigation**:
+**防护**：
 ```python
 # Phoenix implementation: Unconditional cleanup
 try:
@@ -537,31 +563,35 @@ finally:
     conn.unbind()  # Closes socket even if connection not bound
 ```
 
-**Key Insight**: `ldap3.Connection.unbind()` safely closes the underlying socket regardless of connection state. It can be called even if:
-- `open()` never succeeded
-- `start_tls()` failed mid-handshake
-- `bind()` was never attempted
-- Password verification failed
+**要点**：无论连接状态如何，`ldap3.Connection.unbind()` 均能安全关闭底层 socket。以下情况也可调用：
+- `open()` 从未成功
+- `start_tls()` 在握手中途失败
+- 尚未尝试 `bind()`
+- 密码验证失败
 
-**Test Coverage**: Unit tests verify socket cleanup for:
-- Bind failures (wrong password)
-- `open()` exceptions
-- `start_tls()` exceptions
-- Anonymous bind with TLS failures
+**测试覆盖**：单元测试验证以下情况的 socket 清理：
+- 绑定失败，密码错误
+- `open()` 异常
+- `start_tls()` 异常
+- 匿名绑定中 TLS 失败
 
 ---
 
-## Additional Security Resources
+<a id="additional-security-resources"></a>
 
-- [User Identification Strategy](./user-identification-strategy.md) - Email recycling protection, case normalization, migration logic
-- [Protocol Compliance](./protocol-compliance.md) - Anonymous bind prevention, ambiguous search rejection, DN validation
-- [Configuration Reference](./configuration.md) - TLS configuration options and security recommendations
-- [Grafana Comparison](./grafana-comparison.md) - Security patterns adopted from Grafana's implementation
+## 更多安全资源
 
-## References
+- [用户识别策略](./user-identification-strategy.md) — 邮箱回收保护、大小写规范化、迁移逻辑
+- [协议合规性](./protocol-compliance.md) — 防止匿名绑定、拒绝歧义搜索、DN 校验
+- [配置参考](./configuration.md) — TLS 配置选项和安全建议
+- [Grafana 对比](./grafana-comparison.md) — 从 Grafana 实现借鉴的安全模式
 
-- [RFC 4122 - UUID URN Namespace](https://www.rfc-editor.org/rfc/rfc4122.html) - UUIDs are case-insensitive
-- [RFC 4515 - LDAP Search Filter](https://www.rfc-editor.org/rfc/rfc4515.html) - Filter escaping rules
-- [MS-DTYP §2.3.4 - GUID Structure](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/001eec5a-7f8b-4293-9e21-ca349392db40) - objectGUID binary format
-- [ldap3 Referral Handling](https://ldap3.readthedocs.io/en/latest/referrals.html) - Default `auto_referrals=True` behavior
+<a id="references"></a>
+
+## 参考资料
+
+- [RFC 4122 — UUID URN 命名空间](https://www.rfc-editor.org/rfc/rfc4122.html) — UUID 不区分大小写
+- [RFC 4515 — LDAP 搜索过滤器](https://www.rfc-editor.org/rfc/rfc4515.html) — 过滤器转义规则
+- [MS-DTYP §2.3.4 — GUID 结构](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/001eec5a-7f8b-4293-9e21-ca349392db40) — objectGUID 二进制格式
+- [ldap3 转介处理](https://ldap3.readthedocs.io/en/latest/referrals.html) — 默认 `auto_referrals=True` 行为
 

@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user's agent takes 30+ LLM calls to answer trivial questions with no errors, and asked what to run with the `px` CLI and what to look for. This is a trajectory problem: the answer lives in the sequence and contents of the spans, not in status codes.
+用户的智能体回答简单问题需要 30 多次 LLM 调用，期间没有错误；用户询问应运行哪些 `px` CLI 命令以及应检查什么。这是执行轨迹问题：答案在跨度的顺序和内容中，而非状态码中。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The primary path is the `px` CLI. Sending the user to the web UI or the Python SDK as the main answer fails this claim.
+判断条件：以 `px` CLI 为主要路径。如果主要回答让用户使用 Web 界面或 Python SDK，则不满足此条件。

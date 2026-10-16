@@ -1,261 +1,284 @@
-# Appendix: Design FAQ
+<a id="appendix-design-faq"></a>
+# 附录：设计常见问题
 
-Frequently asked "why" questions about the experiment runner design, with answers.
-
----
-
-## Table of Contents
-
-1. [Constants](#constants)
-   - [Why 5 consecutive failures for circuit breaker?](#why-5-consecutive-failures-for-circuit-breaker-trip)
-   - [Why 10-minute stale claim timeout?](#why-10-minute-stale-claim-timeout)
-   - [Why 30-second shield timeout?](#why-30-second-shield-timeout-for-db-writes)
-   - [Why 20 max concurrent slots?](#why-20-max-concurrent-slots)
-   - [Why 5-second cooldown?](#why-5-second-cooldown-on-stopresume-toggles)
-2. [Architecture](#architecture)
-   - [Why no LISTEN/NOTIFY?](#why-no-listennotify-for-cross-replica-coordination)
-   - [Why let in-flight jobs complete?](#why-let-in-flight-jobs-complete-on-stop-instead-of-cancelling-them)
-   - [Why separate circuit breakers?](#why-separate-circuit-breakers-for-tasks-and-evals)
-   - [Why Advisor over Gatekeeper?](#why-advisor-pattern-over-gatekeeper)
-3. [Gaps and Trade-offs](#gaps-and-trade-offs)
-   - [What if initial token bucket rate is wrong?](#what-if-the-token-buckets-initial-rate-5-reqs-is-way-wrong)
-   - [Why is retry backoff lost on resume?](#why-is-retry-backoff-state-lost-on-resume-acceptable)
-   - [Why no queue state persistence?](#why-no-queue-state-persistence)
-4. [Recommendations](#recommendations)
-5. [Open Questions](#open-questions)
+关于实验运行器设计中“为什么”的常见问题与解答。
 
 ---
 
-## Constants
+<a id="table-of-contents"></a>
+## 目录
 
-### Why 5 consecutive failures for circuit breaker trip?
+1. [常量](#constants)
+   - [为什么连续失败 5 次才熔断？](#why-5-consecutive-failures-for-circuit-breaker-trip)
+   - [为什么过期认领超时为 10 分钟？](#why-10-minute-stale-claim-timeout)
+   - [为什么屏蔽取消超时为 30 秒？](#why-30-second-shield-timeout-for-db-writes)
+   - [为什么最大并发槽位为 20？](#why-20-max-concurrent-slots)
+   - [为什么冷却 5 秒？](#why-5-second-cooldown-on-stopresume-toggles)
+2. [架构](#architecture)
+   - [为什么不用 LISTEN/NOTIFY？](#why-no-listennotify-for-cross-replica-coordination)
+   - [为什么允许在途作业完成？](#why-let-in-flight-jobs-complete-on-stop-instead-of-cancelling-them)
+   - [为什么分开熔断器？](#why-separate-circuit-breakers-for-tasks-and-evals)
+   - [为什么选择 Advisor 而非 Gatekeeper？](#why-advisor-pattern-over-gatekeeper)
+3. [不足与取舍](#gaps-and-trade-offs)
+   - [令牌桶初始速率错误怎么办？](#what-if-the-token-buckets-initial-rate-5-reqs-is-way-wrong)
+   - [为什么恢复时可丢失重试退避？](#why-is-retry-backoff-state-lost-on-resume-acceptable)
+   - [为什么不持久化队列状态？](#why-no-queue-state-persistence)
+4. [建议](#recommendations)
+5. [待解决问题](#open-questions)
 
-**Answer**: Balance between fast failure detection and tolerance for transient issues.
+---
 
-| Threshold | Behavior |
+<a id="constants"></a>
+## 常量
+
+<a id="why-5-consecutive-failures-for-circuit-breaker-trip"></a>
+### 为什么连续失败 5 次才触发熔断器？
+
+**答：** 平衡快速故障检测与对暂时问题的容忍。
+
+| 阈值 | 行为 |
 |-----------|----------|
-| 1-2 | Too aggressive — one flaky request kills the experiment |
-| 3-5 | Sweet spot — catches sustained failures, tolerates blips |
-| 10+ | Too slow — wastes many requests before detecting outage |
+| 1–2 | 过激，一次不稳定请求即可终止实验 |
+| 3–5 | 较理想，捕捉持续失败并容忍短暂波动 |
+| 10+ | 太慢，发现故障前浪费大量请求 |
 
-5 failures at ~2 seconds each = ~10 seconds to detect an outage. Acceptable for background processing.
+5 次失败，每次约 2 秒，约 10 秒发现故障。后台处理可以接受。
 
-**Open question**: Should this be configurable per-provider? Some providers are flakier than others.
+**待解决问题：** 是否按提供商配置？部分提供商更不稳定。
 
 ---
 
-### Why 10-minute stale claim timeout?
+<a id="why-10-minute-stale-claim-timeout"></a>
+### 为什么过期认领超时为 10 分钟？
 
-**Answer**: Must be longer than any reasonable LLM request + retry sequence.
+**答：** 必须长于任何合理的 LLM 请求加重试序列。
 
-| Timeout | Risk |
+| 超时 | 风险 |
 |---------|------|
-| 2 min | False positive — slow LLM requests (o1 thinking, complex prompts) may exceed this |
-| 5 min | Still risky — a job with 3 retries at exponential backoff could hit this |
-| 10 min | Safe — even worst-case retry sequences (1+2+4+8+16+32=63s) plus slow requests fit |
-| 30 min | Too slow — crashed experiments take too long to resume |
+| 2 分钟 | 误判，缓慢 LLM 请求，如 o1 思考、复杂提示词，可能超时 |
+| 5 分钟 | 仍有风险，带 3 次指数退避重试的作业可能达到 |
+| 10 分钟 | 安全，即使最差重试序列（1+2+4+8+16+32=63s）加慢请求也能容纳 |
+| 30 分钟 | 太慢，崩溃实验恢复等待过久 |
 
-The cost of a false positive (claiming an experiment that's actually running) is duplicate execution. The current implementation handles this via idempotent writes, but it wastes resources.
+误判，即认领实际仍在运行的实验，代价是重复执行。当前通过幂等写入处理，但仍浪费资源。
 
-**Trade-off**: Users wait 10+ minutes for crashed experiments to resume. Acceptable for background processing.
-
----
-
-### Why 30-second shield timeout for DB writes?
-
-**Answer**: Defensive programming with a generous upper bound.
-
-Normal DB writes take <100ms. The 30-second timeout is a safeguard against:
-- Connection pool exhaustion causing queued writes
-- Network partitions to database
-- Database under extreme load
-
-**Why not 5 seconds?** If writes regularly take >5s, something is wrong, but we'd rather complete the write than corrupt the connection pool. 30s gives maximum chance of success.
-
-**⚠️ Yellow flag**: The original motivation was observed connection pool issues during cancellation. Modern async drivers (asyncpg, psycopg) should handle this correctly. We haven't root-caused the issue — this is a band-aid over an unknown problem.
-
-**Recommendation**: Either reproduce the issue and prove the shield is necessary, or remove it. "Defensive programming" without understanding the threat is cargo cult.
+**取舍：** 用户等待 10 分钟以上才能恢复崩溃实验，后台处理可接受。
 
 ---
 
-### Why 20 max concurrent slots?
+<a id="why-30-second-shield-timeout-for-db-writes"></a>
+### 为什么数据库写入的屏蔽取消超时为 30 秒？
 
-**Answer**: Empirically chosen based on typical deployment constraints.
+**答：** 设定宽松上限的防御式编程。
 
-| Factor | Consideration |
+正常写入小于 100ms。30 秒超时防范：
+
+- 连接池耗尽导致写入排队。
+- 与数据库之间发生网络分区。
+- 数据库负载极高。
+
+**为什么不是 5 秒？** 写入经常超过 5 秒确实有问题，但我们宁愿完成写入，也不愿破坏连接池。30 秒尽可能提高成功机会。
+
+**⚠️ 值得警惕：** 最初原因是观察到取消时连接池出现问题。现代异步驱动 asyncpg、psycopg 理应正确处理。尚未查明根因，这是对未知问题的临时补丁。
+
+**建议：** 复现并证明屏蔽取消确有必要，否则移除。不了解威胁的防御式编程只是照搬形式。
+
+---
+
+<a id="why-20-max-concurrent-slots"></a>
+### 为什么最大并发槽位为 20？
+
+**答：** 根据典型部署约束凭经验选择。
+
+| 因素 | 考虑 |
 |--------|---------------|
-| Memory | Each slot holds in-flight job state, chunks, etc. |
-| DB connections | Each slot may need a connection for writes |
-| Provider limits | Most providers allow 50-100+ RPM, so 20 slots won't bottleneck |
-| Fairness | With round-robin, 20 slots across 5 experiments = 4 slots/experiment average |
+| 内存 | 每个槽位保存进行中作业状态、数据块等 |
+| 数据库连接 | 每个槽位写入时可能需要连接 |
+| 提供商限制 | 多数允许每分钟 50–100 次以上请求，20 个槽位不会成为瓶颈 |
+| 公平性 | 轮询分配时，5 个实验共享 20 槽位，平均每个 4 个 |
 
-**⚠️ Not based on formal benchmarking.** This is a guess that works for typical deployments.
+**⚠️ 没有正式基准依据。** 这是适用于典型部署的估计。
 
-**Recommendation**: Make this configurable. Hardcoded constants become technical debt when deployment requirements vary.
+**建议：** 允许配置。部署需求不同时，硬编码常量会成为技术债。
 
 ---
 
-### Why 5-second cooldown on stop/resume toggles?
+<a id="why-5-second-cooldown-on-stopresume-toggles"></a>
+### 为什么停止/恢复切换冷却 5 秒？
 
-**Answer**: Prevents accidental double-clicks and UI race conditions.
+**答：** 防止意外双击和界面竞态。
 
-| Cooldown | Effect |
+| 冷却 | 效果 |
 |----------|--------|
-| 0s | No protection — rapid clicking causes state thrashing |
-| 1s | Still allows fast double-click |
-| 5s | Enough to drain most in-flight jobs (LLM calls ~1-3s) |
-| 30s | Annoying for legitimate use cases |
+| 0 秒 | 无保护，快速点击导致状态反复切换 |
+| 1 秒 | 仍允许快速双击 |
+| 5 秒 | 足够排空多数在途作业，LLM 调用约 1–3 秒 |
+| 30 秒 | 对正常使用令人困扰 |
 
-5 seconds is long enough to prevent accidents, short enough to not frustrate intentional toggles.
+5 秒足够避免意外，也足够短，不妨碍有意切换。
 
-**Note**: Cooldown only applies to user-initiated toggles (stop mutation, resume mutation), not to initial start or internal completion.
+**说明：** 冷却仅用于用户触发的停止和恢复变更操作，不用于初始启动或内部完成。
 
 ---
 
-## Architecture
+<a id="architecture"></a>
+## 架构
 
-### Why no LISTEN/NOTIFY for cross-replica coordination?
+<a id="why-no-listennotify-for-cross-replica-coordination"></a>
+### 为什么跨副本协调不用 LISTEN/NOTIFY？
 
-**Answer**: Heartbeat-based coordination is simpler and works with all databases.
+**答：** 心跳协调更简单，且适用于所有数据库。
 
-| Approach | Pros | Cons |
+| 方法 | 优点 | 缺点 |
 |----------|------|------|
-| LISTEN/NOTIFY | Instant notification | PostgreSQL-only, requires connection management |
-| Heartbeat polling | Works everywhere, simple | 10-minute delay for crash recovery |
+| LISTEN/NOTIFY | 即时通知 | 仅 PostgreSQL，需要连接管理 |
+| 心跳轮询 | 通用、简单 | 崩溃恢复延迟 10 分钟 |
 
-**Key insight**: Cross-replica stop doesn't need instant notification. The mutation updates `claimed_at=NULL` in the database, and the owning replica's heartbeat detects this within 5 minutes. For background processing, this delay is acceptable.
+**关键认识：** 跨副本停止无需即时通知。变更操作将数据库更新为 `claimed_at=NULL`，所属副本心跳在 5 分钟内发现。后台处理可接受此延迟。
 
-**LISTEN/NOTIFY was not implemented** — the spec mentioned it during design exploration, but the simpler heartbeat approach was chosen.
+**未实现 LISTEN/NOTIFY**：规格在设计探索中提及，但最终选择更简单的心跳方案。
 
 ---
 
-### Why let in-flight jobs complete on stop instead of cancelling them?
+<a id="why-let-in-flight-jobs-complete-on-stop-instead-of-cancelling-them"></a>
+### 为什么停止时让在途作业完成，而非取消？
 
-**Answer**: Clean completion is simpler than handling partial state.
+**答：** 正常完成比处理部分状态更简单。
 
-| Approach | Pros | Cons |
+| 方法 | 优点 | 缺点 |
 |----------|------|------|
-| Cancel immediately | Faster stop | Partial responses, complex cleanup, potential DB corruption |
-| Let complete | Clean, predictable | 1-5 second delay |
+| 立即取消 | 停止更快 | 部分响应、复杂清理、潜在数据库损坏 |
+| 等待完成 | 干净、可预测 | 延迟 1–5 秒 |
 
-LLM calls are typically 1-5 seconds. Waiting for them to complete is faster than implementing robust cancellation logic.
+LLM 调用通常耗时 1–5 秒。等待完成比实现稳健取消逻辑更快。
 
-**What about 5-minute jobs?** Jobs have a 2-minute timeout. If a job exceeds this, it's cancelled via the timeout mechanism, not the stop mechanism.
+**5 分钟的作业怎么办？** 作业超时为 2 分钟。超出时由超时机制取消，而非停止机制。
 
 ---
 
-### Why separate circuit breakers for tasks and evals?
+<a id="why-separate-circuit-breakers-for-tasks-and-evals"></a>
+### 为什么任务与评估采用独立熔断器？
 
-**Answer**: Tasks and evals may use different providers.
+**答：** 任务与评估可能使用不同提供商。
 
-| Scenario | Behavior with shared breaker | Behavior with separate breakers |
+| 场景 | 共享熔断器行为 | 独立熔断器行为 |
 |----------|------------------------------|--------------------------------|
-| Task uses OpenAI, eval uses Anthropic | OpenAI failure kills Anthropic evals | Only OpenAI tasks stop |
-| Both use OpenAI | Same | Same |
+| 任务使用 OpenAI，评估使用 Anthropic | OpenAI 故障导致 Anthropic 评估终止 | 仅停止 OpenAI 任务 |
+| 两者均为 OpenAI | 相同 | 相同 |
 
-**⚠️ Imprecise**: If both task and eval use OpenAI, they should share a circuit breaker. Currently they don't — you could have 5 task failures trip the task breaker while eval keeps hitting the same broken provider.
+**⚠️ 不够精确：** 若任务和评估都用 OpenAI，应该共享熔断器。目前没有，可能任务失败 5 次触发任务熔断，而评估继续请求同一故障提供商。
 
-**Better design**: Per-provider circuit breakers shared across all experiments. Each provider has one breaker; any job using that provider checks and updates it.
+**更好的设计：** 所有实验共享按提供商划分的熔断器。每个提供商一个，使用它的所有作业都检查和更新。
 
-**Current behavior**: Each experiment has two breakers. If task breaker trips, evals continue (even if they use the same provider). This is a known limitation.
-
----
-
-### Why Advisor pattern over Gatekeeper?
-
-**Answer**: Gatekeeper retries block execution slots.
-
-See [appendix-rate-limiting.md](./appendix-rate-limiting.md#why-advisor-wins) for detailed analysis.
-
-**The core problem**: In Gatekeeper, when a job hits 429, it retries internally with backoff (1s, 2s, 4s, 8s...). During this entire sequence, the execution slot is blocked doing nothing. Other experiments that could make progress are starved.
-
-**Advisor solution**: Rate limit check happens at dispatch time. If no capacity, return `None` immediately. Slot stays free to serve other experiments.
-
-**Was Gatekeeper benchmarked?** No formal benchmark. The theoretical analysis was sufficient — blocking slots during backoff is clearly wasteful when other work is available.
+**当前行为：** 每个实验两个熔断器。任务熔断时，评估继续，即使使用同一提供商。这是已知限制。
 
 ---
 
-## Gaps and Trade-offs
+<a id="why-advisor-pattern-over-gatekeeper"></a>
+### 为什么选择 Advisor 模式而非 Gatekeeper？
 
-### What if the token bucket's initial rate (5 req/s) is way wrong?
+**答：** Gatekeeper 重试会阻塞执行槽位。
 
-**Answer**: The adaptive algorithm adjusts, but initial requests may suffer.
+详细分析见 [appendix-rate-limiting.md](./appendix-rate-limiting.md#why-advisor-wins)。
 
-**How it works**:
-- Initial rate: 5 requests/second (conservative)
-- On 429: Reduce rate by 50%
-- On success: Gradually increase rate
+**核心问题：** Gatekeeper 中，作业遇到 429 后在内部退避重试，间隔 1、2、4、8 秒等。整个序列期间槽位被占用却无事可做，其他本可推进的实验被饿死。
 
-**Worst case**: Provider allows 100 req/s, we start at 5. First few seconds are slow, but adaptation is fast.
+**Advisor 方案：** 分派时检查限流。容量不足立即返回 `None`，槽位保持空闲，服务其他实验。
 
-**⚠️ Opposite worst case**: Provider allows 1 req/s (Gemini free tier is 2-5 RPM), we start at 5 req/s. First several requests will 429 before adaptation kicks in.
-
-**Recommendation**: Initial rate should be per-provider. We have provider rate limit research (see rate-limiting appendix) — use it to set sensible defaults instead of one-size-fits-all 5 req/s.
+**Gatekeeper 做过基准测试吗？** 没有正式基准。理论分析已足够：存在其他工作时，退避中占用槽位显然浪费。
 
 ---
 
-### Why is retry backoff state lost on resume acceptable?
+<a id="gaps-and-trade-offs"></a>
+## 不足与取舍
 
-**Answer**: Token bucket state is preserved, which is what matters.
+<a id="what-if-the-token-buckets-initial-rate-5-reqs-is-way-wrong"></a>
+### 令牌桶初始速率 5 req/s 严重不符怎么办？
 
-| State | Persisted? | Why |
+**答：** 自适应算法会调整，但初始请求可能受影响。
+
+**机制：**
+
+- 初始速率每秒 5 次，较保守。
+- 遇到 429，速率降低 50%。
+- 成功后逐渐提高速率。
+
+**最差情况：** 提供商允许 100 req/s，我们从 5 开始。前几秒较慢，但调整很快。
+
+**⚠️ 反向最差情况：** 提供商只允许 1 req/s，Gemini 免费层为 2–5 RPM，却从 5 req/s 开始。自适应生效前，最初几次请求都会遇到 429。
+
+**建议：** 初始速率应按提供商设置。已有提供商限流调研，见限流附录，应据此设置合理默认值，而非统一 5 req/s。
+
+---
+
+<a id="why-is-retry-backoff-state-lost-on-resume-acceptable"></a>
+### 为什么恢复时丢失重试退避状态可以接受？
+
+**答：** 关键的令牌桶状态会保留。
+
+| 状态 | 是否持久保留？ | 原因 |
 |-------|------------|-----|
-| Task queue position | No (re-queried from DB) | DB is source of truth |
-| Retry count per job | No | Jobs are recreated on resume |
-| Token bucket rate | Yes (in-memory, shared) | Adaptive rate survives across experiments |
+| 任务队列位置 | 否，从数据库重新查询 | 数据库为唯一事实来源 |
+| 每作业重试次数 | 否 | 恢复时重新创建作业 |
+| 令牌桶速率 | 是，内存共享 | 自适应速率跨实验保留 |
 
-**The scenario**: Experiment was backing off at 64 seconds, crashes, resumes at 1 second.
+**场景：** 实验处于 64 秒退避时崩溃，恢复后从 1 秒开始。
 
-**Why it's okay**: The token bucket that caused the backoff is still rate-limited. Even if the job restarts at backoff=1s, the token bucket will reject it until capacity is available. No thundering herd.
+**为何可接受：** 导致退避的令牌桶仍受限流约束。即使作业从 1 秒重启，令牌桶也会拒绝，直到有容量，不会产生惊群。
 
-**Trade-off**: Jobs may hit 429 immediately on resume and start backoff from scratch. This wastes a few requests but doesn't cause systemic issues.
+**取舍：** 恢复时可能立即遇到 429，并重新开始退避。浪费少量请求，但不造成系统性问题。
 
 ---
 
-### Why no queue state persistence?
+<a id="why-no-queue-state-persistence"></a>
+### 为什么不持久化队列状态？
 
-**Answer**: Dramatically simpler, and the database is the source of truth anyway.
+**答：** 大幅简化，而且数据库本就是唯一事实来源。
 
-| Approach | Complexity | Failure modes |
+| 方法 | 复杂度 | 失败模式 |
 |----------|------------|---------------|
-| Persist queue state | High — serialize queues, retry heap, backoff timers | Stale state, desync with DB |
-| Query from DB | Low — just query incomplete runs | None (DB is truth) |
+| 持久化队列状态 | 高，序列化队列、重试堆、退避计时器 | 状态过期、与数据库不同步 |
+| 查询数据库 | 低，仅查询未完成运行 | 无，数据库即事实 |
 
-**What's lost on crash**:
-- Retry backoff position (acceptable — see above)
-- Eval queue (acceptable — re-derived from completed tasks)
-- In-flight jobs (acceptable — will be re-executed, idempotent writes)
+**崩溃会丢失：**
 
-**What's NOT lost**:
-- Completed runs (in DB)
-- Which tasks need execution (query incomplete runs)
+- 重试退避位置，可接受，见上。
+- 评估队列，可从已完成任务重新推导。
+- 在途作业，可重新执行，写入幂等。
 
-The "query from DB" approach makes resume idempotent — you can resume the same experiment 10 times and get the same result.
+**不会丢失：**
+
+- 已完成运行，保存在数据库。
+- 需要执行哪些任务，通过查询未完成运行得出。
+
+查询数据库使恢复幂等，同一实验恢复 10 次仍得到相同结果。
 
 ---
 
-## Recommendations
+<a id="recommendations"></a>
+## 建议
 
-Based on this analysis:
+根据上述分析：
 
-1. **Root-cause the shield timeout** — Prove it's needed with a reproducible test, or remove it.
+1. **查明屏蔽取消超时根因**：以可复现测试证明需要，否则移除。
 
-2. **Make constants configurable** — MAX_CONCURRENT, CIRCUIT_BREAKER_THRESHOLD, STALE_CLAIM_TIMEOUT should be environment variables or config.
+2. **常量可配置**：MAX_CONCURRENT、CIRCUIT_BREAKER_THRESHOLD、STALE_CLAIM_TIMEOUT 应作为环境变量或配置。
 
-3. **Per-provider circuit breakers** — Current task/eval split is imprecise. Future iteration should use per-provider breakers.
+3. **按提供商划分熔断器**：当前任务/评估划分不精确，未来迭代应按提供商划分。
 
-4. **Per-provider initial rates** — Use the provider research to set sensible defaults instead of 5 req/s for everyone.
+4. **按提供商设置初始速率**：利用调研确定合理默认值，而非统一 5 req/s。
 
-5. **Add observability** — You need metrics to validate these numbers in production:
-   - Circuit breaker trip rate
-   - 429 rate per provider
-   - Job latency p50/p95/p99
-   - Slot utilization
+5. **增加可观测性**，通过指标在生产环境验证这些数值：
+   - 熔断触发率。
+   - 逐提供商 429 比率。
+   - 作业延迟 p50/p95/p99。
+   - 槽位利用率。
 
-## Open Questions
+<a id="open-questions"></a>
+## 待解决问题
 
-These are genuinely open, not just "should we fix this":
+以下确实尚无定论，并非仅问是否修复：
 
-1. **Should we add LISTEN/NOTIFY?** Current 10-minute delay is probably fine for background processing, but some use cases may need faster coordination.
+1. **是否增加 LISTEN/NOTIFY？** 当前 10 分钟延迟对后台处理可能足够，但部分场景可能需要更快协调。
 
-2. **Should we persist token bucket state to database?** Would allow rate adaptation to survive server restarts. Trade-off is added complexity.
+2. **是否将令牌桶状态持久化到数据库？** 可使速率自适应跨服务端重启保留，代价是增加复杂度。

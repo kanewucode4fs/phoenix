@@ -1,92 +1,104 @@
-# SQLAlchemy Polymorphic User Example
+<a id="sqlalchemy-polymorphic-user-example"></a>
 
-This vignette demonstrates SQLAlchemy's single table inheritance (STI) pattern through a practical example of user authentication. It shows how to model different types of users (local and external) in a single database table while maintaining type safety and clean code organization.
+# SQLAlchemy 多态用户示例
 
-## Key Concepts Demonstrated
+本示例通过用户身份验证实例展示 SQLAlchemy 单表继承（STI）模式，说明如何在单个数据库表中建模本地和外部等不同用户类型，同时保持类型安全与整洁代码组织。
 
-1. **Single Table Inheritance (STI)**
-   - All user types share the same database table
-   - A discriminator column (`auth_method`) determines which class to instantiate
-   - Efficient storage while maintaining object-oriented design
+<a id="key-concepts-demonstrated"></a>
 
-2. **Polymorphic Identity**
-   - Each subclass has a unique identifier in the `auth_method` column
-   - SQLAlchemy automatically instantiates the correct class based on this value
-   - Enables type-safe querying of specific user types
+## 展示的核心概念
 
-3. **Abstract Base Class**
-   - The `User` class cannot be instantiated directly
-   - Defines common structure and behavior for all user types
-   - Enforces consistent interface across subclasses
+1. **单表继承（STI）**
+   - 所有用户类型共享同一个数据库表
+   - 鉴别列（`auth_method`）决定实例化哪个类
+   - 高效存储，同时保持面向对象设计
 
-4. **Security Implementation**
-   - Password hashing using bcrypt with unique salts
-   - Separate storage of password hashes and salts
-   - Type-safe authentication method handling
-   - Database constraints for data integrity
+2. **多态标识**
+   - 每个子类在 `auth_method` 列具有唯一标识符
+   - SQLAlchemy 根据该值自动实例化正确类
+   - 支持对特定用户类型进行类型安全查询
 
-## Initialization Behavior
+3. **抽象基类**
+   - 无法直接实例化 `User` 类
+   - 定义所有用户类型的公共结构和行为
+   - 强制各子类接口一致
 
-SQLAlchemy's ORM has a unique approach to object initialization that's important to understand:
+4. **安全实现**
+   - 使用 bcrypt 和唯一盐值进行密码哈希
+   - 密码哈希与盐值分开存储
+   - 类型安全的身份验证方法处理
+   - 数据库约束确保数据完整性
 
-1. **Object Creation vs Database Loading**
-   - During object creation (e.g., `LocalUser(email="user@example.com", password="secret")`):
-     - The `__init__` method is called
-     - Password hashing and salt generation occur
-     - Attributes are set through the constructor
-   - During database loading (e.g., `session.query(User).all()`):
-     - SQLAlchemy bypasses `__init__`
-     - Attributes are set directly from database rows
-     - This is more like deserialization than construction
+<a id="initialization-behavior"></a>
 
-2. **Polymorphic Loading**
-   - The `auth_method` discriminator determines which class to instantiate
-   - SQLAlchemy automatically selects the correct subclass
-   - All attributes are set directly from the database row
+## 初始化行为
 
-3. **State Management**
-   - Non-mapped state (like computed properties) can be maintained using:
-     - Python descriptors (`@property`)
-     - Event hooks (`InstanceEvents.load()`)
-   - In this example, `auth_method` is computed based on password fields
+SQLAlchemy ORM 的对象初始化方式较独特，需要理解：
 
-This behavior ensures that:
-- Password hashing only occurs during object creation
-- Database loading is efficient and direct
-- Polymorphic inheritance works seamlessly
+1. **对象创建与数据库加载**
+   - 对象创建时，例如 `LocalUser(email="user@example.com", password="secret")`：
+     - 调用 `__init__` 方法
+     - 执行密码哈希和盐值生成
+     - 通过构造函数设置属性
+   - 数据库加载时，例如 `session.query(User).all()`：
+     - SQLAlchemy 绕过 `__init__`
+     - 直接从数据库行设置属性
+     - 更接近反序列化，而非构造
 
-## Code Structure
+2. **多态加载**
+   - `auth_method` 鉴别字段决定实例化哪个类
+   - SQLAlchemy 自动选择正确子类
+   - 所有属性直接从数据库行设置
 
-- `User`: Abstract base class defining common user attributes
-  - Type-safe `auth_method` discriminator
-  - Password fields with check constraints
-  - Database-level integrity checks
+3. **状态管理**
+   - 非映射状态，例如计算属性，可通过以下方式维护：
+     - Python 描述符（`@property`）
+     - 事件钩子（`InstanceEvents.load()`）
+   - 本示例根据密码字段计算 `auth_method`
 
-- `LocalUser`: Subclass for users with local password authentication
-  - Secure password hashing with bcrypt
-  - Unique salt per user
-  - Automatic password hashing on creation
+此行为确保：
+- 密码哈希仅在对象创建时执行
+- 数据库加载高效直接
+- 多态继承无缝工作
 
-- `ExternalUser`: Subclass for users authenticated through external services
-  - No password storage
-  - NULL password fields
-  - Clean separation of concerns
+<a id="code-structure"></a>
 
-## Database Constraints
+## 代码结构
 
-1. **Email Uniqueness**
-   - Ensures no duplicate email addresses
-   - Applies across all user types
+- `User`：定义公共用户属性的抽象基类
+  - 类型安全的 `auth_method` 鉴别字段
+  - 带检查约束的密码字段
+  - 数据库级完整性检查
 
-2. **Auth Method Validation**
-   - Restricts `auth_method` to valid values
-   - Enforces type safety at database level
+- `LocalUser`：本地密码身份验证用户子类
+  - 使用 bcrypt 安全哈希密码
+  - 每名用户使用唯一盐值
+  - 创建时自动哈希密码
 
-3. **Password Field Consistency**
-   - Ensures password fields are either both NULL or both have values
-   - Maintains data integrity for external users
+- `ExternalUser`：通过外部服务身份验证的用户子类
+  - 不存储密码
+  - 密码字段为 NULL
+  - 职责清晰分离
 
-## Usage Example
+<a id="database-constraints"></a>
+
+## 数据库约束
+
+1. **邮箱唯一性**
+   - 确保没有重复邮箱地址
+   - 适用于所有用户类型
+
+2. **身份验证方法校验**
+   - 将 `auth_method` 限制为有效值
+   - 在数据库级强制类型安全
+
+3. **密码字段一致性**
+   - 确保两个密码字段同时为 NULL 或同时有值
+   - 保持外部用户数据完整性
+
+<a id="usage-example"></a>
+
+## 使用示例
 
 ```python
 # Create a local user (password automatically hashed)
@@ -102,54 +114,62 @@ users = session.query(User).all()
 local_users = session.query(LocalUser).all()
 ```
 
-## Security Features
+<a id="security-features"></a>
 
-1. **Password Storage**
-   - Passwords are never stored in plain text
-   - Each user has a unique salt
-   - Uses bcrypt for secure hashing
-   - Salt stored separately from hash
+## 安全特性
 
-2. **Type Safety**
-   - Literal types for auth methods
-   - Database constraints for data integrity
-   - Clear separation between user types
+1. **密码存储**
+   - 绝不明文存储密码
+   - 每名用户使用唯一盐值
+   - 使用 bcrypt 安全哈希
+   - 盐值与哈希分开存储
 
-3. **Data Integrity**
-   - Check constraints at database level
-   - Consistent NULL handling
-   - Proper field validation
+2. **类型安全**
+   - 身份验证方法采用 Literal 类型
+   - 数据库约束确保数据完整性
+   - 不同用户类型清晰分离
 
-## Educational Focus
+3. **数据完整性**
+   - 数据库级检查约束
+   - 一致的 NULL 处理
+   - 适当字段校验
 
-This example is designed to teach:
-- How to implement STI in SQLAlchemy
-- The benefits of polymorphic inheritance in database design
-- How to maintain clean code organization with multiple user types
-- Security best practices for password storage
-- Database constraint design
-- Type safety in Python with SQLAlchemy
+<a id="educational-focus"></a>
 
-## Running the Example
+## 教学重点
 
-1. Install dependencies:
+本示例旨在说明：
+- 如何在 SQLAlchemy 中实现 STI
+- 多态继承对数据库设计的收益
+- 多种用户类型下如何保持代码组织整洁
+- 密码存储安全最佳实践
+- 数据库约束设计
+- 使用 SQLAlchemy 实现 Python 类型安全
+
+<a id="running-the-example"></a>
+
+## 运行示例
+
+1. 安装依赖：
    ```bash
    pip install sqlalchemy bcrypt
    ```
 
-2. Run the example:
+2. 运行示例：
    ```bash
    python users.py
    ```
 
-## Note on Security
+<a id="note-on-security"></a>
 
-This example includes secure password handling for educational purposes. In a production environment, you would want to implement additional security measures such as:
-- Rate limiting
-- Password complexity requirements
-- Account lockout policies
-- Session management
-- Additional authentication factors
-- Secure secret management for `SECRET_KEY`
-- Proper database configuration and access controls
-- Regular security audits and updates
+## 安全说明
+
+本示例为教学目的提供安全密码处理。生产环境还应实现其他安全措施，例如：
+- 限流
+- 密码复杂度要求
+- 账户锁定策略
+- 会话管理
+- 额外身份验证因素
+- `SECRET_KEY` 的安全密钥管理
+- 适当数据库配置和访问控制
+- 定期安全审计和更新

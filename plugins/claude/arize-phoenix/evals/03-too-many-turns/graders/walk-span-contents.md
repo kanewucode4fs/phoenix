@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user's agent takes 30+ LLM calls to answer trivial questions with no errors, and asked what to run with the `px` CLI and what to look for. This is a trajectory problem: the answer lives in the sequence and contents of the spans, not in status codes.
+用户的智能体回答简单问题需要 30 多次 LLM 调用，期间没有错误；用户询问应运行哪些 `px` CLI 命令以及应检查什么。这是执行轨迹问题：答案在跨度的顺序和内容中，而非状态码中。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The response tells the user to walk the spans in time order and read their contents: the LLM spans' input and output messages and the TOOL spans' `input.value` and `output.value`, so the user can see what the agent decided at each step. Counting spans by kind (how many LLM vs TOOL spans per trace) is a plus.
+判断条件：回复要求用户按时间顺序逐个查看跨度并阅读其内容，包括 LLM 跨度的输入和输出消息，以及 TOOL 跨度的 `input.value` 和 `output.value`，以了解智能体每一步作出的决定。按类型统计跨度数量（每条追踪中的 LLM 和 TOOL 跨度各有多少）可以加分。

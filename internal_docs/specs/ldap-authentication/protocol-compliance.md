@@ -1,28 +1,36 @@
-# LDAP Search Result Handling & OpenLDAP Protocol Compliance
+<a id="ldap-search-result-handling--openldap-protocol-compliance"></a>
 
-### Overview
+# LDAP 搜索结果处理与 OpenLDAP 协议合规性
 
-LDAP search operations can return zero, one, or multiple entries per RFC 4511. This appendix documents the security implications of multiple search results, the behavior of reference implementations (OpenLDAP), and Phoenix's handling strategy.
+<a id="overview"></a>
 
-**Topics Covered**:
-- Ambiguous search result security considerations
-- DN validation requirements per OpenLDAP behavior
-- Mock server implementation accuracy for testing
-- Anonymous bind protection mechanisms
-- PII protection in logging
-- Docker development & testing environment
+### 概述
 
-**Implementation Status**: ✅ All requirements implemented and validated with 14/14 automated tests passing.
+根据 RFC 4511，LDAP 搜索可返回零个、一个或多个条目。本附录记录多搜索结果的安全影响、参考实现 OpenLDAP 的行为，以及 Phoenix 的处理策略。
+
+**涵盖主题**：
+- 歧义搜索结果的安全考虑
+- 基于 OpenLDAP 行为的 DN 校验要求
+- 测试用模拟服务器实现的准确性
+- 匿名绑定防护机制
+- 日志中的个人身份信息保护
+- Docker 开发和测试环境
+
+**实现状态**：✅ 所有要求均已实现并验证，14/14 项自动测试通过。
 
 ---
 
-### 1. Ambiguous Search Results: Security Considerations
+<a id="1-ambiguous-search-results-security-considerations"></a>
 
-#### Protocol Behavior (RFC 4511)
+### 1. 歧义搜索结果：安全考虑
 
-LDAP search operations may return multiple entries for a single search filter. Result ordering is not guaranteed by the protocol.
+<a id="protocol-behavior-rfc-4511"></a>
 
-**Example Scenario**:
+#### 协议行为（RFC 4511）
+
+单个搜索过滤器的 LDAP 搜索操作可能返回多个条目，协议不保证结果顺序。
+
+**示例场景**：
 ```ldap
 Search filter: (uid=admin)
 Possible results:
@@ -30,19 +38,23 @@ Possible results:
   - uid=admin,ou=HR,dc=example,dc=com
 ```
 
-**Security Risk**: If a client naively selects `entries[0]` without validating uniqueness, authentication becomes non-deterministic—different users may authenticate depending on LDAP server's return order.
+**安全风险**：若客户端未验证唯一性，直接选择 `entries[0]`，身份验证就会变得不确定：LDAP 服务器返回顺序不同时，可能验证不同用户。
 
-#### OpenLDAP Reference Behavior
+<a id="openldap-reference-behavior"></a>
 
-**Source**: `servers/slapd/search.c`
+#### OpenLDAP 参考行为
 
-OpenLDAP returns all matching entries. The protocol specification does not define result ordering semantics. Client applications must handle ambiguous results appropriately.
+**来源**：`servers/slapd/search.c`
 
-#### Phoenix Implementation Strategy
+OpenLDAP 返回所有匹配条目。协议规范未定义结果顺序语义，客户端应用必须适当处理歧义结果。
 
-**Design Decision**: Reject authentication when multiple entries match.
+<a id="phoenix-implementation-strategy"></a>
 
-**Implementation** (`src/phoenix/server/ldap.py:_search_user()`):
+#### Phoenix 实现策略
+
+**设计决策**：多个条目匹配时拒绝身份验证。
+
+**实现**（`src/phoenix/server/ldap.py:_search_user()`）：
 
 ```python
 if len(conn.entries) == 0:
@@ -61,27 +73,31 @@ elif len(conn.entries) > 1:
 return conn.entries[0]  # Exactly one match
 ```
 
-**Rationale**:
-1. **Security**: Prevents non-deterministic authentication
-2. **Operational**: Surfaces misconfiguration early (overly broad search filters)
-3. **Diagnostics**: Logs all conflicting DNs for troubleshooting
+**依据**：
+1. **安全**：防止非确定性身份验证
+2. **运维**：尽早暴露过宽搜索过滤器等配置问题
+3. **诊断**：记录所有冲突 DN，便于排查
 
-**Alternative Approaches Considered**:
-- **Select by DN length** (longer = more specific): Rejected - still non-deterministic if lengths equal
-- **Allow configuration flag**: Rejected - security should not be optional
-- **Use first result**: Rejected - vulnerable to result ordering changes
+**已考虑的替代方案**：
+- **按 DN 长度选择**，更长表示更具体：否决，长度相同时仍不确定
+- **允许配置标志**：否决，安全不应可选
+- **使用首个结果**：否决，易受结果顺序变化影响
 
-**Test Coverage**: `tests/integration/auth/test_ldap.py::TestLDAPDNValidation::test_duplicate_username_in_different_ous`
+**测试覆盖**：`tests/integration/auth/test_ldap.py::TestLDAPDNValidation::test_duplicate_username_in_different_ous`
 
 ---
 
-### 2. Mock LDAP Server Protocol Compliance
+<a id="2-mock-ldap-server-protocol-compliance"></a>
 
-For accurate integration testing, the mock LDAP server (`tests/integration/_mock_ldap_server.py`) implements protocol behaviors matching OpenLDAP.
+### 2. 模拟 LDAP 服务器协议合规性
 
-#### DN Validation Error Codes
+为准确进行集成测试，模拟 LDAP 服务器（`tests/integration/_mock_ldap_server.py`）实现与 OpenLDAP 一致的协议行为。
 
-**OpenLDAP behavior** (`servers/slapd/search.c:113-118`):
+<a id="dn-validation-error-codes"></a>
+
+#### DN 校验错误码
+
+**OpenLDAP 行为** (`servers/slapd/search.c:113-118`):
 ```c
 rs->sr_err = dnPrettyNormal(...);
 if( rs->sr_err != LDAP_SUCCESS ) {
@@ -89,9 +105,9 @@ if( rs->sr_err != LDAP_SUCCESS ) {
 }
 ```
 
-Returns error code **34** (`LDAP_INVALID_DN_SYNTAX`) for malformed DNs.
+DN 格式错误时返回错误码 **34**（`LDAP_INVALID_DN_SYNTAX`）。
 
-**Mock server implementation**:
+**模拟服务器实现**：
 ```python
 def _validate_dn(self, dn: str) -> bool:
     """Validate DN syntax using ldap3's parse_dn."""
@@ -107,11 +123,13 @@ if not self._validate_dn(search_base):
     self._send_search_done(message_id, result_code=34, matched_count=0)
 ```
 
-#### Empty DN Handling
+<a id="empty-dn-handling"></a>
 
-**Protocol requirement**: Empty DN is valid per RFC 4511 (root DSE).
+#### 空 DN 处理
 
-**Mock server implementation**:
+**协议要求**：根据 RFC 4511，空 DN 有效，表示根 DSE。
+
+**模拟服务器实现**：
 ```python
 def _validate_dn(self, dn: str) -> bool:
     if not dn:
@@ -119,9 +137,11 @@ def _validate_dn(self, dn: str) -> bool:
     # ... validate non-empty DN
 ```
 
-#### Multiple Result Support
+<a id="multiple-result-support"></a>
 
-**Implementation change**: Store users by DN (not username) to support duplicate usernames in different OUs.
+#### 多结果支持
+
+**实现变更**：按 DN 而非用户名存储用户，以支持不同 OU 中的重复用户名。
 
 ```python
 # Storage keyed by DN
@@ -138,15 +158,19 @@ def _handle_user_search(...):
         self.request.sendall(encoder.encode(entry))
 ```
 
-This enables testing of ambiguous search scenarios.
+这样即可测试歧义搜索场景。
 
 ---
 
-### 3. Anonymous Bind Prevention
+<a id="3-anonymous-bind-prevention"></a>
 
-#### OpenLDAP Protocol Behavior
+### 3. 防止匿名绑定
 
-**Source**: `servers/slapd/bind.c:300-334`
+<a id="openldap-protocol-behavior"></a>
+
+#### OpenLDAP 协议行为
+
+**来源**：`servers/slapd/bind.c:300-334`
 
 ```c
 /* accept "anonymous" binds */
@@ -155,20 +179,24 @@ if ( BER_BVISEMPTY( &op->orb_cred ) || BER_BVISEMPTY( &op->o_req_ndn ) ) {
 }
 ```
 
-OpenLDAP accepts empty credentials as anonymous binds unless explicitly disabled via `SLAP_DISALLOW_BIND_ANON`.
+除非通过 `SLAP_DISALLOW_BIND_ANON` 显式禁用，OpenLDAP 会将空凭证接受为匿名绑定。
 
-#### Security Consideration
+<a id="security-consideration"></a>
 
-**Potential attack**: If credentials are not validated before LDAP operations:
-1. Client sends empty password
-2. Application searches LDAP (succeeds - service account)
-3. Application attempts user bind with empty password
-4. LDAP accepts as anonymous bind
-5. Authentication succeeds incorrectly
+#### 安全考虑
 
-#### Phoenix Implementation
+**潜在攻击**：若未在 LDAP 操作前校验凭证：
+1. 客户端发送空密码
+2. 应用搜索 LDAP，通过服务账户成功
+3. 应用尝试使用空密码执行用户绑定
+4. LDAP 将其接受为匿名绑定
+5. 身份验证错误地成功
 
-**Validation** (`src/phoenix/server/api/routers/auth.py`):
+<a id="phoenix-implementation"></a>
+
+#### Phoenix 实现
+
+**校验**（`src/phoenix/server/api/routers/auth.py`）：
 
 ```python
 # /auth/ldap/login endpoint
@@ -179,37 +207,43 @@ if not username or not password:
     raise HTTPException(status_code=401, detail="Username and password required")
 ```
 
-Empty credentials are rejected at the API layer before any LDAP operations.
+空凭证在任何 LDAP 操作前，已在 API 层被拒绝。
 
 ---
 
-### 4. Configuration Recommendations
+<a id="4-configuration-recommendations"></a>
 
-#### Search Filter Specificity
+### 4. 配置建议
 
-To minimize ambiguous results, configure specific search filters:
+<a id="search-filter-specificity"></a>
 
-**Recommended**:
+#### 搜索过滤器精确性
+
+配置具体搜索过滤器，以尽量减少歧义结果：
+
+**推荐**：
 ```bash
 PHOENIX_LDAP_USER_SEARCH_FILTER="(uid=%s)"                        # OpenLDAP
 PHOENIX_LDAP_USER_SEARCH_FILTER="(sAMAccountName=%s)"            # Active Directory
 PHOENIX_LDAP_USER_SEARCH_FILTER="(&(objectClass=person)(uid=%s))" # More specific
 ```
 
-**Avoid**:
+**避免**：
 ```bash
 PHOENIX_LDAP_USER_SEARCH_FILTER="(objectClass=person)"  # Too broad, returns all users
 ```
 
-#### Search Base Scoping
+<a id="search-base-scoping"></a>
 
-Narrow search scope to reduce ambiguity:
+#### 搜索基准范围
+
+缩小搜索范围，减少歧义：
 
 ```bash
 PHOENIX_LDAP_USER_SEARCH_BASE_DNS='["ou=employees,dc=example,dc=com"]'  # Specific OU
 ```
 
-vs.
+对比：
 
 ```bash
 PHOENIX_LDAP_USER_SEARCH_BASE_DNS='["dc=example,dc=com"]'  # Entire directory
@@ -217,11 +251,15 @@ PHOENIX_LDAP_USER_SEARCH_BASE_DNS='["dc=example,dc=com"]'  # Entire directory
 
 ---
 
-### 5. Optional Enhancements
+<a id="5-optional-enhancements"></a>
 
-The following enhancements are not required for correct operation but may improve operational characteristics:
+### 5. 可选增强
 
-#### Explicit Search Limits
+以下增强并非正确运行的必要条件，但可能改善运维特性：
+
+<a id="explicit-search-limits"></a>
+
+#### 显式搜索限制
 
 ```python
 conn.search(
@@ -234,118 +272,140 @@ conn.search(
 )
 ```
 
-**Benefit**: Faster failure on misconfiguration; resource protection.
+**收益**：配置错误时更快失败，并保护资源。
 
-#### Enhanced Error Diagnostics
+<a id="enhanced-error-diagnostics"></a>
 
-Map specific LDAP error codes to actionable messages:
-- Error 53 (`UNWILLING_TO_PERFORM`): "LDAP server may require SASL authentication"
-- Error 12 (`UNAVAILABLE_CRITICAL_EXTENSION`): "Required LDAP extension not available"
+#### 增强错误诊断
 
-**Benefit**: Reduced troubleshooting time for administrators.
+将具体 LDAP 错误码映射为可操作消息：
+- 错误 53（`UNWILLING_TO_PERFORM`）："LDAP server may require SASL authentication"
+- 错误 12（`UNAVAILABLE_CRITICAL_EXTENSION`）："Required LDAP extension not available"
+
+**收益**：减少管理员排障时间。
 
 ---
 
-### 6. Docker Development & Testing Environment
+<a id="6-docker-development--testing-environment"></a>
 
-Phoenix provides a comprehensive Docker Compose profile for LDAP development and testing that exceeds specification requirements.
+### 6. Docker 开发与测试环境
 
-#### Quick Start
+Phoenix 提供完整的 Docker Compose 配置，用于 LDAP 开发和测试，超出规范要求。
+
+<a id="quick-start"></a>
+
+#### 快速开始
 
 ```bash
 ./dev.sh up --profile ldap    # Start full LDAP environment + automated tests
 docker logs devops-ldap-test  # View test results (14/14 PASSED ✅)
 ```
 
-#### Components
+<a id="components"></a>
 
-**Docker Services** (`scripts/docker/devops/overrides/ldap.yml`):
+#### 组件
 
-| Service | Image | Purpose | Access |
+**Docker 服务**（`scripts/docker/devops/overrides/ldap.yml`）：
+
+| 服务 | 镜像 | 用途 | 访问 |
 |---------|-------|---------|--------|
-| `ldap` | osixia/openldap:1.5.0 | Real LDAP server | ldap://localhost:389 |
+| `ldap` | osixia/openldap:1.5.0 | 真实 LDAP 服务器 | ldap://localhost:389 |
 | `ldap-admin` | osixia/phpldapadmin | Web UI | http://localhost:6443 |
-| `ldap-seed` | osixia/openldap | Auto-populate directory | (runs once) |
-| `ldap-test` | python:3.10-slim | Automated test runner | (runs on startup) |
+| `ldap-seed` | osixia/openldap | 自动填充目录 | 运行一次 |
+| `ldap-test` | python:3.10-slim | 自动测试运行器 | 启动时运行 |
 
-#### Enhanced Seed Data
+<a id="enhanced-seed-data"></a>
 
-**File**: `scripts/docker/devops/ldap-seed.ldif` (245 lines, 11 users)
+#### 增强种子数据
 
-**Specification**: 4 basic users → **Implementation**: 11 comprehensive users (+175%)
+**文件**：`scripts/docker/devops/ldap-seed.ldif`，245 行、11 名用户
 
-| User | Edge Case Tested |
+**规范**：4 名基础用户 → **实现**：11 名全面覆盖用户，增加 175%
+
+| 用户 | 测试边界情况 |
 |------|------------------|
-| `admin`, `alice`, `bob`, `charlie` | Happy path (ADMIN, MEMBER, VIEWER roles) |
-| **`nogroups`** | Wildcard "*" fallback → VIEWER |
-| **`multigroup`** | Multiple groups → role precedence (first wins) |
-| **`nodisplay`** | Missing displayName → fallback to email prefix |
-| **`special(user)`** | LDAP injection prevention (special characters) |
-| **`josé`** | UTF-8/Unicode support |
-| **`duplicate`** (IT & HR) | **Ambiguous search rejection (security)** |
+| `admin`、`alice`、`bob`、`charlie` | 正常流程，ADMIN、MEMBER、VIEWER 角色 |
+| **`nogroups`** | 通配符“*”回退 → VIEWER |
+| **`multigroup`** | 多组 → 角色优先级，首次匹配优先 |
+| **`nodisplay`** | 缺少 displayName → 回退至邮箱前缀 |
+| **`special(user)`** | LDAP 注入防护，特殊字符 |
+| **`josé`** | UTF-8/Unicode 支持 |
+| **`duplicate`**（IT 和 HR） | **拒绝歧义搜索，安全测试** |
 
-#### Automated Test Suite
+<a id="automated-test-suite"></a>
 
-**File**: `scripts/docker/devops/scripts/test_ldap_integration.py` (438 lines)
+#### 自动测试套件
 
-**14 Test Cases** covering all success criteria:
+**文件**：`scripts/docker/devops/scripts/test_ldap_integration.py`，438 行
 
-| Tests | Category |
+**14 项测试用例**覆盖所有成功标准：
+
+| 测试 | 类别 |
 |-------|----------|
-| 1-3 | Happy path (admin/member/viewer logins) |
-| 4-5 | Error handling (invalid password, nonexistent user) |
-| 6-8 | Anonymous bind prevention (empty credentials) |
-| **9** | **Security: Duplicate username rejection** |
-| 10-14 | Edge cases (no groups, multi-groups, special chars, unicode, missing attrs) |
+| 1—3 | 正常流程，admin/member/viewer 登录 |
+| 4—5 | 错误处理，无效密码、不存在的用户 |
+| 6—8 | 防止匿名绑定，空凭证 |
+| **9** | **安全：拒绝重复用户名** |
+| 10—14 | 边界情况，无组、多组、特殊字符、Unicode、缺少属性 |
 
-**Results**: ✅ **14/14 PASSED** (real OpenLDAP + Phoenix integration)
+**结果**：✅ **14/14 通过**，真实 OpenLDAP 与 Phoenix 集成
 
-#### Benefits vs Specification
+<a id="benefits-vs-specification"></a>
 
-| Aspect | Specified | Implemented | Delta |
+#### 相比规范的收益
+
+| 方面 | 规范 | 已实现 | 差异 |
 |--------|-----------|-------------|-------|
-| Test users | 4 basic | 11 comprehensive | +175% |
-| Edge cases | Basic only | All from spec + security | Enhanced |
-| LDAP server | Mock only | Mock + Real OpenLDAP | Both |
-| Testing | Manual | Automated (14 tests) | Zero-touch |
-| Ambiguous results | Not covered | Tested (Test 9) | Security fix |
-| PII protection | Not covered | Validated | Compliance |
+| 测试用户 | 4 名基础用户 | 11 名全面覆盖用户 | +175% |
+| 边界情况 | 仅基础 | 规范全部场景加安全场景 | 增强 |
+| LDAP 服务器 | 仅模拟 | 模拟及真实 OpenLDAP | 两者兼有 |
+| 测试 | 手动 | 自动化，14 项测试 | 无需干预 |
+| 歧义结果 | 未覆盖 | 已测试，测试 9 | 安全修复 |
+| 个人身份信息保护 | 未覆盖 | 已验证 | 合规 |
 
 ---
 
-### 7. STARTTLS Implementation & Security
+<a id="7-starttls-implementation--security"></a>
 
-LDAP supports two TLS connection modes: LDAPS (TLS from start on port 636) and STARTTLS (upgrade plaintext connection on port 389). This section documents Phoenix's implementation requirements and the critical security considerations for STARTTLS.
+### 7. STARTTLS 实现与安全
 
-#### Protocol Overview
+LDAP 支持两种 TLS 连接模式：LDAPS 从端口 636 连接开始即使用 TLS；STARTTLS 在端口 389 上将明文连接升级为 TLS。本节记录 Phoenix 实现要求和 STARTTLS 的关键安全考虑。
 
-**LDAPS** (RFC 4513 Section 3):
-- TLS established before any LDAP data is exchanged
-- Default port: 636
-- Analogous to HTTPS
+<a id="protocol-overview"></a>
 
-**STARTTLS** (RFC 4511 Section 4.14.1):
-- Connection starts as plaintext on port 389
-- Client sends Extended Request (OID 1.3.6.1.4.1.1466.20037) to upgrade to TLS
-- All subsequent data (including bind credentials) transmitted over TLS
-- Analogous to SMTP STARTTLS
+#### 协议概览
 
-#### Security Requirement
+**LDAPS**（RFC 4513 第 3 节）：
+- 交换任何 LDAP 数据前先建立 TLS
+- 默认端口 636
+- 类似 HTTPS
 
-**Critical**: For STARTTLS mode, the TLS upgrade MUST complete before any authentication credentials are transmitted. Failure to properly sequence the TLS upgrade results in plaintext password transmission despite TLS being "enabled" in configuration.
+**STARTTLS**（RFC 4511 第 4.14.1 节）：
+- 在端口 389 上建立明文连接
+- 客户端发送扩展请求，OID 为 1.3.6.1.4.1.1466.20037，升级至 TLS
+- 所有后续数据，包括绑定凭证，均经 TLS 传输
+- 类似 SMTP STARTTLS
 
-#### ldap3 Library Behavior
+<a id="security-requirement"></a>
 
-The `ldap3` Python library does not automatically infer STARTTLS from TLS configuration. Explicit sequencing is required:
+#### 安全要求
 
-**Incorrect** (transmits password in plaintext):
+**关键要求**：STARTTLS 模式必须在传输任何身份验证凭证前完成 TLS 升级。升级顺序不正确时，即使配置“启用”了 TLS，仍会明文传输密码。
+
+<a id="ldap3-library-behavior"></a>
+
+#### ldap3 库行为
+
+`ldap3` Python 库不会根据 TLS 配置自动推断 STARTTLS，必须显式安排执行顺序：
+
+**错误**，明文传输密码：
 ```python
 conn = Connection(server, user=dn, password=pwd, auto_bind=True)
 # auto_bind=True means AUTO_BIND_NO_TLS - bind happens immediately
 # TLS upgrade never occurs despite tls parameter on Server object
 ```
 
-**Correct** (encrypts password via STARTTLS):
+**正确**，通过 STARTTLS 加密密码：
 ```python
 # Method 1: Use AUTO_BIND_TLS_BEFORE_BIND constant
 from ldap3 import AUTO_BIND_TLS_BEFORE_BIND
@@ -360,13 +420,15 @@ conn.start_tls()  # MUST occur before bind()
 conn.bind()
 ```
 
-**Reference**: `ldap3/core/connection.py::_do_auto_bind()` - Explicit check for `AUTO_BIND_TLS_BEFORE_BIND` mode to invoke `start_tls()`.
+**参考**：`ldap3/core/connection.py::_do_auto_bind()` 显式检查 `AUTO_BIND_TLS_BEFORE_BIND` 模式，以调用 `start_tls()`。
 
-#### Phoenix Implementation
+<a id="phoenix-implementation-1"></a>
 
-**File**: `src/phoenix/server/ldap.py`
+#### Phoenix 实现
 
-**Service Account Bind** (`_establish_connection()`):
+**文件**：`src/phoenix/server/ldap.py`
+
+**服务账户绑定** (`_establish_connection()`):
 ```python
 def _establish_connection(self, server: Server) -> Connection:
     # Determine auto_bind mode based on TLS configuration
@@ -392,7 +454,7 @@ def _establish_connection(self, server: Server) -> Connection:
     return conn
 ```
 
-**User Password Verification** (`_verify_user_password()`):
+**用户密码验证** (`_verify_user_password()`):
 ```python
 def _verify_user_password(self, server: Server, user_dn: str, password: str) -> bool:
     user_conn = Connection(
@@ -410,121 +472,129 @@ def _verify_user_password(self, server: Server, user_dn: str, password: str) -> 
             user_conn.unbind()
 ```
 
-**Key Implementation Points**:
-1. Service account binds use `AUTO_BIND_TLS_BEFORE_BIND` for automatic TLS upgrade
-2. User password verification uses explicit `start_tls()` before `bind()`
-3. TLS mode check (`tls_mode == "starttls"`) ensures LDAPS is unaffected
-4. Both authentication paths (service account + user bind) implement TLS upgrade
+**实现要点**：
+1. 服务账户绑定使用 `AUTO_BIND_TLS_BEFORE_BIND` 自动升级 TLS
+2. 用户密码验证在 `bind()` 前显式调用 `start_tls()`
+3. TLS 模式检查（`tls_mode == "starttls"`）确保 LDAPS 不受影响
+4. 服务账户和用户绑定两条身份验证路径均实现 TLS 升级
 
-#### Validation Strategy
+<a id="validation-strategy"></a>
 
-**Docker Test Environment**: `scripts/docker/devops/overrides/ldap-test.yml`
+#### 验证策略
 
-Automated security testing infrastructure with adversarial validation:
-- **OpenLDAP Server**: Port 389 (STARTTLS) and 636 (LDAPS) with self-signed certificates
-- **MITM Proxy**: Port 3389 - Adversarial credential extraction proxy
-- **Phoenix STARTTLS**: Port 6007 - Routes through MITM proxy for validation
-- **Phoenix LDAPS**: Port 6008 - Direct connection to port 636
-- **Grafana**: Port 3000 - Comparison baseline (routes through MITM proxy)
-- **Test Runner**: Executes comprehensive test suite on startup
+**Docker 测试环境**：`scripts/docker/devops/overrides/ldap-test.yml`
 
-**Test Script**: `scripts/docker/devops/scripts/test_ldap_tls.py`
+带对抗验证的自动安全测试基础设施：
+- **OpenLDAP 服务器**：端口 389（STARTTLS）和 636（LDAPS），使用自签名证书
+- **中间人代理**：端口 3389，对抗性凭证提取代理
+- **Phoenix STARTTLS**：端口 6007，通过中间人代理验证
+- **Phoenix LDAPS**：端口 6008，直连端口 636
+- **Grafana**：端口 3000，比较基准，经中间人代理
+- **测试运行器**：启动时执行完整测试套件
 
-Three-phase automated security validation:
+**测试脚本**：`scripts/docker/devops/scripts/test_ldap_tls.py`
 
-**Phase 1 - Baseline LDAP Connectivity**:
-1. Direct plaintext LDAP (port 389, no TLS)
-2. Direct STARTTLS with `AUTO_BIND_TLS_BEFORE_BIND` (correct implementation)
-3. Direct LDAPS (port 636, TLS from start)
+三阶段自动安全验证：
 
-**Phase 2 - Application Security Tests**:
-4. Phoenix STARTTLS authentication via MITM proxy
-5. Phoenix LDAPS authentication (direct connection)
-6. Grafana STARTTLS authentication via MITM proxy (comparison)
+**阶段 1 — 基线 LDAP 连通性**：
+1. 直接明文 LDAP，端口 389，无 TLS
+2. 使用 `AUTO_BIND_TLS_BEFORE_BIND` 的直接 STARTTLS，正确实现
+3. 直接 LDAPS，端口 636，从开始即使用 TLS
 
-**Phase 3 - Adversarial Analysis**:
-7. Parse MITM proxy logs for extracted credentials
-8. Verify extracted credentials against LDAP server
-9. Generate security verdict
+**阶段 2 — 应用安全测试**：
+4. Phoenix STARTTLS 经中间人代理身份验证
+5. Phoenix LDAPS 身份验证，直接连接
+6. Grafana STARTTLS 经中间人代理身份验证，用于比较
 
-**MITM Proxy**: `scripts/docker/devops/scripts/ldap_mitm_proxy.py`
+**阶段 3 — 对抗分析**：
+7. 解析中间人代理日志，检查提取的凭证
+8. 使用 LDAP 服务器验证提取凭证
+9. 生成安全判定
 
-Acts as network adversary to validate TLS security:
-- Intercepts LDAP traffic between applications and server
-- Parses LDAP ASN.1/BER protocol structures
-- Attempts to extract DN and password from Simple Bind requests
-- Detects StartTLS requests and TLS handshakes
-- Identifies connecting applications via reverse DNS
-- Outputs structured JSON logs for automated parsing
+**中间人代理**：`scripts/docker/devops/scripts/ldap_mitm_proxy.py`
 
-**Security Model**:
-- IF proxy successfully extracts working credentials → **TLS vulnerability** (plaintext transmission)
-- IF proxy fails to extract credentials → **TLS working correctly** (encrypted data only)
+作为网络攻击者验证 TLS 安全：
+- 拦截应用与服务器之间的 LDAP 流量
+- 解析 LDAP ASN.1/BER 协议结构
+- 尝试从简单绑定请求提取 DN 和密码
+- 检测 StartTLS 请求和 TLS 握手
+- 通过反向 DNS 识别连接的应用
+- 输出结构化 JSON 日志供自动解析
 
-This approach provides definitive proof of TLS security by simulating a real network attacker attempting credential theft. Protocol-level parsing ensures detection works for any password, not just known test values.
+**安全模型**：
+- 若代理成功提取有效凭证 → **TLS 漏洞**，明文传输
+- 若代理无法提取凭证 → **TLS 正常工作**，仅有加密数据
 
-#### Validation Results
+此方法模拟真实网络攻击者尝试窃取凭证，为 TLS 安全提供明确证据。协议级解析确保检测适用于任意密码，而非仅已知测试值。
 
-Adversarial MITM proxy testing confirmed:
+<a id="validation-results"></a>
 
-**Phoenix** (after fix):
-- StartTLS requests detected: Yes
-- TLS handshakes detected: Yes  
-- Credentials extracted by adversary: 0
-- **Verdict**: ✅ SECURE - Network attacker cannot steal credentials
+#### 验证结果
 
-**Grafana v11.4** (tested for comparison):
-- StartTLS requests detected: No
-- TLS handshakes detected: No
-- Credentials extracted by adversary: 2 (service account + user password)
-- **Verdict**: 🚨 VULNERABLE - Despite `start_tls = true` in configuration
+对抗性中间人代理测试确认：
 
-**Finding**: Testing revealed that both `ldap3` (Python) and `go-ldap/ldap` (Go) require explicit attention to STARTTLS sequencing:
+**Phoenix**（修复后）：
+- 检测到 StartTLS 请求：是
+- 检测到 TLS 握手：是
+- 攻击者提取的凭证：0
+- **判定**：✅ 安全，网络攻击者无法窃取凭证
 
-- **`ldap3`**: Requires `AUTO_BIND_TLS_BEFORE_BIND` or manual `start_tls()` call
-- **`go-ldap/ldap`**: Requires explicit `StartTLS()` call before `Bind()`
-- **Common issue**: Configuration flags alone are insufficient - both libraries transmit credentials in plaintext if proper sequencing is not implemented
+**Grafana v11.4**（用于对比测试）：
+- 检测到 StartTLS 请求：否
+- 检测到 TLS 握手：否
+- 攻击者提取的凭证：2，服务账户和用户密码
+- **判定**：🚨 存在漏洞，尽管配置中已设置 `start_tls = true`
 
-Grafana v11.4 exhibits the same vulnerability despite having `start_tls = true` in configuration. The adversarial MITM proxy successfully extracted both service account and user credentials from Grafana LDAP traffic.
+**发现**：测试表明，`ldap3`（Python）和 `go-ldap/ldap`（Go）均要求显式关注 STARTTLS 执行顺序：
 
-**Root Cause**: LDAP libraries provide TLS upgrade mechanisms but do not automatically enforce proper sequencing. Application code must explicitly ensure TLS upgrade completes before credential transmission.
+- **`ldap3`**：要求 `AUTO_BIND_TLS_BEFORE_BIND` 或手动调用 `start_tls()`
+- **`go-ldap/ldap`**：要求在 `Bind()` 前显式调用 `StartTLS()`
+- **共同问题**：仅有配置标志不足，未实现正确顺序时，两种库均明文传输凭证
 
-#### Configuration Reference
+Grafana v11.4 即使配置 `start_tls = true`，仍存在相同漏洞。对抗性中间人代理从 Grafana LDAP 流量中成功提取了服务账户和用户凭证。
 
-**STARTTLS Mode** (port 389, upgrade to TLS):
+**根因**：LDAP 库提供 TLS 升级机制，但不自动强制正确顺序。应用代码必须明确确保在传输凭证前完成 TLS 升级。
+
+<a id="configuration-reference"></a>
+
+#### 配置参考
+
+**STARTTLS 模式**，端口 389，升级至 TLS：
 ```bash
 PHOENIX_LDAP_TLS_MODE=starttls
 PHOENIX_LDAP_PORT=389
 ```
 
-**LDAPS Mode** (port 636, TLS from start):
+**LDAPS 模式**，端口 636，从开始即使用 TLS：
 ```bash
 PHOENIX_LDAP_TLS_MODE=ldaps
 PHOENIX_LDAP_PORT=636
 ```
 
-**No TLS** (plaintext - testing only):
+**无 TLS**，明文，仅用于测试：
 ```bash
 PHOENIX_LDAP_TLS_MODE=none
 PHOENIX_LDAP_PORT=389
 ```
 
-### Advanced TLS Configuration Examples
+<a id="advanced-tls-configuration-examples"></a>
 
-**Private CA Certificate** (for internal LDAP servers):
+### 高级 TLS 配置示例
+
+**私有 CA 证书**，用于内部 LDAP 服务器：
 ```bash
 PHOENIX_LDAP_TLS_MODE=ldaps
 PHOENIX_LDAP_TLS_CA_CERT_FILE=/etc/ssl/certs/internal-ca.pem
 ```
 
-**Mutual TLS (Client Certificate)** (for high-security environments):
+**双向 TLS（客户端证书）**，用于高安全环境：
 ```bash
 PHOENIX_LDAP_TLS_MODE=ldaps
 PHOENIX_LDAP_TLS_CLIENT_CERT_FILE=/etc/ssl/certs/phoenix-client.crt
 PHOENIX_LDAP_TLS_CLIENT_KEY_FILE=/etc/ssl/private/phoenix-client.key
 ```
 
-**Combined Enterprise Configuration**:
+**组合企业配置**：
 ```bash
 # Server connection
 PHOENIX_LDAP_HOST=ldaps.corp.example.com
@@ -543,18 +613,20 @@ PHOENIX_LDAP_BIND_PASSWORD=${LDAP_SERVICE_PASSWORD}
 # ...
 ```
 
-#### Adversarial Testing Methodology
+<a id="adversarial-testing-methodology"></a>
 
-**Approach**: Active credential extraction via protocol parsing.
+#### 对抗测试方法
 
-The MITM proxy (`ldap_mitm_proxy.py`) implements the following attack:
+**方法**：通过协议解析主动提取凭证。
 
-1. **Intercept**: Position between application and LDAP server
-2. **Parse**: Decode LDAP ASN.1/BER structures in bind requests
-3. **Extract**: Attempt to read DN and password from Simple Authentication (RFC 4513 §5.1.1)
-4. **Verify**: Authenticate with extracted credentials against LDAP server
+中间人代理（`ldap_mitm_proxy.py`）实现以下攻击：
 
-**Protocol Parsing**:
+1. **拦截**：位于应用与 LDAP 服务器之间
+2. **解析**：解码绑定请求中的 LDAP ASN.1/BER 结构
+3. **提取**：尝试读取简单身份验证（RFC 4513 §5.1.1）中的 DN 和密码
+4. **验证**：使用提取凭证向 LDAP 服务器身份验证
+
+**协议解析**：
 ```
 BindRequest ::= [APPLICATION 0] SEQUENCE {
     version        INTEGER (1..127),
@@ -566,15 +638,15 @@ BindRequest ::= [APPLICATION 0] SEQUENCE {
 }
 ```
 
-**Security Validation**:
-- Encrypted data → Parser fails → Extraction returns `None` → ✅ SECURE
-- Plaintext data → Parser succeeds → Extracted credentials verified → 🚨 VULNERABLE
+**安全验证**：
+- 加密数据 → 解析失败 → 提取返回 `None` → ✅ 安全
+- 明文数据 → 解析成功 → 提取凭证通过验证 → 🚨 存在漏洞
 
-This approach provides definitive security validation without relying on functional testing alone. If credentials can be extracted and verified, TLS definitively failed.
+此方法提供明确安全验证，无需仅依赖功能测试。若凭证可被提取并通过验证，就说明 TLS 确实失效。
 
-**Structured Logging**:
+**结构化日志**：
 
-All security events emitted as JSON for automated analysis:
+所有安全事件均以 JSON 输出，供自动分析：
 ```json
 {
   "timestamp": 1764371725.425,
@@ -587,16 +659,18 @@ All security events emitted as JSON for automated analysis:
 }
 ```
 
-Events: `connection_established`, `starttls_requested`, `tls_handshake_detected`, `credentials_stolen`, `connection_closed`
+事件：`connection_established`、`starttls_requested`、`tls_handshake_detected`、`credentials_stolen`、`connection_closed`
 
-#### Testing Recommendation
+<a id="testing-recommendation"></a>
 
-For production deployment validation:
-1. **Preferred**: Use LDAPS (port 636) - TLS is implicit, no upgrade sequencing required
-2. **If STARTTLS required**: Test with adversarial MITM proxy or packet capture to verify credentials are encrypted
-3. **Avoid**: Plaintext LDAP (no TLS) in production environments
+#### 测试建议
 
-**Automated Testing**:
+验证生产部署时：
+1. **首选**：LDAPS，端口 636，隐式 TLS，无需安排升级顺序
+2. **必须使用 STARTTLS 时**：通过对抗性中间人代理或抓包验证凭证已加密
+3. **避免**：在生产环境使用无 TLS 的明文 LDAP
+
+**自动测试**：
 ```bash
 # Start test environment (includes MITM proxy)
 cd scripts/docker/devops
@@ -613,7 +687,7 @@ docker logs devops-ldap-mitm-proxy
 docker logs devops-ldap-mitm-proxy 2>&1 | grep "^{" | jq
 ```
 
-**Manual Validation**:
+**手动验证**：
 ```bash
 # Test Phoenix STARTTLS
 curl -X POST http://localhost:6007/auth/ldap/login \
@@ -625,48 +699,54 @@ docker logs devops-ldap-mitm-proxy 2>&1 | grep "CREDENTIALS STOLEN"
 # Expected: No output (Phoenix is secure)
 ```
 
-For comprehensive documentation of the testing infrastructure, see: `scripts/docker/devops/LDAP-TLS-TESTING.md`
+测试基础设施完整文档参见：`scripts/docker/devops/LDAP-TLS-TESTING.md`
 
-Expected: HTTP 204 with `set-cookie` headers containing access/refresh tokens.
+预期：HTTP 204，`set-cookie` 请求头包含访问和刷新 token。
 
 ---
 
-### 8. DN Canonicalization & RFC 4514 Compliance
+<a id="8-dn-canonicalization--rfc-4514-compliance"></a>
 
-#### Problem Statement
+### 8. DN 规范化与 RFC 4514 合规性
 
-RFC 4514 Section 2.4 specifies that LDAP Distinguished Names are case-insensitive and semantically equivalent DNs may have different string representations. LDAP servers (particularly Active Directory in multi-DC environments) may return the same logical DN with different formatting across authentications:
+<a id="problem-statement"></a>
 
-**Case Variations**:
+#### 问题说明
+
+RFC 4514 第 2.4 节规定 LDAP 专有名称不区分大小写，语义等价的 DN 可能有不同字符串表示。LDAP 服务器，尤其是多 DC 环境的 Active Directory，可能在不同身份验证中为同一逻辑 DN 返回不同格式：
+
+**大小写差异**：
 ```
 Login 1 (DC1): uid=alice,ou=users,dc=example,dc=com
 Login 2 (DC2): uid=Alice,ou=Users,dc=Example,dc=Com
 ```
 
-**Whitespace Variations**:
+**空白差异**：
 ```
 Login 1: cn=John Smith,ou=users,dc=example,dc=com
 Login 2: cn = John Smith , ou = users , dc = example , dc = com
 ```
 
-**Multi-Valued RDN Ordering**:
+**多值 RDN 顺序**：
 ```
 Login 1: cn=John Smith+email=john@corp.com,ou=users,dc=example,dc=com
 Login 2: email=john@corp.com+cn=John Smith,ou=users,dc=example,dc=com
 ```
 
-**Security Impact**: Without proper canonicalization, users experience:
-- Account lockouts (existing user not found due to DN formatting mismatch)
-- Duplicate account creation (if `allow_sign_up=true`)
-- Non-deterministic authentication behavior
+**安全影响**：缺少正确规范化时，用户可能遇到：
+- 账户无法登录，DN 格式不匹配导致找不到已有用户
+- 创建重复账户，若 `allow_sign_up=true`
+- 非确定性身份验证行为
 
-#### Phoenix Implementation
+<a id="phoenix-implementation-2"></a>
 
-**RFC 4514-Compliant Canonicalization**:
+#### Phoenix 实现
 
-Phoenix implements full DN canonicalization using `ldap3.utils.dn.parse_dn()` to ensure semantically equivalent DNs map to the same database record.
+**符合 RFC 4514 的规范化**：
 
-**File**: `src/phoenix/server/ldap.py`
+Phoenix 使用 `ldap3.utils.dn.parse_dn()` 实现完整 DN 规范化，确保语义等价 DN 映射至同一数据库记录。
+
+**文件**：`src/phoenix/server/ldap.py`
 
 ```python
 def canonicalize_dn(dn: str) -> str:
@@ -699,43 +779,46 @@ def canonicalize_dn(dn: str) -> str:
     return ",".join(canonical_parts)
 ```
 
-**Note on DN Usage**:
+**DN 使用说明**：
 
-Phoenix no longer uses DN for user identity matching (DNs change too frequently in enterprise
-environments). Instead, Phoenix uses:
-- **Simple mode**: Email as identifier
-- **Enterprise mode**: Immutable unique ID (objectGUID/entryUUID) via `PHOENIX_LDAP_ATTR_UNIQUE_ID`
+Phoenix 不再使用 DN 匹配用户身份，因为企业环境 DN 变化过于频繁。改为：
+- **简单模式**：使用邮箱标识符
+- **企业模式**：通过 `PHOENIX_LDAP_ATTR_UNIQUE_ID` 使用不可变唯一 ID，objectGUID/entryUUID
 
-See [User Identification Strategy](./user-identification-strategy.md) for details.
+详情参见[用户识别策略](./user-identification-strategy.md)。
 
-DN canonicalization is still used for:
-- Audit logging (consistent DN format in logs)
-- Group DN matching in role mappings
-- Debug output consistency
+DN 规范化仍用于：
+- 审计日志，保持日志中的 DN 格式一致
+- 角色映射中的组 DN 匹配
+- 调试输出一致性
 
-**Key Design Points**:
-- **Parsing**: Uses `ldap3.utils.dn.parse_dn()` for RFC-compliant DN parsing
-- **Normalization**: Lowercases attribute types and values
-- **Whitespace**: Strips spaces around `=` and `,` delimiters
-- **Multi-Valued RDNs**: Sorts components alphabetically for deterministic output
-- **Escaped Characters**: Preserves special character escaping (e.g., `\,`, `\+`, `\\`)
-- **Fallback**: Invalid DNs fall back to simple lowercase for graceful degradation
-- **Idempotency**: Canonicalizing a canonical DN produces the same output
+**关键设计点**：
+- **解析**：使用 `ldap3.utils.dn.parse_dn()`，符合 RFC
+- **规范化**：属性类型和值转为小写
+- **空白**：去除 `=` 和 `,` 分隔符周围空格
+- **多值 RDN**：按字母排序组成部分，保证确定性输出
+- **转义字符**：保留特殊字符转义，例如 `\,`、`\+`、`\\`
+- **回退**：无效 DN 回退至简单小写，实现平滑降级
+- **幂等性**：规范化已规范的 DN 产生相同输出
 
-#### Canonicalization Examples
+<a id="canonicalization-examples"></a>
 
-| Input DN | Canonical DN | Issue Handled |
+#### 规范化示例
+
+| 输入 DN | 规范 DN | 处理问题 |
 |----------|-------------|---------------|
-| `CN=John,OU=Users,DC=Example,DC=com` | `cn=john,ou=users,dc=example,dc=com` | Case normalization |
-| `cn = John , ou = Users , dc = Example , dc = com` | `cn=john,ou=users,dc=example,dc=com` | Whitespace stripping |
-| `email=john@corp.com+cn=John Smith,ou=users,dc=example,dc=com` | `cn=john smith+email=john@corp.com,ou=users,dc=example,dc=com` | Multi-valued RDN ordering |
-| `cn=Smith\\, John,ou=Users,dc=Example,dc=com` | `cn=smith\\, john,ou=users,dc=example,dc=com` | Escaped character preservation |
+| `CN=John,OU=Users,DC=Example,DC=com` | `cn=john,ou=users,dc=example,dc=com` | 大小写规范化 |
+| `cn = John , ou = Users , dc = Example , dc = com` | `cn=john,ou=users,dc=example,dc=com` | 去除空白 |
+| `email=john@corp.com+cn=John Smith,ou=users,dc=example,dc=com` | `cn=john smith+email=john@corp.com,ou=users,dc=example,dc=com` | 多值 RDN 排序 |
+| `cn=Smith\\, John,ou=Users,dc=Example,dc=com` | `cn=smith\\, john,ou=users,dc=example,dc=com` | 保留转义字符 |
 
-#### Mock Server Implementation
+<a id="mock-server-implementation"></a>
 
-**File**: `tests/integration/_mock_ldap_server.py`
+#### 模拟服务器实现
 
-The mock LDAP server uses the same canonicalization function:
+**文件**：`tests/integration/_mock_ldap_server.py`
+
+模拟 LDAP 服务器使用相同规范化函数：
 
 ```python
 from phoenix.server.ldap import canonicalize_dn
@@ -751,62 +834,72 @@ def matches_credentials(self, dn: str, password: str) -> bool:
     return canonicalize_dn(self.dn) == canonicalize_dn(dn) and self.password == password
 ```
 
-**Behavior**: If the same logical DN is added with different formatting, it replaces the previous entry (same canonical key). This mimics real LDAP server behavior.
+**行为**：相同逻辑 DN 以不同格式添加时，会替换原有条目，因为规范键相同。这模拟真实 LDAP 服务器行为。
 
-#### Test Coverage
+<a id="test-coverage"></a>
 
-**Unit Tests**: `tests/unit/server/test_ldap.py::TestDNCanonicalization` (16 tests)
+#### 测试覆盖
 
-Validates:
-- Case normalization across attribute types and values
-- Whitespace normalization (compact, spaced, mixed)
-- Multi-valued RDN ordering (2-component and 3+ component)
-- Escaped character preservation (commas, equals, backslashes)
-- Unicode character lowercasing (e.g., José → josé)
-- Edge cases (empty DN, single RDN, invalid DN fallback)
-- Real-world Active Directory and POSIX LDAP formats
-- Idempotency (canonicalizing canonical DNs)
-- Duplicate prevention scenarios
+**单元测试**：`tests/unit/server/test_ldap.py::TestDNCanonicalization`，16 项
 
-**Integration Test**: `tests/integration/auth/test_ldap.py::TestLDAPPosixGroupSearch::test_dn_case_insensitivity`
+验证：
+- 属性类型和值的大小写规范化
+- 空白规范化，紧凑、带空格和混合形式
+- 多值 RDN 顺序，2 个及 3 个以上组成部分
+- 保留转义字符，逗号、等号和反斜杠
+- Unicode 字符转小写，例如 José → josé
+- 边界情况，空 DN、单 RDN、无效 DN 回退
+- 真实 Active Directory 和 POSIX LDAP 格式
+- 幂等性，规范化已规范 DN
+- 防止重复场景
 
-Validates:
-1. User logs in with lowercase DN → Phoenix creates account
-2. LDAP server returns mixed-case DN for same user
-3. User logs in again → Phoenix finds existing account (no duplicate)
-4. Same user ID returned across logins despite DN formatting differences
+**集成测试**：`tests/integration/auth/test_ldap.py::TestLDAPPosixGroupSearch::test_dn_case_insensitivity`
 
-**Result**: ✅ All 16 unit tests passed + 43/43 integration tests passed
+验证：
+1. 用户以小写 DN 登录 → Phoenix 创建账户
+2. LDAP 服务器为相同用户返回混合大小写 DN
+3. 用户再次登录 → Phoenix 找到已有账户，不重复创建
+4. 即使 DN 格式不同，各次登录返回相同用户 ID
 
-#### Alternative Approaches Considered
+**结果**：✅ 16 项单元测试全部通过，43/43 项集成测试通过
 
-| Approach | Decision | Rationale |
+<a id="alternative-approaches-considered"></a>
+
+#### 已考虑的替代方案
+
+| 方案 | 决策 | 原因 |
 |----------|----------|-----------|
-| Simple `.lower()` | ❌ Rejected | Fails for whitespace variations, multi-valued RDN ordering |
-| Store DN as-is, compare with `func.lower()` | ❌ Rejected | Only handles case, not whitespace or RDN ordering |
-| Full RFC 4514 canonicalization | ✅ **Selected** | Handles all edge cases, RFC-compliant, no migration needed |
-| Use ldap3's parse_dn() for semantic comparison | ❌ Rejected | Expensive, unnecessary (lowercase sufficient) |
-| Email fallback on DN mismatch | ❌ Rejected | Security risk (email not unique in LDAP) |
+| 简单 `.lower()` | ❌ 否决 | 无法处理空白差异和多值 RDN 顺序 |
+| 原样存储 DN，通过 `func.lower()` 比较 | ❌ 否决 | 仅处理大小写，无法处理空白或 RDN 顺序 |
+| 完整 RFC 4514 规范化 | ✅ **选用** | 处理全部边界情况，符合 RFC，无需迁移 |
+| 使用 ldap3 的 parse_dn() 进行语义比较 | ❌ 否决 | 成本高、不必要，小写已足够 |
+| DN 不匹配时回退邮箱 | ❌ 否决 | 安全风险，LDAP 邮箱不唯一 |
 
-#### Comparison to Grafana
+<a id="comparison-to-grafana"></a>
 
-Grafana stores DNs as-is in `user_auth.auth_id` but performs case-insensitive lookups via Go's `strings.EqualFold()`. Phoenix achieves the same semantics through lowercase normalization.
+#### 与 Grafana 对比
 
-**Both implementations comply with RFC 4514 case-insensitivity.**
+Grafana 在 `user_auth.auth_id` 中原样保存 DN，但通过 Go 的 `strings.EqualFold()` 不区分大小写查找。Phoenix 通过小写规范化实现相同语义。
+
+**两种实现均符合 RFC 4514 的大小写不敏感要求。**
 
 ---
 
-### 9. TLS Port Defaulting & LDAPS Configuration
+<a id="9-tls-port-defaulting--ldaps-configuration"></a>
 
-#### Problem Statement
+### 9. 默认 TLS 端口与 LDAPS 配置
 
-The configuration documentation and docstrings promised mode-aware port defaults:
-- **STARTTLS**: default port 389 (plaintext, then upgrade)
-- **LDAPS**: default port 636 (TLS from start)
+<a id="problem-statement-1"></a>
 
-However, the implementation in `LDAPConfig.from_env()` always defaulted to port 389 regardless of `PHOENIX_LDAP_TLS_MODE`. This caused **LDAPS to silently fail** for any deployment that set `PHOENIX_LDAP_TLS_MODE=ldaps` without explicitly overriding `PHOENIX_LDAP_PORT`.
+#### 问题说明
 
-**Failure Scenario**:
+配置文档和文档字符串承诺按模式设置默认端口：
+- **STARTTLS**：默认端口 389，明文后升级
+- **LDAPS**：默认端口 636，从开始即使用 TLS
+
+但 `LDAPConfig.from_env()` 实现始终默认端口 389，不考虑 `PHOENIX_LDAP_TLS_MODE`。因此，仅设置 `PHOENIX_LDAP_TLS_MODE=ldaps`、未显式覆盖 `PHOENIX_LDAP_PORT` 的部署会出现 **LDAPS 静默失败**。
+
+**失败场景**：
 ```bash
 # User configuration
 PHOENIX_LDAP_TLS_MODE=ldaps
@@ -816,11 +909,13 @@ PHOENIX_LDAP_TLS_MODE=ldaps
 # → Connection refused or TLS handshake failure
 ```
 
-#### Root Cause Analysis
+<a id="root-cause-analysis"></a>
 
-**File**: `src/phoenix/config.py`
+#### 根因分析
 
-**Before Fix** (lines 1602-1604):
+**文件**：`src/phoenix/config.py`
+
+**修复前**，第 1602—1604 行：
 ```python
 return cls(
     host=host,
@@ -828,11 +923,13 @@ return cls(
     tls_mode=tls_mode,
 ```
 
-**Issue**: Hardcoded `"389"` default, no logic to inspect `tls_mode`.
+**问题**：硬编码 `"389"` 默认值，没有检查 `tls_mode` 的逻辑。
 
-#### Phoenix Implementation
+<a id="phoenix-implementation-3"></a>
 
-**After Fix** (lines 1596-1610):
+#### Phoenix 实现
+
+**修复后**，第 1596—1610 行：
 ```python
 # Determine default port based on TLS mode (if not explicitly set)
 # STARTTLS: port 389 (plaintext, then upgrade)
@@ -846,17 +943,19 @@ return cls(
     tls_mode=tls_mode,
 ```
 
-**Key Design Points**:
-- **Mode-aware defaulting**: Port selection respects `tls_mode`
-- **Explicit override**: `PHOENIX_LDAP_PORT` still takes precedence if set
-- **IANA compliance**: Uses standard LDAP port 389, LDAPS port 636 (RFC 4516)
-- **No breaking changes**: Existing configs with explicit `PHOENIX_LDAP_PORT` unaffected
+**关键设计点**：
+- **模式感知默认值**：端口选择遵循 `tls_mode`
+- **显式覆盖**：设置 `PHOENIX_LDAP_PORT` 时仍优先采用
+- **符合 IANA**：使用标准 LDAP 端口 389、LDAPS 端口 636（RFC 4516）
+- **无不兼容变更**：显式指定 `PHOENIX_LDAP_PORT` 的现有配置不受影响
 
-#### Test Coverage
+<a id="test-coverage-1"></a>
 
-**File**: `tests/unit/test_config.py`
+#### 测试覆盖
 
-**Test 1**: `TestLDAPConfigFromEnv::test_valid_inputs[starttls_defaults_to_port_389]`
+**文件**：`tests/unit/test_config.py`
+
+**测试 1**： `TestLDAPConfigFromEnv::test_valid_inputs[starttls_defaults_to_port_389]`
 ```python
 {
     "PHOENIX_LDAP_TLS_MODE": "starttls",
@@ -865,7 +964,7 @@ return cls(
 # Expected: port=389
 ```
 
-**Test 2**: `TestLDAPConfigFromEnv::test_valid_inputs[ldaps_defaults_to_port_636]`
+**测试 2**： `TestLDAPConfigFromEnv::test_valid_inputs[ldaps_defaults_to_port_636]`
 ```python
 {
     "PHOENIX_LDAP_TLS_MODE": "ldaps",
@@ -874,48 +973,54 @@ return cls(
 # Expected: port=636
 ```
 
-**Result**: ✅ Both tests pass (27/27 LDAP config tests passing)
+**结果**：✅ 两项测试均通过，27/27 项 LDAP 配置测试通过
 
-#### Docker Validation
+<a id="docker-validation"></a>
 
-**Files**: 
+#### Docker 验证
+
+**文件**：
 - `scripts/docker/devops/overrides/ldap.yml`
 - `scripts/docker/devops/overrides/ldap-test.yml`
 
-All Docker LDAP configurations **omit** `PHOENIX_LDAP_PORT` to validate port defaulting in real-world scenarios:
+所有 Docker LDAP 配置均**省略** `PHOENIX_LDAP_PORT`，在真实场景验证默认端口：
 
-| Configuration | TLS Mode | Port Omitted? | Expected Default | Validated By |
+| 配置 | TLS 模式 | 是否省略端口？ | 预期默认值 | 验证方式 |
 |--------------|----------|---------------|------------------|--------------|
-| `ldap.yml` | None (`tls_mode=none`) | ✅ Yes | 389 | LDAP integration tests |
-| `ldap-test.yml` (`phoenix-starttls`) | STARTTLS | ✅ Yes | 389 | TLS test script |
-| `ldap-test.yml` (`phoenix`) | LDAPS | ✅ Yes | 636 | TLS test script |
+| `ldap.yml` | 无（`tls_mode=none`） | ✅ 是 | 389 | LDAP 集成测试 |
+| `ldap-test.yml`（`phoenix-starttls`） | STARTTLS | ✅ 是 | 389 | TLS 测试脚本 |
+| `ldap-test.yml`（`phoenix`） | LDAPS | ✅ 是 | 636 | TLS 测试脚本 |
 
-**Validation Strategy**:
-- Phoenix containers start successfully without explicit `PHOENIX_LDAP_PORT`
-- LDAP authentication works in all three modes (no TLS, STARTTLS, LDAPS)
-- Confirms port defaulting matches IANA standards (RFC 4516)
+**验证策略**：
+- Phoenix 容器不显式设置 `PHOENIX_LDAP_PORT` 即可成功启动
+- LDAP 身份验证在无 TLS、STARTTLS 和 LDAPS 三种模式均可工作
+- 确认默认端口符合 IANA 标准（RFC 4516）
 
-**Result**: ✅ Docker tests confirm correct port defaults for all TLS modes
+**结果**：✅ Docker 测试确认所有 TLS 模式的默认端口正确
 
-#### Impact Analysis
+<a id="impact-analysis"></a>
 
-**Before Fix**:
-| Config | Expected Port | Actual Port | Result |
+#### 影响分析
+
+**修复前**：
+| 配置 | 预期端口 | 实际端口 | 结果 |
 |--------|--------------|-------------|--------|
-| `tls_mode=starttls` (no port) | 389 | 389 | ✅ Works |
-| `tls_mode=ldaps` (no port) | 636 | 389 ❌ | 🚨 TLS handshake fails |
-| `tls_mode=ldaps`, `port=636` | 636 | 636 | ✅ Works (explicit) |
+| `tls_mode=starttls`，未指定端口 | 389 | 389 | ✅ 可用 |
+| `tls_mode=ldaps`，未指定端口 | 636 | 389 ❌ | 🚨 TLS 握手失败 |
+| `tls_mode=ldaps`、`port=636` | 636 | 636 | ✅ 可用，显式指定 |
 
-**After Fix**:
-| Config | Expected Port | Actual Port | Result |
+**修复后**：
+| 配置 | 预期端口 | 实际端口 | 结果 |
 |--------|--------------|-------------|--------|
-| `tls_mode=starttls` (no port) | 389 | 389 | ✅ Works |
-| `tls_mode=ldaps` (no port) | 636 | 636 | ✅ Works |
-| `tls_mode=ldaps`, `port=636` | 636 | 636 | ✅ Works (explicit) |
+| `tls_mode=starttls`，未指定端口 | 389 | 389 | ✅ 可用 |
+| `tls_mode=ldaps`，未指定端口 | 636 | 636 | ✅ 可用 |
+| `tls_mode=ldaps`、`port=636` | 636 | 636 | ✅ 可用，显式指定 |
 
-#### Comparison to Grafana
+<a id="comparison-to-grafana-1"></a>
 
-Grafana's LDAP configuration (TOML-based) requires explicit `port` specification:
+#### 与 Grafana 对比
+
+Grafana 基于 TOML 的 LDAP 配置要求显式指定 `port`：
 ```toml
 [servers]
 host = "ldap.example.com"
@@ -923,45 +1028,49 @@ port = 636  # Must be explicit
 use_ssl = true
 ```
 
-Phoenix's environment-based configuration now provides **smart defaults** for better UX, while still allowing explicit overrides for non-standard ports.
+Phoenix 基于环境变量的配置现提供**智能默认值**，改善用户体验，同时仍允许显式覆盖非标准端口。
 
-#### Migration Notes
+<a id="migration-notes"></a>
 
-**No migration required**. Existing deployments fall into two categories:
+#### 迁移说明
 
-1. **STARTTLS users** (no `PHOENIX_LDAP_PORT` set):
-   - Before: port=389 ✅
-   - After: port=389 ✅
-   - **Impact**: None
+**无需迁移**。现有部署分为两类：
 
-2. **LDAPS users**:
-   - **With explicit port** (`PHOENIX_LDAP_PORT=636`):
-     - Before: port=636 ✅
-     - After: port=636 ✅
-     - **Impact**: None
-   - **Without explicit port** (broken before fix):
-     - Before: port=389 🚨 (broken)
-     - After: port=636 ✅ (fixed)
-     - **Impact**: Feature now works correctly
+1. **STARTTLS 用户**，未设置 `PHOENIX_LDAP_PORT`：
+   - 之前：port=389 ✅
+   - 之后：port=389 ✅
+   - **影响**：无
+
+2. **LDAPS 用户**：
+   - **显式指定端口**（`PHOENIX_LDAP_PORT=636`）：
+     - 之前：port=636 ✅
+     - 之后：port=636 ✅
+     - **影响**：无
+   - **未显式指定端口**，修复前不可用：
+     - 之前：port=389 🚨，不可用
+     - 之后：port=636 ✅，已修复
+     - **影响**：功能现已正常工作
 
 ---
 
-### 10. References
+<a id="10-references"></a>
 
-**LDAP Protocol**:
-- RFC 4511 - Lightweight Directory Access Protocol (LDAP): The Protocol
-- RFC 4514 - LDAP: String Representation of Distinguished Names
+### 10. 参考资料
 
-**OpenLDAP Source Code**:
-- `servers/slapd/search.c` - Search operation handling, DN validation
-- `servers/slapd/bind.c` - Bind operation handling, anonymous bind logic
-- `include/ldap.h` - Error code definitions
+**LDAP 协议**：
+- RFC 4511 — 轻量目录访问协议（LDAP）：协议
+- RFC 4514 — LDAP：专有名称的字符串表示
 
-**ldap3 Library**:
-- `ldap3/utils/dn.py` - DN parsing and validation implementation
+**OpenLDAP 源码**：
+- `servers/slapd/search.c` — 搜索操作处理、DN 校验
+- `servers/slapd/bind.c` — 绑定操作处理、匿名绑定逻辑
+- `include/ldap.h` — 错误码定义
 
-**Phoenix Implementation**:
-- `src/phoenix/server/ldap.py` - LDAP authentication logic
-- `tests/integration/_mock_ldap_server.py` - Mock LDAP server for testing
-- `tests/integration/auth/test_ldap.py` - Integration test suite
+**ldap3 库**：
+- `ldap3/utils/dn.py` — DN 解析和校验实现
+
+**Phoenix 实现**：
+- `src/phoenix/server/ldap.py` — LDAP 身份验证逻辑
+- `tests/integration/_mock_ldap_server.py` — 测试用模拟 LDAP 服务器
+- `tests/integration/auth/test_ldap.py` — 集成测试套件
 

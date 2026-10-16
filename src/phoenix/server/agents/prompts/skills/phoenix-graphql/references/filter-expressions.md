@@ -1,161 +1,166 @@
-# Filter expressions
+<a id="filter-expressions"></a>
 
-A filter condition is a Python boolean expression that Phoenix compiles to SQL. There are three
-filter languages, one each for spans, traces, and sessions, and the argument name picks the
-language. The vocabularies do not mix.
+# 筛选表达式
 
-| Language | Argument | Keeps | Accepted on |
+筛选条件是由 Phoenix 编译为 SQL 的 Python 布尔表达式。共有三种筛选语言，分别用于跨度、追踪和会话，通过参数名选择语言，各自的词汇不能混用。
+
+| 语言 | 参数 | 保留对象 | 支持的位置 |
 | --- | --- | --- | --- |
-| Span filter | `filterCondition` | individual spans | `Project.spans`, `Trace.spans`, project aggregates (`recordCount`, `tokenCountTotal`, `costSummary`, `latencyMsQuantile`, ...), `SpanQuery().where(...)` in the Python client, the UI spans filter bar |
-| Trace filter | `traceFilterCondition` | every span of a matching trace | `Project.spans`, the UI traces filter bar, the `filter` query param on `GET /v1/projects/{id}/traces` and the `filter` argument of `client.traces.get_traces(...)` (Python) and `getTraces({...})` (TypeScript) |
-| Session filter | `sessionFilterCondition` | sessions | `Project.sessions`, project aggregates, the UI sessions filter bar, the `filter` query param on `GET /v1/projects/{id}/sessions` and the `filter` argument of `client.sessions.list(...)` (Python) and `listSessions({...})` (TypeScript) |
+| 跨度筛选 | `filterCondition` | 单个跨度 | `Project.spans`、`Trace.spans`、项目汇总指标（`recordCount`、`tokenCountTotal`、`costSummary`、`latencyMsQuantile` 等）、Python 客户端的 `SpanQuery().where(...)`、界面跨度筛选栏 |
+| 追踪筛选 | `traceFilterCondition` | 匹配追踪的所有跨度 | `Project.spans`、界面追踪筛选栏、`GET /v1/projects/{id}/traces` 的 `filter` 查询参数，以及 `client.traces.get_traces(...)`（Python）和 `getTraces({...})`（TypeScript）的 `filter` 参数 |
+| 会话筛选 | `sessionFilterCondition` | 会话 | `Project.sessions`、项目汇总指标、界面会话筛选栏、`GET /v1/projects/{id}/sessions` 的 `filter` 查询参数，以及 `client.sessions.list(...)`（Python）和 `listSessions({...})`（TypeScript）的 `filter` 参数 |
 
-`filterCondition` and `traceFilterCondition` compose on `Project.spans`: matching spans inside
-matching traces. `filterCondition` and `sessionFilterCondition` are mutually exclusive on the
-aggregates that accept both.
+`filterCondition` 和 `traceFilterCondition` 可在 `Project.spans` 中组合，得到匹配追踪内的匹配跨度。对于同时接收两者的汇总指标，`filterCondition` 与 `sessionFilterCondition` 互斥。
 
-## Checking a condition
+<a id="checking-a-condition"></a>
 
-| Need | GraphQL field on `Project` |
+## 检查条件
+
+| 需求 | `Project` 上的 GraphQL 字段 |
 | --- | --- |
-| Validate before running | `validateSpanFilterCondition(condition:)`, `validateTraceFilterCondition(condition:)`, `validateSessionFilterCondition(condition:)` → `{ isValid errorMessage }` |
-| List bindable names | `traceFilterVocabulary`, `sessionFilterVocabulary` → `{ name type category description iterableName }` |
-| Span filter names | no vocabulary field; the table under [Span filter](#span-filter) is exhaustive |
+| 运行前验证 | `validateSpanFilterCondition(condition:)`、`validateTraceFilterCondition(condition:)`、`validateSessionFilterCondition(condition:)` → `{ isValid errorMessage }` |
+| 列出可绑定名称 | `traceFilterVocabulary`、`sessionFilterVocabulary` → `{ name type category description iterableName }` |
+| 跨度筛选名称 | 没有词汇字段；[跨度筛选](#span-filter)中的表格是完整清单 |
 
-A span filter that returns no rows may be misspelled rather than unmatched. Check the spelling
-against the vocabulary before concluding there is no data.
+跨度筛选未返回记录，可能是名称拼错，而非没有匹配数据。在断言没有数据前，先对照词汇清单检查拼写。
 
-## Syntax shared by all three languages
+<a id="syntax-shared-by-all-three-languages"></a>
 
-### Operators
+## 三种语言共享的语法
 
-| Category | Accepted | Rejected |
+<a id="operators"></a>
+
+### 运算符
+
+| 类别 | 接受的写法 | 拒绝的写法 |
 | --- | --- | --- |
-| Comparison | `==` `!=` `<` `<=` `>` `>=`; chained: `500 < latency_ms <= 2000` | `=` |
-| Missing values | `is None`, `is not None` | `is null`, `null`, `is` with any other value |
-| Membership | `x in [...]` exact; `'text' in field` case-insensitive substring; `not in` | `None` inside a list; a literal on the left (`1 in [1, 2]`); `like` |
-| Logic | `and`, `or`, `not`, parentheses | `&&`, `\|\|`, `&`, `\|`, `!` |
-| Arithmetic | `+` `-` `*` `/` `%` | `**`, `//`, bitwise operators |
-| Casts | `float(x)`, `int(x)`, `str(x)` | `bool(x)`, any other function |
-| Comprehensions | `any`, `all`, `len`, `sum`, `max`, `min` over a declared collection: `any(d.cost > 0 for d in cost_details)`; `len` takes a list comprehension | method calls (`name.startswith(...)`), `len(name)` |
+| 比较 | `==` `!=` `<` `<=` `>` `>=`；链式比较：`500 < latency_ms <= 2000` | `=` |
+| 缺失值 | `is None`、`is not None` | `is null`、`null`、对其他值使用 `is` |
+| 成员关系 | `x in [...]` 为精确匹配；`'text' in field` 为不区分大小写的子串匹配；支持 `not in` | 列表内的 `None`；左侧为字面量，如 `1 in [1, 2]`；`like` |
+| 逻辑 | `and`、`or`、`not`、括号 | `&&`、`\|\|`、`&`、`\|`、`!` |
+| 算术 | `+` `-` `*` `/` `%` | `**`、`//`、位运算符 |
+| 类型转换 | `float(x)`、`int(x)`、`str(x)` | `bool(x)`、其他函数 |
+| 推导式 | 对声明的集合使用 `any`、`all`、`len`、`sum`、`max`、`min`，如 `any(d.cost > 0 for d in cost_details)`；`len` 接收列表推导式 | 方法调用，如 `name.startswith(...)`；`len(name)` |
 
-### Literals
+<a id="literals"></a>
 
-| Kind | Write | Not |
+### 字面量
+
+| 类型 | 正确写法 | 错误写法 |
 | --- | --- | --- |
-| String | `'LLM'` or `"LLM"` | unquoted: `LLM` |
-| Number | `100`, `0.5` | quoted: `'100'` |
-| Boolean | `True`, `False` | `true`, `false` |
-| Missing | `None` | `null`, `nil` |
-| Datetime | ISO 8601 with an offset: `'2026-09-01T00:00:00Z'`, `'2026-09-01T00:00:00+00:00'` | without an offset |
-| List | `['LLM', 'TOOL']`, same type throughout | mixed types; `None` elements |
+| 字符串 | `'LLM'` 或 `"LLM"` | 不带引号的 `LLM` |
+| 数字 | `100`、`0.5` | 带引号的 `'100'` |
+| 布尔值 | `True`、`False` | `true`、`false` |
+| 缺失值 | `None` | `null`、`nil` |
+| 日期时间 | 带偏移量的 ISO 8601，如 `'2026-09-01T00:00:00Z'`、`'2026-09-01T00:00:00+00:00'` | 不带偏移量 |
+| 列表 | `['LLM', 'TOOL']`，全部元素类型一致 | 混合类型、`None` 元素 |
 
-### Rules that differ from Python
+<a id="rules-that-differ-from-python"></a>
 
-- A missing value fails every comparison, including `!=`. A span without `metadata['tier']`
-  matches neither `metadata['tier'] == 'premium'` nor `metadata['tier'] != 'premium'`. Spell the
-  missing case out: `metadata['tier'] != 'premium' or metadata['tier'] is None`.
-- `is None` is true for an absent key and for a stored JSON `null`.
-- Every operand of `and`, `or`, and `not` must itself be a condition. `name == 'x' and
-  metadata['flag']` is rejected; write `metadata['flag'] == True`.
-- The whole expression must be a condition. A bare `True` or a bare field is rejected.
-- `'text' in field` ignores case. `==` and list membership are exact.
-- Annotation accessors expose `.label` (string), `.score` (number), `.explanation` (string), and
-  `.identifier` (string). The bare accessor is an existence check: `annotations['quality']`.
-- `.identifier` is never missing: it is `''` on an annotation written without one, so test for
-  that with `== ''` rather than `is None`.
+### 与 Python 不同的规则
 
-## Span filter
+- 缺失值在所有比较中都不匹配，包括 `!=`。没有 `metadata['tier']` 的跨度既不匹配 `metadata['tier'] == 'premium'`，也不匹配 `metadata['tier'] != 'premium'`。应显式列出缺失情况：`metadata['tier'] != 'premium' or metadata['tier'] is None`。
+- 键不存在或存储的 JSON 值为 `null` 时，`is None` 都为真。
+- `and`、`or`、`not` 的每个操作数本身都必须是条件。`name == 'x' and
+  metadata['flag']` 会被拒绝，应写为 `metadata['flag'] == True`。
+- 整个表达式必须是条件，单独的 `True` 或单独字段会被拒绝。
+- `'text' in field` 忽略大小写，`==` 和列表成员关系则精确匹配。
+- 标注访问器提供 `.label`（字符串）、`.score`（数字）、`.explanation`（字符串）和 `.identifier`（字符串）。单独的访问器用于检查是否存在，例如 `annotations['quality']`。
+- `.identifier` 永不缺失：未指定时，标注中的值为 `''`，应通过 `== ''` 检查，而非 `is None`。
 
-### Root spans
+<a id="span-filter"></a>
 
-There is no `traces` connection and no root-span argument. Root-span scoping is a clause in
-`filterCondition`, and it composes with everything else. The UI's traces table is
-`spans(filterCondition: "parent_span is None", traceFilterCondition: ...)`.
+## 跨度筛选
 
-| Clause | Keeps | Use when |
+<a id="root-spans"></a>
+
+### 根跨度
+
+没有 `traces` 连接，也没有根跨度参数。根跨度作用域通过 `filterCondition` 中的子句限定，可与其他所有条件组合。界面的追踪表使用 `spans(filterCondition: "parent_span is None", traceFilterCondition: ...)`。
+
+| 子句 | 保留对象 | 使用场景 |
 | --- | --- | --- |
-| `parent_id is None` | spans with no parent id | the default |
-| `parent_span is None` | those, plus orphans whose parent span was never received | you want every top-level span, including ones whose parent was dropped |
+| `parent_id is None` | 没有父 ID 的跨度 | 默认选择 |
+| `parent_span is None` | 上述跨度，以及父跨度从未收到的孤儿跨度 | 希望获取全部顶层跨度，包括父跨度丢失的情况 |
 
-A root span is usually one per trace. Fragmented traces can have several.
+通常每条追踪只有一个根跨度；碎片化追踪可能有多个。
 
-### Vocabulary
+<a id="vocabulary"></a>
 
-This table is exhaustive. Every identifier not in it is read as an attribute path.
+### 词汇
 
-| Name | Type | Notes |
+此表为完整清单。任何未列出的标识符都会被视为属性路径。
+
+| 名称 | 类型 | 说明 |
 | --- | --- | --- |
-| `span_id`, `trace_id`, `parent_id` | string | OpenTelemetry hex ids |
-| `name` | string | span name |
-| `span_kind` | enum | `'CHAIN'`, `'LLM'`, `'RETRIEVER'`, `'EMBEDDING'`, `'TOOL'`, `'AGENT'`, `'RERANKER'`, `'GUARDRAIL'`, `'EVALUATOR'`, `'PROMPT'`, `'DECISION'`, `'UNKNOWN'`; literals are uppercased for you |
-| `status_code` | enum | `'OK'`, `'ERROR'`, `'UNSET'`; literals are uppercased for you |
-| `status_message` | string | error text |
-| `latency_ms` | number | |
-| `start_time`, `end_time` | datetime | |
-| `cumulative_llm_token_count_prompt`, `cumulative_llm_token_count_completion`, `cumulative_llm_token_count_total` | number | this span plus its descendants |
-| `llm.token_count.prompt`, `llm.token_count.completion`, `llm.token_count.total` | number | this span alone |
-| `total_cost`, `prompt_cost`, `completion_cost` | number | `0` when the span has no cost row |
-| `cost_details` | collection | iterable only; elements have `token_type` (string), `is_prompt` (boolean), `cost`, `tokens`, `cost_per_token` (number) |
-| `parent_span` | reserved | only `is None` / `is not None`; `parent_span.name` is rejected |
-| `annotations['name']` | annotation | on the span itself; `evals['name']` is a legacy alias |
-| `trace_annotations['name']` | annotation | on the span's containing trace |
-| `attributes[...]`, `metadata[...]`, any other dotted name | attribute | JSON attribute path; type unknown until read |
+| `span_id`、`trace_id`、`parent_id` | 字符串 | OpenTelemetry 十六进制 ID |
+| `name` | 字符串 | 跨度名称 |
+| `span_kind` | 枚举 | `'CHAIN'`、`'LLM'`、`'RETRIEVER'`、`'EMBEDDING'`、`'TOOL'`、`'AGENT'`、`'RERANKER'`、`'GUARDRAIL'`、`'EVALUATOR'`、`'PROMPT'`、`'DECISION'`、`'UNKNOWN'`；字面量会自动转为大写 |
+| `status_code` | 枚举 | `'OK'`、`'ERROR'`、`'UNSET'`；字面量会自动转为大写 |
+| `status_message` | 字符串 | 错误文本 |
+| `latency_ms` | 数字 | |
+| `start_time`、`end_time` | 日期时间 | |
+| `cumulative_llm_token_count_prompt`、`cumulative_llm_token_count_completion`、`cumulative_llm_token_count_total` | 数字 | 当前跨度及其后代 |
+| `llm.token_count.prompt`、`llm.token_count.completion`、`llm.token_count.total` | 数字 | 仅当前跨度 |
+| `total_cost`、`prompt_cost`、`completion_cost` | 数字 | 没有费用记录时为 `0` |
+| `cost_details` | 集合 | 仅可迭代；元素包含 `token_type`（字符串）、`is_prompt`（布尔值）、`cost`、`tokens`、`cost_per_token`（数字） |
+| `parent_span` | 保留名称 | 只支持 `is None` / `is not None`；`parent_span.name` 被拒绝 |
+| `annotations['name']` | 标注 | 跨度自身的标注；`evals['name']` 是旧别名 |
+| `trace_annotations['name']` | 标注 | 该跨度所属追踪的标注 |
+| `attributes[...]`、`metadata[...]`、其他带点名称 | 属性 | JSON 属性路径，读取前类型未知 |
 
-Legacy spellings still accepted: `context.span_id`, `context.trace_id`,
-`cumulative_token_count.prompt`, `cumulative_token_count.completion`,
-`cumulative_token_count.total`.
+仍接受以下旧写法：`context.span_id`、`context.trace_id`、`cumulative_token_count.prompt`、`cumulative_token_count.completion`、`cumulative_token_count.total`。
 
-### Attributes
+<a id="attributes"></a>
 
-| Write | Reads |
+### 属性
+
+| 写法 | 读取内容 |
 | --- | --- |
-| `llm.model_name`, `attributes['llm.model_name']`, `attributes['llm']['model_name']` | the same attribute |
+| `llm.model_name`、`attributes['llm.model_name']`、`attributes['llm']['model_name']` | 同一个属性 |
 | `metadata['topic']` | `attributes['metadata']['topic']` |
-| `input.value`, `output.value` | the span's input and output text |
-| `input.mime_type`, `output.mime_type` | the payload type |
-| `attributes['tags'][0]` | the first element of a JSON array |
+| `input.value`、`output.value` | 跨度输入和输出文本 |
+| `input.mime_type`、`output.mime_type` | 载荷类型 |
+| `attributes['tags'][0]` | JSON 数组的第一个元素 |
 | `user.id` | `attributes['user']['id']` |
 
-An attribute's type is unknown until the row is read. Compared against a number it is read as a
-number, against `True` or `False` as a boolean, otherwise as text. Rows whose value cannot be
-converted drop out instead of erroring. `float(x)`, `int(x)`, and `str(x)` force a read as that
-type.
+属性类型在读取行之前未知。与数字比较时按数字读取，与 `True` 或 `False` 比较时按布尔值读取，其他情况按文本读取。值无法转换的行会被排除，不会报错。`float(x)`、`int(x)` 和 `str(x)` 可强制按指定类型读取。
 
-### Annotations
+<a id="annotations"></a>
 
-The accessor picks the level. The wrong level compiles and matches nothing.
+### 标注
 
-| Accessor | Matches annotations on |
+访问器决定标注层级。使用错误层级仍可编译，但不会匹配任何内容。
+
+| 访问器 | 匹配的标注位置 |
 | --- | --- |
-| `annotations['name']` | the span itself |
-| `evals['name']` | the span itself (legacy alias) |
-| `trace_annotations['name']` | the span's containing trace |
+| `annotations['name']` | 跨度自身 |
+| `evals['name']` | 跨度自身，旧别名 |
+| `trace_annotations['name']` | 跨度所属的追踪 |
 
-`trace_annotations[...]` matches every span of an annotated trace. Add `parent_id is None` to
-get one row per trace. Discover names with `Project.spanAnnotationNames` and
-`Project.traceAnnotationNames`.
+`trace_annotations[...]` 匹配带有标注追踪中的全部跨度。添加 `parent_id is None` 可使每条追踪返回一行。通过 `Project.spanAnnotationNames` 和 `Project.traceAnnotationNames` 发现名称。
 
-One name can cover several rows on the same span — a reviewer per pass, a run per coding
-session — because annotations are keyed by `(name, span, identifier)`. `.identifier` picks out
-one of them: `annotations['note'].identifier == 'coding-run:1'` reads only the row that run
-wrote, and combining it with `.label` or `.score` constrains that same row.
+同一名称可以对应同一跨度上的多条记录，例如每轮评审一条、每次编码会话一条，因为标注以 `(name, span, identifier)` 为键。`.identifier` 用于选中其中一条：`annotations['note'].identifier == 'coding-run:1'` 仅读取该次运行写入的记录；与 `.label` 或 `.score` 组合时，约束作用于同一条记录。
 
-### Spellings that compile and match nothing
+<a id="spellings-that-compile-and-match-nothing"></a>
 
-Unknown names fall back to attribute paths, so these are not errors.
+### 能编译但匹配不到内容的写法
 
-| Wrote | Phoenix reads | Write instead |
+未知名称会回退为属性路径，因此以下情况不会报错。
+
+| 原写法 | Phoenix 的解释 | 应改为 |
 | --- | --- | --- |
-| `span_kind == LLM` | attribute named `LLM` | `span_kind == 'LLM'` |
-| `parent_id == null` | attribute named `null` | `parent_id is None` |
-| `error_count > 0`, `num_spans > 3`, `token_count_total > 0` | attributes; these are trace filter names | `traceFilterCondition`, or `status_code == 'ERROR'` for the span |
-| `'refund' in input`, `output is None` | the `input` / `output` attribute objects | `'refund' in input.value`, `output.value is None` |
-| `annotations.q.label == 'x'` | attribute path `annotations.q.label` | `annotations['q'].label == 'x'` |
-| `attributes.llm.model_name == 'x'` | attribute named `attributes` | `llm.model_name == 'x'` |
-| `is_root == True`, `user_id == 'u1'` | attributes | `parent_id is None`, `user.id == 'u1'` |
+| `span_kind == LLM` | 名为 `LLM` 的属性 | `span_kind == 'LLM'` |
+| `parent_id == null` | 名为 `null` 的属性 | `parent_id is None` |
+| `error_count > 0`、`num_spans > 3`、`token_count_total > 0` | 属性；这些名称实际属于追踪筛选 | `traceFilterCondition`，或使用 `status_code == 'ERROR'` 筛选跨度 |
+| `'refund' in input`、`output is None` | `input` / `output` 属性对象 | `'refund' in input.value`、`output.value is None` |
+| `annotations.q.label == 'x'` | 属性路径 `annotations.q.label` | `annotations['q'].label == 'x'` |
+| `attributes.llm.model_name == 'x'` | 名为 `attributes` 的属性 | `llm.model_name == 'x'` |
+| `is_root == True`、`user_id == 'u1'` | 属性 | `parent_id is None`、`user.id == 'u1'` |
 
-### Examples
+<a id="examples"></a>
+
+### 示例
 
 ```python span-filter
 parent_id is None
@@ -195,35 +200,37 @@ not span_kind == "LLM"
 span_kind == "LLM" and (latency_ms > 5000 or status_code == "ERROR")
 ```
 
-## Trace filter
+<a id="trace-filter"></a>
 
-Matches whole traces. Names are strict: an unknown name is rejected with a "did you mean"
-suggestion. Span filter names (`span_kind`, `status_code`, `parent_id`, `input.value`) are
-unknown here. Ask span-level questions with a comprehension over `spans`.
+## 追踪筛选
 
-### Vocabulary
+匹配整条追踪，名称严格校验：未知名称会被拒绝，并返回“是否想输入……”建议。跨度筛选名称（`span_kind`、`status_code`、`parent_id`、`input.value`）在此未知。跨度级问题应通过对 `spans` 的推导式表达。
 
-| Name | Type | Notes |
+<a id="vocabulary-1"></a>
+
+### 词汇
+
+| 名称 | 类型 | 说明 |
 | --- | --- | --- |
-| `trace_id` | string | |
-| `start_time`, `end_time` | datetime | |
-| `latency_ms` | number | |
-| `num_spans`, `error_count`, `tool_span_count`, `llm_span_count` | number | rollups; `0` when empty, never null |
-| `token_count_prompt`, `token_count_completion`, `token_count_total` | number | rollups |
-| `prompt_cost`, `completion_cost`, `total_cost` | number | rollups |
-| `input`, `output` | string | the root span's I/O text: `'refund' in input`, `output is None` |
-| `user.id` | string | the root span's user id; the only dotted name |
-| `metadata['k']`, `attributes['k']` | attribute | read from the root span; `attributes["input.value"]` for any other root attribute |
-| `trace_annotations['name']` | annotation | `annotations[...]` is rejected here |
-| `spans` | collection | element fields: `name`, `parent_id`, `span_kind`, `status_code`, `start_time`, `end_time`, `latency_ms`, `llm_token_count_prompt`, `llm_token_count_completion`, `llm_token_count_total`, `cumulative_error_count`, `cumulative_llm_token_count_prompt`, `cumulative_llm_token_count_completion`, `cumulative_llm_token_count_total`; relations `parent_span` (traversable), `children`, `siblings`, `annotations`, `cost_details` |
-| `trace_annotations`, `span_annotations` | collection | elements have `name`, `label`, `score`, `identifier` |
-| `span_cost_details` | collection | elements have `token_type`, `is_prompt`, `cost`, `tokens`, `cost_per_token` |
+| `trace_id` | 字符串 | |
+| `start_time`、`end_time` | 日期时间 | |
+| `latency_ms` | 数字 | |
+| `num_spans`、`error_count`、`tool_span_count`、`llm_span_count` | 数字 | 汇总值；为空时为 `0`，永不为 null |
+| `token_count_prompt`、`token_count_completion`、`token_count_total` | 数字 | 汇总值 |
+| `prompt_cost`、`completion_cost`、`total_cost` | 数字 | 汇总值 |
+| `input`、`output` | 字符串 | 根跨度的输入输出文本：`'refund' in input`、`output is None` |
+| `user.id` | 字符串 | 根跨度的用户 ID，唯一支持的带点名称 |
+| `metadata['k']`、`attributes['k']` | 属性 | 从根跨度读取；其他根属性可使用 `attributes["input.value"]` |
+| `trace_annotations['name']` | 标注 | 此处拒绝 `annotations[...]` |
+| `spans` | 集合 | 元素字段：`name`、`parent_id`、`span_kind`、`status_code`、`start_time`、`end_time`、`latency_ms`、`llm_token_count_prompt`、`llm_token_count_completion`、`llm_token_count_total`、`cumulative_error_count`、`cumulative_llm_token_count_prompt`、`cumulative_llm_token_count_completion`、`cumulative_llm_token_count_total`；关系：`parent_span`（可遍历）、`children`、`siblings`、`annotations`、`cost_details` |
+| `trace_annotations`、`span_annotations` | 集合 | 元素包含 `name`、`label`、`score`、`identifier` |
+| `span_cost_details` | 集合 | 元素包含 `token_type`、`is_prompt`、`cost`、`tokens`、`cost_per_token` |
 
-Root-span reads (`input`, `output`, `user.id`, `metadata`, `attributes`) bind to the
-representative root span the traces table displays. Inside a comprehension, reference only the
-loop variable's fields.
+根跨度读取（`input`、`output`、`user.id`、`metadata`、`attributes`）绑定到追踪表展示的代表性根跨度。推导式内部只能引用循环变量的字段。
 
-### Examples
+<a id="examples-1"></a>
+
+### 示例
 
 ```python trace-filter
 error_count > 0 and latency_ms > 1000
@@ -245,29 +252,34 @@ len([span for span in spans if span.span_kind == "TOOL"]) > 3
 sum(detail.cost for detail in span_cost_details if detail.is_prompt) > 0.10
 ```
 
-## Session filter
+<a id="session-filter"></a>
 
-Matches sessions. A session is one conversation, and each trace in it is usually one turn.
-Names are strict, as in the trace filter.
+## 会话筛选
 
-### Vocabulary
+匹配会话。一个会话是一段对话，其中每条追踪通常代表一轮。与追踪筛选一样，名称严格校验。
 
-| Name | Type | Notes |
+<a id="vocabulary-2"></a>
+
+### 词汇
+
+| 名称 | 类型 | 说明 |
 | --- | --- | --- |
-| `session_id` | string | |
-| `start_time`, `end_time` | datetime | |
-| `duration_ms` | number | |
-| `num_traces`, `num_traces_with_error`, `tool_span_count`, `llm_span_count` | number | rollups; `0` when empty |
-| `token_count_prompt`, `token_count_completion`, `token_count_total` | number | rollups |
-| `prompt_cost`, `completion_cost`, `total_cost` | number | rollups |
-| `first_input`, `last_output` | string | the opening input and final output; `==`, `in`, `is None` |
-| `any_input`, `any_output` | containment only | `'refund' in any_input`; never `any_input == ...` |
-| `user.id`, `metadata['k']`, `attributes['k']` | attribute | read from the session's root spans |
-| `session_annotations['name']` | annotation | |
-| `traces` | collection | elements have `start_time`, `end_time`, `latency_ms`, and their own `spans` |
-| `spans`, `session_annotations`, `span_annotations`, `span_cost_details` | collection | as in the trace filter |
+| `session_id` | 字符串 | |
+| `start_time`、`end_time` | 日期时间 | |
+| `duration_ms` | 数字 | |
+| `num_traces`、`num_traces_with_error`、`tool_span_count`、`llm_span_count` | 数字 | 汇总值，空时为 `0` |
+| `token_count_prompt`、`token_count_completion`、`token_count_total` | 数字 | 汇总值 |
+| `prompt_cost`、`completion_cost`、`total_cost` | 数字 | 汇总值 |
+| `first_input`、`last_output` | 字符串 | 开场输入和最终输出，支持 `==`、`in`、`is None` |
+| `any_input`、`any_output` | 仅支持包含判断 | `'refund' in any_input`，不能使用 `any_input == ...` |
+| `user.id`、`metadata['k']`、`attributes['k']` | 属性 | 从会话的根跨度读取 |
+| `session_annotations['name']` | 标注 | |
+| `traces` | 集合 | 元素包含 `start_time`、`end_time`、`latency_ms` 及其自身的 `spans` |
+| `spans`、`session_annotations`、`span_annotations`、`span_cost_details` | 集合 | 与追踪筛选相同 |
 
-### Examples
+<a id="examples-2"></a>
+
+### 示例
 
 ```python session-filter
 num_traces > 5 and total_cost > 0.50

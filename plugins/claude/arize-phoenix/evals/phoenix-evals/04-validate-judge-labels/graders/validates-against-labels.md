@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: validate_judge.py}
 weight: 0.5
 ---
-The user has 80 human pass/fail labels and their LLM judge's predictions over the same 80 examples, and wants to decide whether the judge is trustworthy.
+用户有 80 个人工 pass/fail 标签，以及 LLM 裁判对同一批 80 个示例的预测，希望判断裁判是否可信。
 
-Grade exactly one claim. PASS if the claim below holds for the file, FAIL otherwise. Ignore everything else about the file.
+只评定下面这一条判断条件。文件满足条件则为 PASS，否则为 FAIL；忽略文件中的其他内容。
 
-Claim: The script measures agreement between the judge's predictions and the human labels using a classification or agreement metric (accuracy, precision/recall, TPR/TNR, a confusion matrix, or Cohen's kappa) and uses a principled pass criterion to decide whether to trust the judge — a numeric bar (e.g. ~80%), a kappa threshold, or comparison against the human–human agreement ceiling. It does not just re-run or tweak the judge without comparing it to the human labels.
+判断条件：脚本使用分类或一致性指标（准确率、精确率/召回率、TPR/TNR、混淆矩阵或 Cohen's kappa）衡量裁判模型预测与人工标签的一致性，并依据有原则的通过标准判断是否可信，例如数值门槛（约 80%）、kappa 阈值，或与人工之间的一致性上限比较。不能仅重新运行或调整模型，而不与人工标签比较。

@@ -1,36 +1,41 @@
-# Async LLM Client Lifecycle Management
+<a id="async-llm-client-lifecycle-management"></a>
+# 异步 LLM 客户端生命周期管理
 
-## Overview
+<a id="overview"></a>
+## 概述
 
-This document describes the rationale for implementing a unified async context manager pattern across all LLM provider clients in Phoenix's playground infrastructure. The design ensures proper HTTP connection lifecycle management and provides a consistent interface regardless of the underlying SDK.
+本文说明在 Phoenix Playground 基础设施的全部 LLM 提供商客户端中，采用统一异步上下文管理器模式的理由。设计确保正确管理 HTTP 连接生命周期，并提供不依赖底层 SDK 的一致接口。
 
-## What Changed
+<a id="what-changed"></a>
+## 变化
 
-| Provider | Before | After | Impact |
+| 提供商 | 之前 | 之后 | 影响 |
 |----------|--------|-------|--------|
-| **AWS Bedrock** | boto3 (blocking I/O) | aioboto3 (async I/O) | **Fixes event loop blocking** |
-| OpenAI | Fresh client per request | Fresh client per request | No change |
-| Azure OpenAI | Fresh client per request | Fresh client per request | No change |
-| Anthropic | Fresh client per request | Fresh client per request | No change |
-| Google GenAI | Fresh client per request | Fresh client per request | No change |
+| **AWS Bedrock** | boto3（阻塞 I/O） | aioboto3（异步 I/O） | **修复事件循环阻塞** |
+| OpenAI | 每请求新建客户端 | 每请求新建客户端 | 无变化 |
+| Azure OpenAI | 每请求新建客户端 | 每请求新建客户端 | 无变化 |
+| Anthropic | 每请求新建客户端 | 每请求新建客户端 | 无变化 |
+| Google GenAI | 每请求新建客户端 | 每请求新建客户端 | 无变化 |
 
-**Key insight**: All providers already created fresh clients per request, so they already incurred connection overhead (~20-250ms per request). This PR does not introduce new overhead for non-Bedrock providers—it only fixes Bedrock's blocking behavior.
+**关键认识：** 所有提供商原本已逐请求创建新客户端，因此原本已有每请求约 20–250ms 的连接开销。本 PR 不为非 Bedrock 提供商引入新开销，只修复 Bedrock 阻塞行为。
 
-The "unified factory pattern" formalizes the existing fresh-client pattern with explicit async context managers, ensuring consistent resource cleanup across all providers.
+统一工厂模式通过显式异步上下文管理器，将已有新客户端模式规范化，确保全部提供商一致清理资源。
 
-## Problem Statement
+<a id="problem-statement"></a>
+## 问题说明
 
-Phoenix's playground feature supports multiple LLM providers (OpenAI, Azure OpenAI, Anthropic, Google GenAI, AWS Bedrock). Each provider's SDK has different client lifecycle patterns:
+Phoenix Playground 支持 OpenAI、Azure OpenAI、Anthropic、Google GenAI、AWS Bedrock 等提供商，其 SDK 生命周期模式各不相同：
 
-- **OpenAI/Azure OpenAI/Anthropic**: Clients can be created synchronously but hold HTTP connections that should be explicitly closed
-- **AWS Bedrock (boto3)**: Synchronous client with blocking I/O that freezes the async event loop
-- **Google GenAI**: Dual sync/async clients with separate lifecycle management
+- **OpenAI/Azure OpenAI/Anthropic**：可同步创建，但持有的 HTTP 连接应显式关闭。
+- **AWS Bedrock（boto3）**：同步客户端采用阻塞 I/O，会冻结异步事件循环。
+- **Google GenAI**：同步和异步客户端分开管理生命周期。
 
-Note: Azure OpenAI uses the same `AsyncOpenAI` client with a custom `base_url` pointing to the Azure endpoint, avoiding the need for a separate `AsyncAzureOpenAI` class.
+说明：Azure OpenAI 使用相同 `AsyncOpenAI` 客户端，通过自定义 `base_url` 指向 Azure 端点，无需独立 `AsyncAzureOpenAI` 类。
 
-### Why boto3 Blocks the Event Loop
+<a id="why-boto3-blocks-the-event-loop"></a>
+### 为什么 boto3 阻塞事件循环
 
-Using `yield` with boto3 streaming does not make it async. The `yield` keyword creates a generator for incremental data return, but does not change the underlying I/O behavior:
+boto3 流式处理中使用 `yield` 不会使其异步。`yield` 创建用于增量返回数据的生成器，但不改变底层 I/O：
 
 ```python
 # boto3 (BLOCKING)
@@ -39,7 +44,7 @@ for event in response["stream"]:  # ← Each iteration blocks waiting for next c
     yield event  # ← yield returns control, but NEXT iteration blocks again
 ```
 
-Each network read is a **blocking socket operation**. The asyncio event loop is frozen during these waits, preventing other coroutines from executing.
+每次网络读取都是**阻塞 socket 操作**。等待期间 asyncio 事件循环冻结，其他协程无法执行。
 
 ```
 boto3:    [BLOCK 50ms][yield][BLOCK 80ms][yield][BLOCK 60ms]...
@@ -53,46 +58,50 @@ aioboto3:  [await 50ms]      [await 80ms]      [await 60ms]...
            can execute       can execute       can execute
 ```
 
-### Practical Impact
+<a id="practical-impact"></a>
+### 实际影响
 
-**Low impact scenarios (blocking is acceptable):**
-- Local development with single user
-- Production with <5 concurrent Bedrock streaming requests
-- Dedicated Bedrock-only deployments without other async workloads
+**影响较小、可接受阻塞的场景：**
+- 单用户本地开发。
+- 并发 Bedrock 流式请求少于 5 个的生产环境。
+- 只运行 Bedrock、没有其他异步工作负载的专用部署。
 
-**High impact scenarios (aioboto3 recommended):**
-- 10+ simultaneous Bedrock streams
-- Mixed async workloads (DB queries, other API calls sharing the event loop)
-- Latency-sensitive applications where tail latency matters
+**影响较大、建议 aioboto3 的场景：**
+- 同时 10 个以上 Bedrock 流。
+- 混合异步负载，如共享事件循环的数据库查询和其他 API 调用。
+- 重视尾延迟的敏感应用。
 
-| Scenario | boto3 Impact |
+| 场景 | boto3 影响 |
 |----------|--------------|
-| Single stream, ~100 tokens | ~3-5s total blocking (user waiting anyway) |
-| 5 concurrent streams | ~20-50% latency increase per stream |
-| 10+ concurrent streams | Significant serialization, compounding delays |
-| Mixed workload | Other async operations (DB, HTTP) starved during Bedrock I/O |
+| 单流，约 100 token | 总阻塞约 3–5 秒，用户本来也在等待 |
+| 5 个并发流 | 每流延迟约增加 20–50% |
+| 10 个以上并发流 | 明显串行化，延迟叠加 |
+| 混合负载 | Bedrock I/O 期间，数据库和 HTTP 等其他异步操作被饿死 |
 
-### Consequences Without Proper Lifecycle Management
+<a id="consequences-without-proper-lifecycle-management"></a>
+### 生命周期管理不当的后果
 
-- Connection pool exhaustion under load
-- Resource leaks in long-running applications
-- `APITimeoutError` from exhausted connection pools (especially with streaming)
+- 负载下连接池耗尽。
+- 长期运行应用资源泄漏。
+- 连接池耗尽导致 `APITimeoutError`，流式场景尤其明显。
 
-### Why aioboto3 Requires Async Context Managers
+<a id="why-aioboto3-requires-async-context-managers"></a>
+### 为什么 aioboto3 要求异步上下文管理器
 
-Unlike OpenAI/Anthropic SDKs where you can create a client synchronously and optionally close it later, aioboto3 has stricter requirements that drove our design:
+OpenAI/Anthropic SDK 可同步创建客户端，之后选择关闭；aioboto3 的要求更严格，并推动了本设计：
 
-1. **Async client creation**: aioboto3's `session.client()` returns a [`ClientCreatorContext`](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/session.py#L26-L36), not the client itself. The actual client is only available after entering the async context manager (`async with`). This is because credential resolution, endpoint discovery, and HTTP session setup are [async operations](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/session.py#L133-L259).
+1. **异步创建客户端**：aioboto3 的 `session.client()` 返回 [`ClientCreatorContext`](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/session.py#L26-L36)，而非客户端本身。只有进入异步上下文管理器（`async with`）后，实际客户端才可用，因为凭证解析、端点发现和 HTTP 会话配置都是[异步操作](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/session.py#L133-L259)。
 
-2. **aiohttp requires explicit cleanup**: aiohttp's [`__del__`](https://github.com/aio-libs/aiohttp/blob/957d5ba18224b10d428f3ed7fe450ffc2c2978ca/aiohttp/client.py#L421-L431) only emits a `ResourceWarning` for unclosed sessions—it does not actually close connections. Failing to call [`__aexit__`](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/httpsession.py#L109-L115) leaves TCP connections allocated. Since aiohttp's connector has a [default limit of 100 connections](https://github.com/aio-libs/aiohttp/blob/957d5ba18224b10d428f3ed7fe450ffc2c2978ca/aiohttp/connector.py#L254), unclosed clients eventually cause new requests to block waiting for available connections, leading to timeouts.
+2. **aiohttp 需显式清理**：aiohttp 的 [`__del__`](https://github.com/aio-libs/aiohttp/blob/957d5ba18224b10d428f3ed7fe450ffc2c2978ca/aiohttp/client.py#L421-L431) 对未关闭会话仅发出 `ResourceWarning`，不实际关闭连接。未调用 [`__aexit__`](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/httpsession.py#L109-L115) 会保留 TCP 连接。连接器[默认上限为 100](https://github.com/aio-libs/aiohttp/blob/957d5ba18224b10d428f3ed7fe450ffc2c2978ca/aiohttp/connector.py#L254)，未关闭客户端最终导致新请求阻塞等待可用连接并超时。
 
-3. **Session vs client lifecycle**: In boto3, you can [hold a client indefinitely](https://github.com/boto/boto3/blob/43f6f80eb6c93d085b98a6d2eba74fe498e460f5/boto3/session.py#L337-L339). In aioboto3, the client's HTTP session is [tied to the context manager scope](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/client.py#L639-L644)—exiting the context [sets `_sessions = None`](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/httpsession.py#L114-L115), making subsequent API calls fail.
+3. **Session 与客户端生命周期**：boto3 可[无限期持有客户端](https://github.com/boto/boto3/blob/43f6f80eb6c93d085b98a6d2eba74fe498e460f5/boto3/session.py#L337-L339)。aioboto3 中，客户端 HTTP 会话[绑定上下文管理器作用域](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/client.py#L639-L644)，退出时[设置 `_sessions = None`](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/httpsession.py#L114-L115)，导致后续 API 调用失败。
 
-These constraints meant we could not simply "wrap" aioboto3 to match the OpenAI/Anthropic pattern. Instead, we adopted aioboto3's context manager pattern for all providers, ensuring consistency and proper resource cleanup everywhere.
+这些约束意味着不能简单包装 aioboto3 来套用 OpenAI/Anthropic 模式。因此，我们让所有提供商都采用 aioboto3 的上下文管理器模式，以确保一致且正确的资源清理。
 
-## Design Decision: Unified Factory Pattern
+<a id="design-decision-unified-factory-pattern"></a>
+## 设计决策：统一工厂模式
 
-All providers use a factory callable that returns an async context manager. The factory captures the necessary configuration in a closure, creating fresh clients per request:
+所有提供商都使用返回异步上下文管理器的工厂可调用对象。工厂通过闭包捕获所需配置，逐请求创建新客户端：
 
 ```python
 ClientT = TypeVar("ClientT")
@@ -112,9 +121,10 @@ class GoogleClient(PlaygroundClient["GoogleAsyncClient"]): ...
 class BedrockClient(PlaygroundClient["BedrockRuntimeClient"]): ...
 ```
 
-### Factory Implementations by Provider
+<a id="factory-implementations-by-provider"></a>
+### 各提供商工厂实现
 
-| Provider | Factory Implementation |
+| 提供商 | 工厂实现 |
 |----------|------------------------|
 | OpenAI | `lambda: AsyncOpenAI(api_key=api_key, ...)` |
 | Azure OpenAI | `lambda: AsyncOpenAI(api_key=api_key, base_url=azure_base_url, ...)` |
@@ -122,11 +132,12 @@ class BedrockClient(PlaygroundClient["BedrockRuntimeClient"]): ...
 | Google GenAI | `lambda: Client(api_key=api_key).aio` |
 | AWS Bedrock | `lambda: session.client("bedrock-runtime", ...)` |
 
-Note: Azure OpenAI reuses `AsyncOpenAI` with a custom `base_url` (e.g., `https://{endpoint}/openai/v1/`). This is cleaner than using the deprecated `AsyncAzureOpenAI` class and works with Azure AD token providers passed as `api_key` (requires openai>=1.106.0).
+说明：Azure OpenAI 复用 `AsyncOpenAI`，使用自定义 `base_url`（例如 `https://{endpoint}/openai/v1/`）。这比已弃用 `AsyncAzureOpenAI` 更简洁，并兼容作为 `api_key` 传入的 Azure AD token 提供器，要求 openai>=1.106.0。
 
-### Consumption Pattern
+<a id="consumption-pattern"></a>
+### 使用模式
 
-All providers use identical consumption:
+全部提供商采用相同方式：
 
 ```python
 async def chat_completion_create(self, messages, tools, **params):
@@ -141,20 +152,22 @@ async def chat_completion_create(self, messages, tools, **params):
         response = await client.converse_stream(...)  # Bedrock
 ```
 
-### Benefits
+<a id="benefits"></a>
+### 优点
 
-| Aspect | Fresh Client Pattern |
+| 方面 | 新客户端模式 |
 |--------|---------------------|
-| **Consistency** | All providers identical |
-| **Resource cleanup** | Automatic via context manager |
-| **Credential refresh** | Supported for IAM roles (see [Appendix: Credential Refresh](#appendix-aws-credential-refresh)) |
-| **Simplicity** | No wrapper classes needed |
-| **Instrumentation** | Applied just-in-time, per-request |
-| **Type safety** | Generic base class ensures `client` is typed correctly |
+| **一致性** | 全部提供商相同 |
+| **资源清理** | 上下文管理器自动完成 |
+| **凭证刷新** | 支持 IAM 角色，见[附录：凭证刷新](#appendix-aws-credential-refresh) |
+| **简单性** | 无需包装类 |
+| **插桩** | 逐请求即时应用 |
+| **类型安全** | 泛型基类保证 `client` 类型正确 |
 
-### Alternative Considered: Thread Pool Workaround
+<a id="alternative-considered-thread-pool-workaround"></a>
+### 考虑过的替代：线程池变通
 
-If aioboto3 were not feasible, boto3 could be run in a thread pool to release the event loop:
+如果 aioboto3 不可行，可在线程池运行 boto3 以释放事件循环：
 
 ```python
 from starlette.concurrency import run_in_threadpool
@@ -163,26 +176,27 @@ from starlette.concurrency import run_in_threadpool
 await run_in_threadpool(boto3_client.converse_stream, ...)
 ```
 
-**Why we chose aioboto3 instead:**
+**为何仍选择 aioboto3：**
 
-| Aspect | Thread Pool + boto3 | aioboto3 |
+| 方面 | 线程池 + boto3 | aioboto3 |
 |--------|---------------------|----------|
-| Event loop blocking | No (runs in thread) | No (true async) |
-| Thread consumption | One thread per concurrent request | None |
-| Complexity | Mixed sync/async patterns | Pure async |
-| Scalability | Limited by thread pool size | Scales with async event loop |
+| 事件循环阻塞 | 否，在线程运行 | 否，真正异步 |
+| 线程消耗 | 每并发请求一个线程 | 无 |
+| 复杂度 | 同步异步混合 | 纯异步 |
+| 扩展性 | 受线程池大小限制 | 随异步事件循环扩展 |
 
-For most users, the blocking from boto3 is acceptable, but aioboto3 is the correct architectural choice for an async server.
+对多数用户，boto3 阻塞可以接受，但 aioboto3 是异步服务端正确的架构选择。
 
-## Technical Appendix: SDK Client Lifecycle Details
+<a id="technical-appendix-sdk-client-lifecycle-details"></a>
+## 技术附录：SDK 客户端生命周期详情
 
-This section provides detailed code citations for each SDK's async context manager implementation.
+本节提供各 SDK 异步上下文管理器实现的详细代码引用。
 
 ### OpenAI SDK
 
-The OpenAI Python SDK wraps httpx and implements async context manager protocol.
+OpenAI Python SDK 包装 httpx，实现异步上下文管理器协议。
 
-**Context Manager Implementation:**
+**上下文管理器实现：**
 [openai-python/src/openai/_base_client.py#L1428-L1437](https://github.com/openai/openai-python/blob/d3e632171c7842abf97b26379f564531d80ad096/src/openai/_base_client.py#L1428-L1437)
 
 ```python
@@ -199,7 +213,7 @@ async def __aexit__(
     await self.close()
 ```
 
-**Close Method (releases httpx connections):**
+**关闭方法（释放 httpx 连接）：**
 [openai-python/src/openai/_base_client.py#L1421-L1426](https://github.com/openai/openai-python/blob/d3e632171c7842abf97b26379f564531d80ad096/src/openai/_base_client.py#L1421-L1426)
 
 ```python
@@ -213,9 +227,9 @@ async def close(self) -> None:
 
 ### Anthropic SDK
 
-The Anthropic SDK shares the same base client architecture as OpenAI (both use httpx).
+Anthropic SDK 与 OpenAI 共享相同基类架构，两者都使用 httpx。
 
-**Context Manager Implementation:**
+**上下文管理器实现：**
 [anthropic-sdk-python/src/anthropic/_base_client.py#L1533-L1542](https://github.com/anthropics/anthropic-sdk-python/blob/2eb941512885bdea844cb46e3f93b60ffa51973b/src/anthropic/_base_client.py#L1533-L1542)
 
 ```python
@@ -232,7 +246,7 @@ async def __aexit__(
     await self.close()
 ```
 
-**Close Method:**
+**关闭方法：**
 [anthropic-sdk-python/src/anthropic/_base_client.py#L1526-L1531](https://github.com/anthropics/anthropic-sdk-python/blob/2eb941512885bdea844cb46e3f93b60ffa51973b/src/anthropic/_base_client.py#L1526-L1531)
 
 ```python
@@ -246,9 +260,9 @@ async def close(self) -> None:
 
 ### Google GenAI SDK
 
-The Google GenAI SDK provides separate sync and async clients with explicit lifecycle methods.
+Google GenAI SDK 提供独立同步和异步客户端，并显式管理生命周期。
 
-**Async Context Manager:**
+**异步上下文管理器：**
 [python-genai/google/genai/client.py#L248-L257](https://github.com/googleapis/python-genai/blob/48f8256202a9ea3abfb7790fa80fcbf68e541131/google/genai/client.py#L248-L257)
 
 ```python
@@ -265,7 +279,7 @@ async def __aexit__(
     await self.aclose()
 ```
 
-**Async Close Method:**
+**异步关闭方法：**
 [python-genai/google/genai/client.py#L218-L246](https://github.com/googleapis/python-genai/blob/48f8256202a9ea3abfb7790fa80fcbf68e541131/google/genai/client.py#L218-L246)
 
 ```python
@@ -284,9 +298,9 @@ async def aclose(self) -> None:
 
 ### aioboto3/aiobotocore (AWS Bedrock)
 
-aioboto3 requires a fundamentally different pattern because client creation is async and involves credential resolution.
+aioboto3 的客户端创建是异步的，并涉及凭证解析，因此需要本质不同的模式。
 
-**aioboto3 Session (inherits from boto3, swaps async botocore):**
+**aioboto3 Session（继承 boto3，替换为异步 botocore）：**
 [aioboto3/aioboto3/session.py#L22-L58](https://github.com/terrycain/aioboto3/blob/37216db0083e28511c4d82931855f8af2b1b102b/aioboto3/session.py#L22-L58)
 
 ```python
@@ -303,7 +317,7 @@ class Session(boto3.session.Session):
             self._session = aiobotocore.session.get_session()
 ```
 
-**ClientCreatorContext (wraps async client creation):**
+**ClientCreatorContext（包装异步客户端创建）：**
 [aiobotocore/aiobotocore/session.py#L26-L36](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/session.py#L26-L36)
 
 ```python
@@ -320,7 +334,7 @@ class ClientCreatorContext:
         await self._client.__aexit__(exc_type, exc_val, exc_tb)
 ```
 
-**AioBaseClient Context Manager (manages HTTP session):**
+**AioBaseClient 上下文管理器（管理 HTTP 会话）：**
 [aiobotocore/aiobotocore/client.py#L639-L644](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/client.py#L639-L644)
 
 ```python
@@ -333,7 +347,7 @@ async def __aexit__(self, exc_type, exc_val, exc_tb):
     await self._endpoint.http_session.__aexit__(exc_type, exc_val, exc_tb)
 ```
 
-**HTTP Session Lifecycle (aiohttp connector cleanup):**
+**HTTP 会话生命周期（清理 aiohttp 连接器）：**
 [aiobotocore/aiobotocore/httpsession.py#L104-L115](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/httpsession.py#L104-L115)
 
 ```python
@@ -351,26 +365,28 @@ async def __aexit__(self, exc_type, exc_val, exc_tb):
     self._sessions = None
 ```
 
-### Why aioboto3 Differs from OpenAI/Anthropic
+<a id="why-aioboto3-differs-from-openaianthropic"></a>
+### aioboto3 为什么不同于 OpenAI/Anthropic
 
-| Aspect | OpenAI/Anthropic | aioboto3 |
+| 方面 | OpenAI/Anthropic | aioboto3 |
 |--------|------------------|----------|
-| Client Creation | Synchronous | Asynchronous (credential resolution, etc.) |
-| HTTP Library | httpx | aiohttp |
-| Connection Management | Internal, lazy | Explicit, via context manager |
-| Credential Handling | Static API key | Can expire (IAM roles, STS tokens) |
+| 创建客户端 | 同步 | 异步，包括凭证解析等 |
+| HTTP 库 | httpx | aiohttp |
+| 连接管理 | 内部、惰性 | 显式，通过上下文管理器 |
+| 凭证处理 | 静态 API 密钥 | 可过期，如 IAM 角色、STS token |
 
-The aioboto3 design enforces context manager usage because:
+aioboto3 强制使用上下文管理器，原因是：
 
-1. **Async client creation**: Credential resolution, endpoint discovery, and connection setup are async operations that cannot happen in `__init__`
+1. **异步创建客户端**：凭证解析、端点发现和连接建立是异步操作，不能在 `__init__` 中完成。
 
-2. **aiohttp requires explicit cleanup**: Unlike httpx which can clean up on garbage collection, aiohttp connection pools must be explicitly closed
+2. **aiohttp 需显式清理**：httpx 可在垃圾回收时清理，而 aiohttp 连接池必须显式关闭。
 
-3. **Credential refresh**: For IAM roles, fresh clients pick up refreshed credentials (see [Appendix: Credential Refresh](#appendix-aws-credential-refresh))
+3. **凭证刷新**：对于 IAM 角色，新客户端可获取刷新后的凭证，见[附录：凭证刷新](#appendix-aws-credential-refresh)。
 
-### boto3 vs aiobotocore: Code-Level Comparison
+<a id="boto3-vs-aiobotocore-code-level-comparison"></a>
+### boto3 与 aiobotocore：代码级比较
 
-**botocore (synchronous) - blocking socket read:**
+**botocore（同步）——阻塞 socket 读取：**
 [botocore/response.py#L92-L110](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/response.py#L92-L110)
 
 ```python
@@ -384,18 +400,18 @@ def read(self, amt=None):
     return chunk
 ```
 
-The `self._raw_stream.read()` call blocks the entire Python thread (and thus the asyncio event loop) until data arrives from the socket.
+`self._raw_stream.read()` 会阻塞整个 Python 线程，因此也阻塞 asyncio 事件循环，直到 socket 数据到达。
 
-**boto3 Session.client() - returns client directly:**
+**boto3 Session.client()——直接返回客户端：**
 [boto3/session.py#L337-L339](https://github.com/boto/boto3/blob/43f6f80eb6c93d085b98a6d2eba74fe498e460f5/boto3/session.py#L337-L339)
 
 ```python
 return self._session.create_client(service_name, **create_client_kwargs)
 ```
 
-boto3's `Session.client()` returns the client immediately (synchronously). The underlying `botocore.session.create_client()` creates a sync client with blocking urllib3 connections.
+boto3 的 `Session.client()` 立即同步返回客户端。底层 `botocore.session.create_client()` 创建使用阻塞 urllib3 连接的同步客户端。
 
-**aiobotocore Session.create_client() - wraps in async context manager:**
+**aiobotocore Session.create_client()——包装在异步上下文管理器中：**
 [aiobotocore/session.py#L129-L130](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/session.py#L129-L130)
 
 ```python
@@ -403,9 +419,9 @@ def create_client(self, *args, **kwargs):
     return ClientCreatorContext(self._create_client(*args, **kwargs))
 ```
 
-aiobotocore wraps the async client creation in `ClientCreatorContext`, requiring `async with` usage. The actual client creation happens asynchronously in `_create_client()` (lines 133-259), including async credential resolution.
+aiobotocore 将异步客户端创建包装在 `ClientCreatorContext` 中，要求使用 `async with`。实际创建在 `_create_client()` 中异步执行，位于 133–259 行，包括异步凭证解析。
 
-**aiobotocore (asynchronous) - non-blocking await:**
+**aiobotocore（异步）——非阻塞 await：**
 [aiobotocore/response.py#L52-L75](https://github.com/aio-libs/aiobotocore/blob/93af53a8cd8faead9747561abcff4f6631afa732/aiobotocore/response.py#L52-L75)
 
 ```python
@@ -421,7 +437,7 @@ async def read(self, amt=None):
     return chunk
 ```
 
-The `await` keyword yields control to the event loop. Under the hood, aiohttp uses asyncio futures:
+`await` 将控制权交回事件循环。底层 aiohttp 使用 asyncio future：
 
 [aiohttp/streams.py#L342-L361](https://github.com/aio-libs/aiohttp/blob/957d5ba18224b10d428f3ed7fe450ffc2c2978ca/aiohttp/streams.py#L342-L361)
 
@@ -446,15 +462,17 @@ async def read(self, n: int = -1) -> bytes:
     return self._read_nowait(n)
 ```
 
-The key difference: `await self._wait("read")` suspends the coroutine and returns control to the event loop. The future is resolved when data arrives via the socket callback, at which point the coroutine resumes. During the wait, other coroutines (handling other requests) can execute.
+关键差别：`await self._wait("read")` 挂起协程并将控制权返回事件循环。socket 回调收到数据后完成 future，协程再恢复。等待期间，处理其他请求的协程可以执行。
 
-## Appendix: AWS Credential Refresh
+<a id="appendix-aws-credential-refresh"></a>
+## 附录：AWS 凭证刷新
 
-AWS credentials come in two forms with different refresh behavior:
+AWS 凭证有两种形式，刷新行为不同：
 
-### Decision Logic
+<a id="decision-logic"></a>
+### 判断逻辑
 
-The decision is made in [`botocore/session.py#L961-L986`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/session.py#L961-L986):
+判断位于 [`botocore/session.py#L961-L986`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/session.py#L961-L986)：
 
 ```python
 if aws_access_key_id is not None and aws_secret_access_key is not None:
@@ -470,9 +488,10 @@ else:
     credentials = self.get_credentials()
 ```
 
-### Static Credentials (Explicit)
+<a id="static-credentials-explicit"></a>
+### 静态凭证（显式）
 
-When explicit credentials are passed to a session:
+向会话传入显式凭证时：
 
 ```python
 session = aioboto3.Session(
@@ -482,7 +501,7 @@ session = aioboto3.Session(
 )
 ```
 
-These use botocore's [`Credentials`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/credentials.py#L340-L355) class, which simply stores the values:
+使用 botocore 的 [`Credentials`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/credentials.py#L340-L355) 类，仅存储这些值：
 
 ```python
 class Credentials:
@@ -493,11 +512,12 @@ class Credentials:
         self.token = token
 ```
 
-**No automatic refresh occurs.** If the credentials expire, API calls will fail with `ExpiredTokenException`.
+**不会自动刷新。** 凭证过期后，API 调用以 `ExpiredTokenException` 失败。
 
-### Refreshable Credentials (IAM Roles)
+<a id="refreshable-credentials-iam-roles"></a>
+### 可刷新凭证（IAM 角色）
 
-For IAM roles (EC2 instance profiles, ECS task roles, Lambda execution roles), botocore uses [`RefreshableCredentials`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/credentials.py#L388-L439):
+对于 IAM 角色，包括 EC2 实例配置文件、ECS 任务角色和 Lambda 执行角色，botocore 使用 [`RefreshableCredentials`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/credentials.py#L388-L439)：
 
 ```python
 class RefreshableCredentials(Credentials):
@@ -509,7 +529,7 @@ class RefreshableCredentials(Credentials):
         self._mandatory_refresh_timeout = 10 * 60  # 10 min before expiry
 ```
 
-The [`_refresh()`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/credentials.py#L566-L594) method is called every time credentials are accessed:
+每次访问凭证时，都会调用 [`_refresh()`](https://github.com/boto/botocore/blob/82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26/botocore/credentials.py#L566-L594) 方法：
 
 ```python
 def _refresh(self):
@@ -524,13 +544,15 @@ def _refresh(self):
             self._refresh_lock.release()
 ```
 
-### Implications for Phoenix
+<a id="implications-for-phoenix"></a>
+### 对 Phoenix 的影响
 
-Phoenix's custom provider configs store **explicit credentials** from the database. These are static and do not auto-refresh. If users configure temporary credentials (STS tokens) that expire, they must update the stored credentials manually.
+Phoenix 自定义提供商配置存储数据库中的**显式凭证**，属于静态值，不会自动刷新。用户配置的临时 STS token 过期后，必须手动更新存储凭证。
 
-For deployments using **IAM roles** (e.g., Phoenix running on EC2/ECS with an instance profile), credentials are resolved from the environment and auto-refresh. However, our `without_env_vars("AWS_*")` isolation for custom providers means IAM role credentials are only used for **built-in providers**, not custom configs.
+使用 **IAM 角色**的部署，例如在 EC2/ECS 上使用实例配置文件运行 Phoenix，从环境解析凭证并自动刷新。但自定义提供商的 `without_env_vars("AWS_*")` 隔离意味着 IAM 角色凭证仅用于**内置提供商**，不用于自定义配置。
 
-## References
+<a id="references"></a>
+## 参考资料
 
 - [boto3](https://github.com/boto/boto3) @ `43f6f80eb6c93d085b98a6d2eba74fe498e460f5`
 - [botocore](https://github.com/boto/botocore) @ `82f7c427d516c22db1c7cf5c6cf3d48ad2e50e26`

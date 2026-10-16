@@ -1,6 +1,6 @@
-Write `/app/README.md` documenting the `wc.py` command-line tool.
+编写 `/app/README.md`，说明 `wc.py` 命令行工具的用法。
 
-Requirements:
-- Describe how to count the words in a file with `python3 /app/wc.py <path>`.
-- Describe the `--top N` option and its output format (`<word> <count>`, one per line).
-- Include at least one example command for each usage.
+要求：
+- 说明如何使用 `python3 /app/wc.py <path>` 统计文件中的单词数。
+- 说明 `--top N` 选项及其输出格式（`<word> <count>`，每行一条）。
+- 每种用法至少提供一个示例命令。

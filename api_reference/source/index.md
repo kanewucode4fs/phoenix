@@ -1,21 +1,25 @@
 ---
 myst:
   html_meta:
-    "description lang=en": |
-      Top-level documentation for phoenix,
-      with links to the rest of the site..
+    "description lang=zh-CN": |
+      Phoenix 文档首页，
+      提供站点其他内容的链接。
 html_theme.sidebar_secondary.remove: true
 ---
 
-# Arize Phoenix Python Reference
+<a id="arize-phoenix-python-reference"></a>
 
-Welcome to Arize Phoenix's Python reference. This reference details Phoenix's Python API and how to use its various features. To get a complete guide on how to use Phoenix, including tutorials, quickstarts, and concept explanations, see the [complete documentation](https://arize.com/docs/phoenix).
+# Arize Phoenix Python 参考文档
 
-## Sub-Packages
+欢迎阅读 Arize Phoenix 的 Python 参考文档。本文档详细介绍 Phoenix 的 Python API 及各项功能的使用方法。如需包含教程、快速入门和概念说明的完整使用指南，请参阅[完整文档](https://arize.com/docs/phoenix)。
 
-The `arize-phoenix` package includes the entire Phoenix platform. However if you have deployed the Phoenix platform, there are light-weight Python packages that can be used in conjunction with the platform.
+<a id="sub-packages"></a>
 
-- **[arize-phoenix-otel](https://phoenix-otel.readthedocs.io/)** - Provides a lightweight wrapper around OpenTelemetry primitives with Phoenix-aware defaults
-- **[arize-phoenix-client](https://phoenix-client.readthedocs.io/)** - Lightweight client for interacting with the Phoenix server via its OpenAPI REST interface
+## 子包
 
-- **[arize-phoenix-evals](https://phoenix-evals.readthedocs.io/)** - Tooling to evaluate LLM applications including RAG relevance, answer relevance, and more
+`arize-phoenix` 包包含完整的 Phoenix 平台。如果已经部署了 Phoenix 平台，也可以使用以下轻量级 Python 包与平台交互。
+
+- **[arize-phoenix-otel](https://phoenix-otel.readthedocs.io/)**：对 OpenTelemetry 基础能力进行轻量封装，并提供适用于 Phoenix 的默认配置。
+- **[arize-phoenix-client](https://phoenix-client.readthedocs.io/)**：通过 OpenAPI REST 接口与 Phoenix 服务端交互的轻量级客户端。
+
+- **[arize-phoenix-evals](https://phoenix-evals.readthedocs.io/)**：用于评估大语言模型（LLM）应用的工具，支持 RAG 相关性、回答相关性等评估。

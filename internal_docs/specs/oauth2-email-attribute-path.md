@@ -1,59 +1,65 @@
-# OAuth2/OIDC Email Attribute Path Configuration
+<a id="oauth2oidc-email-attribute-path-configuration"></a>
+# OAuth2/OIDC 邮箱属性路径配置
 
-## Problem Statement
+<a id="problem-statement"></a>
+## 问题说明
 
-When using Microsoft Entra ID (Azure AD) as an OAuth2 identity provider, Phoenix requires the `email` claim to be present in the ID token. However, Entra ID users might not have the `mail` attribute populated in their directory.
+使用 Microsoft Entra ID（Azure AD）作为 OAuth2 身份提供商时，Phoenix 要求 ID token 包含 `email` 声明。但 Entra ID 用户目录中可能未填充 `mail` 属性。
 
-Even with the `email` optional claim configured in the Entra ID app registration, if the user's `mail` attribute is empty, the `email` claim will not be included in the token.
+即使应用注册配置了可选 `email` 声明，用户 `mail` 为空时，token 仍不会包含 `email`。
 
-**Current Error:**
+**当前错误:**
 > "Missing or invalid 'email' claim. Please ensure your OIDC provider is configured to include the 'email' scope."
 
-**GitHub Issue:** https://github.com/Arize-ai/phoenix/issues/11065
+**GitHub 问题:** https://github.com/Arize-ai/phoenix/issues/11065
 
 ---
 
-## Table of Contents
+<a id="table-of-contents"></a>
+## 目录
 
-1. [Problem Statement](#problem-statement)
-2. [Background](#background)
-3. [Design Decision](#design-decision)
-4. [Solution](#solution)
-5. [Implementation Plan](#implementation-plan)
-6. [Testing Plan](#testing-plan)
-7. [Operational Considerations](#operational-considerations)
-8. [Known Limitations](#known-limitations)
-9. [Future Considerations](#future-considerations)
-10. [Summary](#summary)
-11. [References](#references)
+1. [问题说明](#problem-statement)
+2. [背景](#background)
+3. [设计决策](#design-decision)
+4. [解决方案](#solution)
+5. [实施计划](#implementation-plan)
+6. [测试计划](#testing-plan)
+7. [运维考虑](#operational-considerations)
+8. [已知限制](#known-limitations)
+9. [未来考虑](#future-considerations)
+10. [汇总](#summary)
+11. [参考资料](#references)
 
 ---
 
-## Background
+<a id="background"></a>
+## 背景
 
-### Azure AD Claim Analysis
+<a id="azure-ad-claim-analysis"></a>
+### Azure AD 声明分析
 
-| Claim | Description | Unique? | Email Format? | Availability |
+| 声明 | 说明 | 唯一？ | 邮箱格式？ | 可用性 |
 |-------|-------------|---------|---------------|--------------|
-| `sub` | OIDC subject identifier (UUID) | ✅ Globally | ❌ | ✅ Always |
-| `email` | User's email address | ❌ | ✅ | ❌ May be null |
-| `preferred_username` | User's login identifier | ✅ Per tenant | ⚠️ Not guaranteed | ⚠️ v2.0 + `profile` scope |
-| `upn` | User Principal Name | ✅ Per tenant | ✅ Always `user@domain` | ⚠️ v2.0 optional claim |
-| `name` | Display name | ❌ | ❌ | ⚠️ `profile` scope |
+| `sub` | OIDC 主体标识符（UUID） | ✅ 全局 | ❌ | ✅ 始终 |
+| `email` | 用户邮箱 | ❌ | ✅ | ❌ 可能为空 |
+| `preferred_username` | 登录标识符 | ✅ 租户内 | ⚠️ 不保证 | ⚠️ v2.0 + `profile` scope |
+| `upn` | 用户主体名称 | ✅ 租户内 | ✅ 始终为 `user@domain` | ⚠️ v2.0 可选声明 |
+| `name` | 显示名称 | ❌ | ❌ | ⚠️ `profile` scope |
 
-**Key facts:**
+**关键事实：**
 
-- **`preferred_username` and `upn` are different claims.** Per [Microsoft docs](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference), `preferred_username` "could be an email address, phone number, or a generic username without a specified format."
-- **For Azure AD specifically**, `preferred_username` typically contains the UPN value (which is email-formatted), but this is not guaranteed by the OIDC spec.
-- **UPN is always email-formatted** because Azure AD requires the UPN suffix to be a valid, verified domain (RFC 822 compliant). See [Microsoft Entra UserPrincipalName population](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/plan-connect-userprincipalname).
-- **`upn` in v2.0 tokens** is an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference) that must be explicitly configured in Token Configuration.
-- **`preferred_username` availability**: Present by default in v2.0 tokens when requesting the `profile` scope. See [Microsoft ID token claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference).
+- **`preferred_username` 与 `upn` 是不同声明。** 根据 [Microsoft 文档](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference)，`preferred_username` 可能为邮箱、电话或无固定格式的通用用户名。
+- **具体到 Azure AD**，`preferred_username` 通常包含邮箱格式的 UPN，但 OIDC 不保证。
+- **UPN 始终为邮箱格式**，因为 Azure AD 要求后缀是有效、已验证且符合 RFC 822 的域，见 [Microsoft Entra UserPrincipalName 填充](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/plan-connect-userprincipalname)。
+- **v2.0 token 中的 `upn`** 是[可选声明](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)，必须在 Token Configuration 显式配置。
+- **`preferred_username` 可用性**：请求 `profile` scope 时，v2.0 token 默认包含，见 [Microsoft ID token 声明参考](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference)。
 
-### Grafana's Approach
+<a id="grafanas-approach"></a>
+### Grafana 的方案
 
-Grafana handles this scenario in two ways:
+Grafana 通过两种方式处理：
 
-1. **Azure AD Connector** — Hardcoded fallback to `preferred_username`:
+1. **Azure AD 连接器**：硬编码回退到 `preferred_username`：
    ```go
    func (claims *azureClaims) extractEmail() string {
        if claims.Email == "" {
@@ -65,18 +71,20 @@ Grafana handles this scenario in two ways:
    }
    ```
 
-2. **Generic OAuth** — Configurable JMESPath:
-   - `email_attribute_path` — JMESPath expression to extract email
-   - `email_attribute_name` — Key name in Attributes map
-   - Automatic fallback to parse `upn` as email
+2. **通用 OAuth**：可配置 JMESPath：
+   - `email_attribute_path`：提取邮箱的 JMESPath 表达式。
+   - `email_attribute_name`：Attributes 映射键名。
+   - 自动回退，将 `upn` 解析为邮箱。
 
 ---
 
-## Design Decision
+<a id="design-decision"></a>
+## 设计决策
 
-### Approaches Considered and Rejected
+<a id="approaches-considered-and-rejected"></a>
+### 考虑过但拒绝的方案
 
-**1. Automatic Fallback Chain**
+**1. 自动回退链**
 
 ```python
 # Rejected
@@ -86,47 +94,50 @@ for claim in ["email", "preferred_username", "upn"]:
         return value
 ```
 
-**Problems:**
-- Hardcodes Azure AD knowledge into Phoenix
-- Phoenix can't reliably detect Azure AD (IDP name is user-defined)
-- Creates implicit, unexpected behavior for other IDPs
+**问题：**
+- 将 Azure AD 知识硬编码进 Phoenix。
+- IDP 名由用户定义，Phoenix 无法可靠检测 Azure AD。
+- 为其他 IDP 引入隐式、意外行为。
 
-**2. Separate Database Column for User Identifier**
+**2. 为用户标识符增加独立数据库列**
 
-| Entity | Example (Azure AD) | Current Column |
+| 实体 | 示例（Azure AD） | 当前列 |
 |--------|-------------------|----------------|
-| Subject ID | `abc123-uuid-...` | `oauth2_user_id` ✅ |
-| Login Identifier | `john.doe@company.onmicrosoft.com` (UPN) | **nowhere** |
-| Display Name | `John Doe` | `username` ✅ |
-| Contact Email | `john.doe@company.com` (might be null) | `email` |
+| 主体 ID | `abc123-uuid-...` | `oauth2_user_id` ✅ |
+| 登录标识符 | `john.doe@company.onmicrosoft.com`（UPN） | **无** |
+| 显示名称 | `John Doe` | `username` ✅ |
+| 联系邮箱 | `john.doe@company.com`，可能为空 | `email` |
 
-**Problem:** Adding a new column requires database migration.
+**问题：** 新增列需要数据库迁移。
 
-**3. Allow Null Email (Like LDAP)**
+**3. 像 LDAP 一样允许空邮箱**
 
-LDAP supports optional email when `PHOENIX_LDAP_ATTR_EMAIL` is empty, but this disables admin provisioning. Enterprise environments often need admin pre-provisioning.
+`PHOENIX_LDAP_ATTR_EMAIL` 为空时，LDAP 支持可选邮箱，但会禁用管理员预配置。企业通常需要管理员预创建用户。
 
-### Chosen Approach: Configurable JMESPath Extraction
+<a id="chosen-approach-configurable-jmespath-extraction"></a>
+### 选定方案：可配置 JMESPath 提取
 
-**Core justification:** Phoenix does not validate email format for OAuth2 users. The `email` column only requires:
-1. Non-empty string
-2. Unique value
-3. Sanitization (trim + lowercase)
+**核心理由：** Phoenix 不验证 OAuth2 用户邮箱格式，`email` 列仅要求：
+1. 非空字符串。
+2. 唯一值。
+3. 清理，即去除首尾空白并转小写。
 
-Phoenix already accepts whatever the IDP provides. We're changing *which claim* to trust, not *how* we validate it.
+Phoenix 原本接受 IDP 提供的任意值，改变的是信任**哪个声明**，而非**如何验证**。
 
-**Why this works for Azure AD:**
-1. `preferred_username` is non-empty and unique — satisfies column constraints
-2. For Azure AD, it typically contains the UPN — which is email-formatted
-3. Consistent with existing patterns (`GROUPS_ATTRIBUTE_PATH`, `ROLE_ATTRIBUTE_PATH`)
+**为何适用于 Azure AD：**
+1. `preferred_username` 非空且唯一，满足列约束。
+2. 通常包含邮箱格式的 UPN。
+3. 与现有 `GROUPS_ATTRIBUTE_PATH`、`ROLE_ATTRIBUTE_PATH` 模式一致。
 
-**Note on backward compatibility:** Adding email format validation now would be a breaking change. Existing OAuth2 users might already have non-email values stored. This feature respects the existing contract.
+**向后兼容说明：** 现在添加邮箱格式验证会破坏兼容性，已有 OAuth2 用户可能存有非邮箱值。本功能遵守现有契约。
 
 ---
 
-## Solution
+<a id="solution"></a>
+## 解决方案
 
-### Configuration
+<a id="configuration"></a>
+### 配置
 
 ```bash
 # JMESPath expression to extract email from claims
@@ -134,32 +145,35 @@ Phoenix already accepts whatever the IDP provides. We're changing *which claim* 
 PHOENIX_OAUTH2_{IDP}_EMAIL_ATTRIBUTE_PATH=preferred_username
 ```
 
-### Recommended Configuration for Azure AD
+<a id="recommended-configuration-for-azure-ad"></a>
+### Azure AD 推荐配置
 
-**TL;DR:** Use `preferred_username`. It requires no Azure AD configuration changes.
+**建议：** 使用 `preferred_username`，无需修改 Azure AD 配置。
 
-| Claim | Phoenix Config | Azure AD Config Required |
+| 声明 | Phoenix 配置 | Azure AD 所需配置 |
 |-------|----------------|-------------------------|
-| `preferred_username` | `EMAIL_ATTRIBUTE_PATH=preferred_username` | ✅ None — available by default in v2.0 tokens with `profile` scope |
-| `upn` | `EMAIL_ATTRIBUTE_PATH=upn` | ❌ Must add as optional claim in Azure Portal → Token Configuration |
+| `preferred_username` | `EMAIL_ATTRIBUTE_PATH=preferred_username` | ✅ 无，v2.0 token 的 `profile` scope 默认提供 |
+| `upn` | `EMAIL_ATTRIBUTE_PATH=upn` | ❌ 必须在 Azure Portal → Token Configuration 添加可选声明 |
 
-**Prerequisites for `preferred_username`:**
-- Phoenix already requests `openid email profile` by default
-- The `profile` scope includes `preferred_username` in v2.0 tokens
-- No scope or Azure configuration change required
+**`preferred_username` 前提：**
+- Phoenix 默认已请求 `openid email profile`。
+- v2.0 token 的 `profile` scope 包含 `preferred_username`。
+- 无需修改 scope 或 Azure 配置。
 
-**Edge case:** If `preferred_username` is not in email format (e.g., phone number or plain username), it will still be stored since Phoenix does not validate email format. The `mailto:` link may malfunction, but login works.
+**边界情况：** `preferred_username` 不是邮箱格式，如电话或普通用户名，也会存储，因为 Phoenix 不验证邮箱格式。`mailto:` 可能异常，但登录有效。
 
-### Behavior
+<a id="behavior"></a>
+### 行为
 
-| Configuration | Claim Used | Notes |
+| 配置 | 使用声明 | 说明 |
 |--------------|------------|-------|
-| Not set (default) | `email` | Standard OIDC behavior |
-| `=preferred_username` | `preferred_username` | **Recommended for Azure AD** |
-| `=upn` | `upn` | Requires Azure AD optional claim config |
-| `=some.nested.path` | JMESPath result | For custom claims |
+| 未设置，默认 | `email` | 标准 OIDC 行为 |
+| `=preferred_username` | `preferred_username` | **Azure AD 推荐** |
+| `=upn` | `upn` | 需配置 Azure AD 可选声明 |
+| `=some.nested.path` | JMESPath 结果 | 用于自定义声明 |
 
-### Extraction Logic
+<a id="extraction-logic"></a>
+### 提取逻辑
 
 ```python
 import jmespath
@@ -187,19 +201,21 @@ def extract_email(user_claims: dict, email_attribute_path: str) -> str | None:
     return None
 ```
 
-### Case Sensitivity
+<a id="case-sensitivity"></a>
+### 大小写敏感性
 
-**Path is case-sensitive:** JMESPath claim names must match exactly. `preferred_username` works, but `Preferred_Username` or `preferredUsername` will not.
+**路径区分大小写：** JMESPath 声明名必须完全一致。`preferred_username` 有效，`Preferred_Username`、`preferredUsername` 无效。
 
-**Values are lowercased:** All extracted values go through `sanitize_email()` which lowercases them. This is existing behavior for all email values in Phoenix.
+**值转小写：** 所有值通过 `sanitize_email()` 转小写，这是 Phoenix 处理全部邮箱值的现有行为。
 
-**Why lowercasing is safe:** Azure AD enforces UPN uniqueness case-insensitively. Two users cannot exist with UPNs `User@Domain.com` and `user@domain.com`. See [LDAP String Syntax](https://learn.microsoft.com/en-us/windows/win32/adschema/a-userprincipalname).
+**为何安全：** Azure AD 按忽略大小写的方式保证 UPN 唯一，不能同时存在 UPN 为 `User@Domain.com` 和 `user@domain.com` 的用户，见 [LDAP 字符串语法](https://learn.microsoft.com/en-us/windows/win32/adschema/a-userprincipalname)。
 
-**Admin provisioning works:** Admin can provision with `John.Doe@Company.com` and IDP can return `john.doe@company.com` — they match because both are lowercased before comparison.
+**管理员预配置可用：** 管理员使用 `John.Doe@Company.com`，IDP 返回 `john.doe@company.com`，比较前都转小写，能够匹配。
 
-### Error Handling
+<a id="error-handling"></a>
+### 错误处理
 
-If extraction returns `None`, raise `MissingEmailScope` with the configured path in the message:
+提取返回 `None` 时，抛出 `MissingEmailScope`，消息包含配置路径：
 
 ```python
 email = extract_email(user_claims, config.email_attribute_path)
@@ -214,11 +230,13 @@ if not email:
 
 ---
 
-## Implementation Plan
+<a id="implementation-plan"></a>
+## 实施计划
 
-### Phase 1: Add Configuration
+<a id="phase-1-add-configuration"></a>
+### 阶段 1：添加配置
 
-**File:** `src/phoenix/config.py`
+**文件：** `src/phoenix/config.py`
 
 ```python
 @dataclass
@@ -235,7 +253,7 @@ class OAuth2ClientConfig:
     """
 ```
 
-Environment variable parsing:
+环境变量解析：
 
 ```python
 email_attribute_path = getenv(
@@ -244,9 +262,10 @@ email_attribute_path = getenv(
 )
 ```
 
-### Phase 2: Update Extraction Logic
+<a id="phase-2-update-extraction-logic"></a>
+### 阶段 2：更新提取逻辑
 
-**File:** `src/phoenix/server/api/routers/oauth2.py`
+**文件：** `src/phoenix/server/api/routers/oauth2.py`
 
 ```python
 def _parse_user_info(
@@ -268,9 +287,10 @@ def _parse_user_info(
     # ... rest unchanged ...
 ```
 
-### Phase 3: Pass Configuration Through
+<a id="phase-3-pass-configuration-through"></a>
+### 阶段 3：传递配置
 
-**File:** `src/phoenix/server/api/routers/oauth2.py`
+**文件：** `src/phoenix/server/api/routers/oauth2.py`
 
 ```python
 user_info = _parse_user_info(
@@ -279,96 +299,107 @@ user_info = _parse_user_info(
 )
 ```
 
-### Phase 4: JMESPath Dependency
+<a id="phase-4-jmespath-dependency"></a>
+### 阶段 4：JMESPath 依赖
 
-JMESPath is already a dependency — used in `src/phoenix/server/oauth2.py` for `GROUPS_ATTRIBUTE_PATH` and `ROLE_ATTRIBUTE_PATH`. No changes needed.
+JMESPath 已为现有依赖，在 `src/phoenix/server/oauth2.py` 中用于 `GROUPS_ATTRIBUTE_PATH` 和 `ROLE_ATTRIBUTE_PATH`，无需改动。
 
-### Phase 5: Update Documentation
+<a id="phase-5-update-documentation"></a>
+### 阶段 5：更新文档
 
-**Files:**
-- `docs/` — Add configuration example for Azure AD
-- Error messages — Include configuration hint
+**文件：**
+- `docs/`：添加 Azure AD 配置示例。
+- 错误消息：包含配置提示。
 
-**Key points to document:**
-1. Values are **lowercased** before storage (existing behavior)
-2. Admin provisioning is case-insensitive
-3. Not a breaking change — all OAuth2 emails already lowercased via `sanitize_email()`
-
----
-
-## Testing Plan
-
-### Unit Tests
-
-1. **Default behavior** — `email_attribute_path=None` uses `email` claim
-2. **Custom path** — `email_attribute_path="preferred_username"` extracts correctly
-3. **Nested path** — `email_attribute_path="attributes.email"` works with JMESPath
-4. **Missing claim** — Raises `MissingEmailScope` with helpful message
-5. **Empty value** — Empty string treated as missing
-6. **Case handling** — Extracted values are lowercased
-
-### Integration Tests
-
-1. **Azure AD simulation** — Claims with `preferred_username` but no `email`
-2. **Admin provisioning** — User provisioned by UPN, matched on login
-3. **Standard IDP** — Default behavior unchanged
+**文档要点：**
+1. 值存储前转**小写**，为现有行为。
+2. 管理员预配置不区分大小写。
+3. 无破坏性变更，全部 OAuth2 邮箱原本已通过 `sanitize_email()` 转小写。
 
 ---
 
-## Operational Considerations
+<a id="testing-plan"></a>
+## 测试计划
 
-### Admin Provisioning
+<a id="unit-tests"></a>
+### 单元测试
 
-Admins typically know users' UPNs because UPN is the login username. When using `EMAIL_ATTRIBUTE_PATH=preferred_username`:
+1. **默认行为**：`email_attribute_path=None` 使用 `email`。
+2. **自定义路径**：`email_attribute_path="preferred_username"` 正确提取。
+3. **嵌套路径**：`email_attribute_path="attributes.email"` 支持 JMESPath。
+4. **声明缺失**：抛出带有用消息的 `MissingEmailScope`。
+5. **空值**：空串视为缺失。
+6. **大小写**：提取值转小写。
 
-- Admin provisions users using their UPN (e.g., `john.doe@company.onmicrosoft.com`)
-- On first login, user is matched by email (before `oauth2_user_id` is set)
-- Subsequent logins match by `sub` claim (stored in `oauth2_user_id`)
+<a id="integration-tests"></a>
+### 集成测试
 
-**Important:** Admin must provision using the exact value the IDP returns. If admin provisions with `user@company.com` but IDP returns `user@company.onmicrosoft.com`, first login won't match.
+1. **模拟 Azure AD**：包含 `preferred_username`，没有 `email`。
+2. **管理员预配置**：按 UPN 创建，登录时匹配。
+3. **标准 IDP**：默认行为不变。
 
-### Email Routing (SMTP)
+---
 
-UPN is an identity identifier, not a guaranteed contact address:
+<a id="operational-considerations"></a>
+## 运维考虑
 
-- `user@company.onmicrosoft.com` — May or may not have a mailbox
-- `user@company.com` — Only works if mailboxes are configured
+<a id="admin-provisioning"></a>
+### 管理员预配置
 
-**Impact:**
-- `mailto:` links in Phoenix UI may not work
-- Emails sent to non-routable UPNs will bounce
-- This is no different from the current state where `email` claim could contain a non-deliverable address
+管理员通常知道用户 UPN，因为它就是登录名。使用 `EMAIL_ATTRIBUTE_PATH=preferred_username` 时：
 
-### UPN Changes in Azure AD
+- 使用 UPN 预创建用户，例如 `john.doe@company.onmicrosoft.com`。
+- 首次登录按邮箱匹配，此时 `oauth2_user_id` 尚未设置。
+- 后续按 `sub` 匹配，存于 `oauth2_user_id`。
 
-If a user's UPN changes in Azure AD (name change, domain migration):
-- **After first login:** User is matched by `sub` (stored in `oauth2_user_id`) — no issue
-- **Admin-provisioned users who haven't logged in yet:** Could fail to match on first login if provisioned with old UPN
+**重要：** 必须使用 IDP 返回的精确值。以 `user@company.com` 创建而 IDP 返回 `user@company.onmicrosoft.com` 时，首次登录无法匹配。
 
-This is mitigated because `oauth2_user_id` (the `sub` claim) is stable and used for matching after the first successful login.
+<a id="email-routing-smtp"></a>
+### 邮件路由（SMTP）
 
-### Changing Configuration for Existing Deployments
+UPN 是身份标识，不保证为联系地址：
 
-If `EMAIL_ATTRIBUTE_PATH` is changed after users exist:
-- Existing users are matched by `sub` (stored in `oauth2_user_id`) on next login
-- Their `email` column is updated to the new extracted value
-- No data loss, but the displayed email value changes
+- `user@company.onmicrosoft.com`：可能有邮箱，也可能没有。
+- `user@company.com`：仅配置邮箱后可用。
 
-**Email uniqueness collision:** If the new extracted value collides with another user's email:
-- The code catches the `IntegrityError` and raises `EmailAlreadyInUse`
-- Login fails with error "An account for {email} is already in use"
-- Admin must resolve the conflict (delete or update the conflicting user record)
+**影响：**
+- Phoenix 界面的 `mailto:` 可能无效。
+- 发往不可路由 UPN 的邮件会退信。
+- 与现有 `email` 可能包含不可投递地址的情况无异。
 
-### Rollback Scenario (Critical Limitation)
+<a id="upn-changes-in-azure-ad"></a>
+### Azure AD 中 UPN 变化
 
-**Scenario:**
-1. Admin deploys with `EMAIL_ATTRIBUTE_PATH=preferred_username`
-2. Users log in, their `oauth2_user_id` is set, email column contains UPNs
-3. Admin rolls back config (removes `EMAIL_ATTRIBUTE_PATH`, defaults to `email`)
-4. User logs in again
-5. **User is locked out**
+因改名或域迁移修改 UPN 时：
+- **首次登录之后：** 按存于 `oauth2_user_id` 的 `sub` 匹配，无问题。
+- **尚未登录的管理员预创建用户：** 使用旧 UPN 创建时，首次可能无法匹配。
 
-**Why this happens:** The current OAuth2 flow parses user info (including email extraction) **before** user lookup:
+`oauth2_user_id`，即 `sub`，稳定且在首次成功登录后用于匹配，因此可缓解风险。
+
+<a id="changing-configuration-for-existing-deployments"></a>
+### 修改已有部署配置
+
+用户已存在后更改 `EMAIL_ATTRIBUTE_PATH`：
+- 下次按存于 `oauth2_user_id` 的 `sub` 匹配。
+- `email` 更新为新提取值。
+- 无数据丢失，但显示邮箱变化。
+
+**邮箱唯一性冲突：** 新值与其他用户邮箱冲突时：
+- 捕获 `IntegrityError` 并抛出 `EmailAlreadyInUse`。
+- 登录失败，提示 "An account for {email} is already in use"。
+- 管理员需删除或更新冲突记录。
+
+<a id="rollback-scenario-critical-limitation"></a>
+### 回滚场景（严重限制）
+
+**场景：**
+1. 使用 `EMAIL_ATTRIBUTE_PATH=preferred_username` 部署。
+2. 用户登录，设置 `oauth2_user_id`，邮箱列保存 UPN。
+3. 回滚配置，移除 `EMAIL_ATTRIBUTE_PATH`，默认使用 `email`。
+4. 用户再次登录。
+5. **用户无法登录。**
+
+**原因：** 当前流程在查找用户**之前**解析用户信息，包括提取邮箱：
 
 ```python
 # Current flow in oauth2.py
@@ -376,112 +407,124 @@ user_info = _parse_user_info(user_claims)  # ← Fails here if email claim is nu
 # Never reaches user lookup by oauth2_user_id
 ```
 
-If email extraction fails, `MissingEmailScope` is raised before we can match the user by `oauth2_user_id`.
+邮箱提取失败时，尚未按 `oauth2_user_id` 匹配，就抛出 `MissingEmailScope`。
 
-**Workarounds:**
-1. **Don't roll back** if the `email` claim is still null — that's the whole reason for the config
-2. **Fix the IDP** to populate the `email` claim before rolling back
-3. **Manual database update** — set users' email back to their real email (if known)
+**替代方法：**
+1. `email` 仍为空时**不要回滚**，这是配置存在的原因。
+2. 回滚前**修复 IDP**，填充 `email`。
+3. **手动更新数据库**，若已知真实邮箱，将用户邮箱改回。
 
-**Future consideration:** The flow could be changed to attempt `oauth2_user_id` lookup first, only requiring email extraction for new users. This would make the config change more reversible.
+**未来考虑：** 先按 `oauth2_user_id` 查找，仅新用户要求提取邮箱，使配置变更更可逆。
 
-### Per-IDP Configuration
+<a id="per-idp-configuration"></a>
+### 按 IDP 配置
 
-Each IDP can have different settings:
+各 IDP 可采用不同设置：
 
 ```bash
 PHOENIX_OAUTH2_GOOGLE_EMAIL_ATTRIBUTE_PATH=email          # default
 PHOENIX_OAUTH2_AZURE_AD_EMAIL_ATTRIBUTE_PATH=preferred_username  # custom
 ```
 
-### Azure AD v1.0 Endpoints
+<a id="azure-ad-v10-endpoints"></a>
+### Azure AD v1.0 端点
 
-Microsoft Entra ID has two OIDC endpoint versions:
-- v1.0: `https://login.microsoftonline.com/{tenant}/oauth2/authorize`
-- v2.0: `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize`
+Microsoft Entra ID 有两版 OIDC 端点：
+- v1.0：`https://login.microsoftonline.com/{tenant}/oauth2/authorize`
+- v2.0：`https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize`
 
-If using v1.0 (no `/v2.0/` in the URL):
-- `preferred_username` is not available by default
-- Options:
-  1. Add `preferred_username` as optional claim in Azure Portal
-  2. Use `upn` instead (also requires optional claim configuration)
-  3. Migrate to v2.0 endpoints (recommended by Microsoft)
-
----
-
-## Known Limitations
-
-### Critical
-
-1. **Configuration rollback locks out users** — If you enable `EMAIL_ATTRIBUTE_PATH`, users log in, then roll back the config while `email` claim is still null, users are locked out. See [Rollback Scenario](#rollback-scenario-critical-limitation) for details.
-
-2. **Email collision on config change** — If the new extracted value matches another user's email, login fails with "An account for {email} is already in use." Admin must manually resolve the conflict.
-
-### Semantic
-
-3. **Column named `email` may contain non-email values** — The column is effectively a "user identifier" field. Future developers might assume email format.
-
-4. **UI label says "Email"** — Users see their UPN in a field labeled "Email" which may be confusing.
-
-### Integration
-
-5. **External integrations may break** — If Phoenix user data is exported to systems expecting valid email addresses, those integrations might fail validation.
-
-### Configuration
-
-6. **JMESPath misconfiguration** — Typos or wrong syntax fail silently (treated as missing claim). Error messages should clarify which path was attempted.
-
-7. **JMESPath returns non-string** — Arrays, objects, or non-string values are treated as missing.
+使用 v1.0，即 URL 不含 `/v2.0/` 时：
+- 默认不提供 `preferred_username`。
+- 可选方案：
+  1. 在 Azure Portal 添加 `preferred_username` 可选声明。
+  2. 改用 `upn`，也需可选声明配置。
+  3. 迁移到 Microsoft 推荐的 v2.0 端点。
 
 ---
 
-## Future Considerations
+<a id="known-limitations"></a>
+## 已知限制
 
-### `EMAIL_ATTRIBUTE_PATH=null` (Optional Email)
+<a id="critical"></a>
+### 严重限制
 
-For IDPs with no email-like claim at all:
+1. **配置回滚导致无法登录**：启用 `EMAIL_ATTRIBUTE_PATH` 并有用户登录后，在 `email` 仍为空时回滚会锁住用户。见[回滚场景](#rollback-scenario-critical-limitation)。
+
+2. **配置变化引发邮箱冲突**：新值与其他用户邮箱相同，登录报错 "An account for {email} is already in use."，需管理员手动解决。
+
+<a id="semantic"></a>
+### 语义
+
+3. **`email` 列可能存非邮箱值**：实际为用户标识字段，后续开发者可能误以为是邮箱格式。
+
+4. **界面标签为 Email**：用户在 Email 字段看到 UPN，可能困惑。
+
+<a id="integration"></a>
+### 集成
+
+5. **外部集成可能失效**：导出到要求有效邮箱的系统时，可能验证失败。
+
+<a id="configuration"></a>
+### 配置
+
+6. **JMESPath 配置错误**：拼写或语法错误静默失败，视为缺失声明。错误应明确尝试的路径。
+
+7. **JMESPath 返回非字符串**：数组、对象等非字符串值视为缺失。
+
+---
+
+<a id="future-considerations"></a>
+## 未来考虑
+
+<a id="email_attribute_pathnull-optional-email"></a>
+### `EMAIL_ATTRIBUTE_PATH=null`（可选邮箱）
+
+对于完全没有类邮箱声明的 IDP：
 
 ```bash
 PHOENIX_OAUTH2_{IDP}_EMAIL_ATTRIBUTE_PATH=null
 ```
 
-**Behavior:**
-- Generate null email marker (reuse LDAP infrastructure)
-- Require `ALLOW_SIGN_UP=True` (disable admin provisioning)
-- User matched by `sub` (`oauth2_user_id`) only
+**行为：**
+- 复用 LDAP 基础设施，生成空邮箱标记。
+- 要求 `ALLOW_SIGN_UP=True`，禁用管理员预配置。
+- 仅按 `sub`（`oauth2_user_id`）匹配。
 
-**Why deferred:** The original issue (#11065) is Azure AD where UPN is always available. `EMAIL_ATTRIBUTE_PATH=preferred_username` solves it. `=null` is for rarer edge cases.
+**为何暂缓：** 原问题 #11065 针对始终有 UPN 的 Azure AD，`EMAIL_ATTRIBUTE_PATH=preferred_username` 已解决。`=null` 用于更少见边界情况。
 
-### Username Attribute Path
+<a id="username-attribute-path"></a>
+### 用户名属性路径
 
-`USERNAME_ATTRIBUTE_PATH` was considered but deferred:
-- Current `name` claim extraction works for most cases
-- Username collision handling already exists (random suffix)
-- Can be added if demand emerges
+曾考虑 `USERNAME_ATTRIBUTE_PATH`，但暂缓：
+- 当前 `name` 提取适合多数场景。
+- 已有用户名冲突处理，采用随机后缀。
+- 出现需求时再加。
 
 ---
 
-## Summary
+<a id="summary"></a>
+## 汇总
 
-| Aspect | Decision |
+| 方面 | 决定 |
 |--------|----------|
-| **Approach** | Configurable JMESPath extraction |
-| **Configuration** | `PHOENIX_OAUTH2_{IDP}_EMAIL_ATTRIBUTE_PATH` |
-| **Default** | `"email"` (OIDC standard, backward compatible) |
-| **Azure AD solution** | Set to `preferred_username` (no Azure config needed) |
-| **Value processing** | Lowercased via `sanitize_email()` (existing behavior) |
-| **Validation** | None (OAuth2 emails not format-validated) |
-| **Admin provisioning** | Works (UPN is unique per tenant) |
-| **Complexity** | Low — follows existing `GROUPS_ATTRIBUTE_PATH` pattern |
+| **方案** | 可配置 JMESPath 提取 |
+| **配置** | `PHOENIX_OAUTH2_{IDP}_EMAIL_ATTRIBUTE_PATH` |
+| **默认** | `"email"`，OIDC 标准、向后兼容 |
+| **Azure AD 方案** | 设为 `preferred_username`，无需 Azure 配置 |
+| **值处理** | `sanitize_email()` 转小写，现有行为 |
+| **验证** | 无，OAuth2 邮箱不验证格式 |
+| **管理员预配置** | 可用，UPN 租户内唯一 |
+| **复杂度** | 低，沿用 `GROUPS_ATTRIBUTE_PATH` 模式 |
 
 ---
 
-## References
+<a id="references"></a>
+## 参考资料
 
-- GitHub Issue: https://github.com/Arize-ai/phoenix/issues/11065
-- Grafana Generic OAuth: https://grafana.com/docs/grafana/latest/setup-grafana/configure-security/configure-authentication/generic-oauth/
+- GitHub 问题: https://github.com/Arize-ai/phoenix/issues/11065
+- Grafana 通用 OAuth: https://grafana.com/docs/grafana/latest/setup-grafana/configure-security/configure-authentication/generic-oauth/
 - Grafana Azure AD: https://grafana.com/docs/grafana/latest/setup-grafana/configure-security/configure-authentication/azuread/
-- Microsoft Entra ID Claims: https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
-- Microsoft UPN Population: https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/plan-connect-userprincipalname
-- LDAP String Syntax (Case Sensitivity): https://learn.microsoft.com/en-us/windows/win32/adschema/a-userprincipalname
-- LDAP Optional Email Design: [./ldap-authentication/optional-email.md](./ldap-authentication/optional-email.md)
+- Microsoft Entra ID 声明: https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+- Microsoft UPN 填充: https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/plan-connect-userprincipalname
+- LDAP 字符串语法（大小写敏感性）: https://learn.microsoft.com/en-us/windows/win32/adschema/a-userprincipalname
+- LDAP 可选邮箱设计: [./ldap-authentication/optional-email.md](./ldap-authentication/optional-email.md)

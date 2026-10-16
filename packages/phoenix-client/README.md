@@ -4,7 +4,7 @@
             <picture>
                 <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix-white.svg">
                 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg">
-                <img alt="Arize Phoenix logo" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
+                <img alt="Arize Phoenix 标志" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
             </picture>
         </a>
         <br>
@@ -13,39 +13,47 @@
 </h1>
 <p align="center">
     <a href="https://pypi.org/project/arize-phoenix-client/">
-        <img src="https://img.shields.io/pypi/v/arize-phoenix-client" alt="PyPI Version">
+        <img src="https://img.shields.io/pypi/v/arize-phoenix-client" alt="PyPI 版本">
     </a>
     <a href="https://arize-phoenix.readthedocs.io/projects/client/">
-        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="Documentation">
+        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="文档">
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=packages/phoenix-client/README.md" />
 </p>
-Phoenix Client provides an interface for interacting with the Phoenix platform via its REST API, enabling you to manage datasets, run experiments, analyze traces, and collect feedback programmatically.
+Phoenix Client 提供通过 REST API 与 Phoenix 平台交互的接口，可用编程方式管理数据集、运行实验、分析追踪并收集反馈。
 
-## Features
+<a id="features"></a>
 
-- **REST API Interface** - Interact with Phoenix's OpenAPI REST interface
-- **Prompts** - Create, version, and invoke prompt templates
-- **Datasets** - Create and append to datasets from DataFrames, CSV files, or dictionaries
-- **Experiments** - Run evaluations and track experiment results
-- **Eval CI (pytest)** - Run LLM evals as ordinary pytest tests and record them as Phoenix experiments (`pip install "arize-phoenix-client[pytest]"`)
-- **Spans** - Query and analyze traces with powerful filtering
-- **Annotations** - Add human feedback and automated evaluations
-- **Evaluation Helpers** - Extract span data in formats optimized for RAG evaluation workflows
+## 功能
 
-## Installation
+- **REST API 接口**：与 Phoenix 的 OpenAPI REST 接口交互
+- **提示词**：创建、版本管理并调用提示词模板
+- **数据集**：从 DataFrame、CSV 文件或字典创建数据集并追加数据
+- **实验**：运行评估并跟踪实验结果
+- **评估 CI（pytest）**：将 LLM 评估作为普通 pytest 测试运行，并记录为 Phoenix 实验（`pip install "arize-phoenix-client[pytest]"`）
+- **Span**：借助强大过滤能力查询和分析追踪
+- **标注**：添加人工反馈和自动评估
+- **评估辅助函数**：以针对 RAG 评估流程优化的格式提取 Span 数据
 
-Install the Phoenix Client with pip:
+<a id="installation"></a>
+
+## 安装
+
+通过 pip 安装 Phoenix Client：
 
 ```bash
 pip install arize-phoenix-client
 ```
 
-## Getting Started
+<a id="getting-started"></a>
 
-### Environment Variables
+## 开始使用
 
-Configure the Phoenix Client using environment variables for seamless use across different environments:
+<a id="environment-variables"></a>
+
+### 环境变量
+
+通过环境变量配置 Phoenix Client，以便在不同环境中无缝使用：
 
 ```bash
 # For local Phoenix server (default)
@@ -59,18 +67,13 @@ export PHOENIX_API_KEY="your-api-key"
 export PHOENIX_CLIENT_HEADERS="Authorization=Bearer your-api-key,custom-header=value"
 ```
 
-`PHOENIX_ENDPOINT` is a base URL and is the canonical setting for the client. If
-your app also exports traces, set `PHOENIX_COLLECTOR_ENDPOINT` for the OTel SDK
-— usually to the same value. When only `PHOENIX_COLLECTOR_ENDPOINT` is set, the
-client infers its base URL from it. See
-[Environments](https://arize.com/docs/phoenix/environments) for the full list.
+`PHOENIX_ENDPOINT` 是基础 URL，也是客户端的规范配置。若应用也导出追踪，请为 OTel SDK 设置 `PHOENIX_COLLECTOR_ENDPOINT`，通常使用相同值。仅设置 `PHOENIX_COLLECTOR_ENDPOINT` 时，客户端会据此推断基础 URL。 完整列表见[环境](https://arize.com/docs/phoenix/environments)。
 
-### Credential File Discovery (`.env.phoenix`)
+<a id="credential-file-discovery-envphoenix"></a>
 
-When a setting is not provided by argument or environment variable, the client
-looks for a `.env.phoenix` file in the current working directory — walking up
-toward the filesystem root and stopping at the first match — and reads
-`PHOENIX_`-prefixed keys from it (dotenv format):
+### 凭证文件发现（`.env.phoenix`）
+
+当参数或环境变量未提供某项配置时，客户端从当前工作目录开始向文件系统根目录逐级查找 `.env.phoenix`，在首个匹配处停止，并读取其中以 `PHOENIX_` 为前缀的键（dotenv 格式）：
 
 ```bash
 # .env.phoenix
@@ -78,24 +81,17 @@ PHOENIX_ENDPOINT=http://localhost:6006
 PHOENIX_API_KEY=your-api-key
 ```
 
-Explicit arguments and environment variables always take precedence — the file
-never overrides anything already set. Set `PHOENIX_DISCOVER_CONFIG=false` to
-disable discovery entirely.
+显式参数和环境变量始终优先，文件绝不会覆盖已设置的值。设置 `PHOENIX_DISCOVER_CONFIG=false` 可完全禁用发现。
 
-Credentials (`PHOENIX_API_KEY` and `PHOENIX_CLIENT_HEADERS`) and server location
-(`PHOENIX_ENDPOINT` and the variables it falls back to) are each resolved as a
-group from one source tier. If explicit or process credentials are paired with
-an endpoint from `.env.phoenix`, the client warns once and continues without
-logging credential values.
+凭证（`PHOENIX_API_KEY` 和 `PHOENIX_CLIENT_HEADERS`）与服务器位置（`PHOENIX_ENDPOINT` 及其回退变量）各自作为一组，从同一来源层级解析。若显式或进程凭证与 `.env.phoenix` 中的端点配对，客户端会发出一次警告后继续，不记录凭证值。
 
-Discovery results, including a missing file, are cached per working directory
-for the process lifetime. Long-running processes can call
-`phoenix.client.utils.config.clear_env_file_cache()` after creating or changing
-the file.
+发现结果（包括文件缺失）按工作目录缓存，持续整个进程生命周期。长期运行的进程可在创建或修改文件后调用 `phoenix.client.utils.config.clear_env_file_cache()`。
 
-### Client Initialization
+<a id="client-initialization"></a>
 
-The client automatically reads environment variables, or you can override them:
+### 初始化客户端
+
+客户端自动读取环境变量，也可以显式覆盖：
 
 ```python
 from phoenix.client import Client, AsyncClient
@@ -119,13 +115,17 @@ async_client = AsyncClient(base_url="http://localhost:6006")
 async_client = AsyncClient(base_url="https://your-phoenix-instance.com", api_key="your-api-key")
 ```
 
-## Resources
+<a id="resources"></a>
 
-The Phoenix Client organizes functionality into resources that correspond to key Phoenix platform features. Each resource provides specialized methods for managing different types of data:
+## 资源
 
-### Prompts
+Phoenix Client 按对应 Phoenix 平台主要功能的资源组织能力，各资源提供管理不同数据类型的专用方法：
 
-Manage prompt templates and versions:
+<a id="prompts"></a>
+
+### 提示词
+
+管理提示词模板及版本：
 
 ```python
 from phoenix.client import Client
@@ -167,9 +167,11 @@ resp = oai_client.chat.completions.create(**formatted_prompt)
 print(resp.choices[0].message.content)
 ```
 
-### Datasets
+<a id="datasets"></a>
 
-Manage evaluation datasets and examples for experiments and evaluation:
+### 数据集
+
+管理评估数据集及示例，用于实验和评估：
 
 ```python
 from phoenix.client import Client
@@ -236,9 +238,11 @@ dataset = client.datasets.create_dataset(
 )
 ```
 
-### Traces
+<a id="traces"></a>
 
-Retrieve traces for a project with optional filtering and sorting:
+### 追踪
+
+获取项目追踪，可选择过滤和排序：
 
 ```python
 from phoenix.client import Client
@@ -276,7 +280,7 @@ traces = client.traces.get_traces(
 )
 ```
 
-**Async usage:**
+**异步用法：**
 
 ```python
 from phoenix.client import AsyncClient
@@ -289,23 +293,25 @@ traces = await async_client.traces.get_traces(
 )
 ```
 
-| Parameter              | Type                                    | Default | Description                                          |
+| 参数              | 类型                                    | 默认值 | 说明                                          |
 | ---------------------- | --------------------------------------- | ------- | ---------------------------------------------------- |
-| `project_identifier`   | `str`                                   | —       | Project name or ID — **required**                    |
-| `start_time`           | `datetime \| None`                      | `None`  | Inclusive lower bound on trace start time             |
-| `end_time`             | `datetime \| None`                      | `None`  | Exclusive upper bound on trace start time            |
-| `sort`                 | `"start_time" \| "latency_ms" \| None`  | `None`  | Sort field (server defaults to `"start_time"`)       |
-| `order`                | `"asc" \| "desc" \| None`              | `None`  | Sort direction (server defaults to `"desc"`)         |
-| `include_spans`        | `bool`                                  | `False` | Include full span details for each trace             |
-| `session_id`           | `str \| Sequence[str] \| None`          | `None`  | Filter by session ID(s) or GlobalID(s)               |
-| `limit`                | `int`                                   | `100`   | Maximum number of traces to return                   |
-| `timeout`              | `int \| None`                           | `60`    | Request timeout in seconds                           |
+| `project_identifier`   | `str`                                   | —       | 项目名称或 ID，**必填**                    |
+| `start_time`           | `datetime \| None`                      | `None`  | 追踪开始时间下界（包含）             |
+| `end_time`             | `datetime \| None`                      | `None`  | 追踪开始时间上界（不包含）            |
+| `sort`                 | `"start_time" \| "latency_ms" \| None`  | `None`  | 排序字段（服务器默认为 `"start_time"`）       |
+| `order`                | `"asc" \| "desc" \| None`              | `None`  | 排序方向（服务器默认为 `"desc"`）         |
+| `include_spans`        | `bool`                                  | `False` | 包含每条追踪的完整 Span 详情             |
+| `session_id`           | `str \| Sequence[str] \| None`          | `None`  | 按会话 ID 或 GlobalID 过滤               |
+| `limit`                | `int`                                   | `100`   | 返回追踪的最大数量                   |
+| `timeout`              | `int \| None`                           | `60`    | 请求超时秒数                           |
 
-> **Note:** Requires Phoenix server >= 13.15.0.
+> **注意：** 要求 Phoenix 服务器 >= 13.15.0。
 
-### Spans
+<a id="spans"></a>
 
-Query for spans and annotations from your projects for custom evaluation and annotation workflows:
+### Span
+
+从项目中查询 Span 和标注，用于自定义评估和标注流程：
 
 ```python
 from phoenix.client import Client
@@ -331,9 +337,11 @@ annotations_df = client.spans.get_span_annotations_dataframe(
 )
 ```
 
-### Annotations
+<a id="annotations"></a>
 
-Add annotations to spans for evaluation, user feedback, and custom annotation workflows:
+### 标注
+
+为 Span 添加标注，用于评估、用户反馈和自定义标注流程：
 
 ```python
 from phoenix.client import Client
@@ -368,9 +376,11 @@ annotations = [
 client.spans.log_span_annotations(span_annotations=annotations)
 ```
 
-### Sessions
+<a id="sessions"></a>
 
-Retrieve and annotate conversation sessions:
+### 会话
+
+获取并标注对话会话：
 
 ```python
 from phoenix.client import Client
@@ -398,9 +408,11 @@ client.sessions.add_session_annotation(
 )
 ```
 
-### Experiments
+<a id="experiments"></a>
 
-Run tasks across datasets and evaluate their outputs:
+### 实验
+
+在数据集上运行任务并评估输出：
 
 ```python
 from phoenix.client import Client
@@ -430,10 +442,7 @@ for run in ran_experiment["task_runs"]:
     print(f"Output: {run['output']}, Error: {run['error']}")
 ```
 
-Beyond the batch `run_experiment` loop, you can post runs and evaluations one at a
-time with `log_run` and `log_evaluation`. These are the incremental primitives the
-pytest plugin builds on, and they are useful for any consumer that produces results
-progressively rather than all at once:
+除批量 `run_experiment` 循环外，还可以通过 `log_run` 和 `log_evaluation` 逐个提交运行和评估。它们是 pytest 插件所依赖的增量基础能力，适用于逐步产生结果而非一次性生成全部结果的使用方：
 
 ```python
 from datetime import datetime, timezone
@@ -457,15 +466,13 @@ client.experiments.log_evaluation(
 )
 ```
 
-Both methods are available on `AsyncClient` as awaitable coroutines with the same
-signatures.
+两个方法在 `AsyncClient` 上均提供相同签名的可等待协程。
 
-### Eval CI (pytest)
+<a id="eval-ci-pytest"></a>
 
-Write LLM evals as ordinary pytest tests and record each marked test as a run in a
-Phoenix experiment, so the same suite that gates your pull requests also builds a
-history of results in Phoenix. Install the `pytest` extra and mark tests with
-`@pytest.mark.phoenix`:
+### 评估 CI（pytest）
+
+将 LLM 评估编写为普通 pytest 测试，并将每个标记测试记录为 Phoenix 实验中的一次运行，使控制 PR 是否通过的同一套测试也在 Phoenix 中积累结果历史。安装 `pytest` 扩展依赖，并用 `@pytest.mark.phoenix` 标记测试：
 
 ```bash
 pip install "arize-phoenix-client[pytest]" pytest
@@ -485,12 +492,13 @@ def test_answers(question, expected):
     assert result == expected
 ```
 
-See the [Eval CI with pytest guide](https://arize.com/docs/phoenix/datasets-and-experiments/how-to-experiments/eval-ci-with-pytest)
-for marker options, environment variables, and a CI recipe.
+标记选项、环境变量和 CI 配置示例见[使用 pytest 进行评估 CI 的指南](https://arize.com/docs/phoenix/datasets-and-experiments/how-to-experiments/eval-ci-with-pytest)。
 
-### Projects
+<a id="projects"></a>
 
-Manage Phoenix projects that organize your AI application data:
+### 项目
+
+管理用于组织 AI 应用数据的 Phoenix 项目：
 
 ```python
 from phoenix.client import Client
@@ -513,20 +521,24 @@ new_project = client.projects.create(
 print(f"Created project with ID: {new_project['id']}")
 ```
 
-## Documentation
+<a id="documentation"></a>
 
-- **[Full Documentation](https://arize-phoenix.readthedocs.io/projects/client/)** - Complete API reference and guides
-- **[Phoenix Docs](https://arize.com/docs/phoenix)** - Main Phoenix documentation
-- **[GitHub Repository](https://github.com/Arize-ai/phoenix)** - Source code and examples
+## 文档
 
-## Community
+- **[完整文档](https://arize-phoenix.readthedocs.io/projects/client/)** - 完整 API 参考与指南
+- **[Phoenix 文档](https://arize.com/docs/phoenix)** - Phoenix 主文档
+- **[GitHub 仓库](https://github.com/Arize-ai/phoenix)** - 源代码和示例
 
-Join our community to connect with thousands of AI builders:
+<a id="community"></a>
 
-- 🌍 Join our [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
-- 💡 Ask questions and provide feedback in the _#phoenix-support_ channel.
-- 🌟 Leave a star on our [GitHub](https://github.com/Arize-ai/phoenix).
-- 🐞 Report bugs with [GitHub Issues](https://github.com/Arize-ai/phoenix/issues).
-- 𝕏 Follow us on [𝕏](https://twitter.com/ArizePhoenix).
-- 💼 Follow us on [LinkedIn](https://www.linkedin.com/showcase/113218220).
-- 🗺️ Check out our [roadmap](https://github.com/orgs/Arize-ai/projects/45) to see where we're heading next.
+## 社区
+
+加入我们的社区，与数千名 AI 开发者交流：
+
+- 🌍 加入我们的 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
+- 💡 在 _#phoenix-support_ 频道提问并反馈。
+- 🌟 为我们的 [GitHub](https://github.com/Arize-ai/phoenix) 加星。
+- 🐞 通过 [GitHub Issues](https://github.com/Arize-ai/phoenix/issues) 报告问题。
+- 𝕏 在 [𝕏](https://twitter.com/ArizePhoenix) 关注我们。
+- 💼 在 [LinkedIn](https://www.linkedin.com/showcase/113218220) 关注我们。
+- 🗺️ 查看我们的[路线图](https://github.com/orgs/Arize-ai/projects/45)，了解未来方向。

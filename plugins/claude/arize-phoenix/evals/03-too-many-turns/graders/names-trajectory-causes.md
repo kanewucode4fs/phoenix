@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user's agent takes 30+ LLM calls to answer trivial questions with no errors, and asked what to run with the `px` CLI and what to look for. This is a trajectory problem: the answer lives in the sequence and contents of the spans, not in status codes.
+用户的智能体回答简单问题需要 30 多次 LLM 调用，期间没有错误；用户询问应运行哪些 `px` CLI 命令以及应检查什么。这是执行轨迹问题：答案在跨度的顺序和内容中，而非状态码中。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The response names at least two concrete trajectory-level causes to look for, such as: the same tool called repeatedly with the same or near-identical arguments; the model re-planning or re-asking instead of answering; a system prompt that forces tool use or forbids answering directly; a tool output too large or malformed to act on; a missing tool or skill so the agent flails.
+判断条件：回复至少指出两种需要检查的具体轨迹层面原因，例如：使用相同或近似参数反复调用同一个工具；模型反复重新规划或提问而不作答；系统提示词强制使用工具或禁止直接回答；工具输出过大或格式错误导致无法处理；缺少工具或技能使智能体无所适从。

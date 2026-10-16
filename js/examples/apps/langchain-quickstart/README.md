@@ -1,26 +1,32 @@
-# LangChain TypeScript Quickstart
+<a id="langchain-typescript-quickstart"></a>
 
-A LangChain TypeScript travel planner agent with Phoenix tracing and optional evaluations.
+# LangChain TypeScript 快速开始
 
-## Prerequisites
+集成 Phoenix 追踪及可选评估的 LangChain TypeScript 旅行规划 Agent。
 
-- **Node.js 18+** installed
-- **Phoenix** running locally (`pip install arize-phoenix && phoenix serve`) or access to Phoenix Cloud
-- **OpenAI API key** (`OPENAI_API_KEY`) – for the agent LLM
-- **Tavily API key** (`TAVILY_API_KEY`) – for tool search (essential_info, budget_basics, local_flavor)
+<a id="prerequisites"></a>
 
-## Setup
+## 前置条件
 
-1. **Install dependencies:**
+- 已安装 **Node.js 18+**
+- **Phoenix** 在本地运行 (`pip install arize-phoenix && phoenix serve`) 或可访问 Phoenix Cloud
+- **OpenAI API 密钥**（`OPENAI_API_KEY`），用于 Agent LLM
+- **Tavily API 密钥**（`TAVILY_API_KEY`），用于工具搜索（essential_info、budget_basics、local_flavor）
+
+<a id="setup"></a>
+
+## 配置
+
+1. **安装依赖：**
 
 ```bash
 cd js/examples/apps/langchain-quickstart
 npm install
 ```
 
-2. **Set environment variables:**
+2. **设置环境变量：**
 
-Copy `.env.example` to `.env` and fill in:
+将 `.env.example` 复制为 `.env` 并填写：
 
 ```bash
 # Required for the agent
@@ -37,65 +43,75 @@ PHOENIX_PROJECT_NAME=langchain-travel-agent
 FIREWORKS_API_KEY=your-fireworks-api-key
 ```
 
-3. **Start Phoenix** (if running locally):
+3. **启动 Phoenix**（若在本地运行）：
 
 ```bash
 pip install arize-phoenix
 phoenix serve
 ```
 
-## Running the Application
+<a id="running-the-application"></a>
+
+## 运行应用
 
 ```bash
 npm start
 ```
 
-This will:
+这会：
 
-- Create a LangChain agent with three tools: **essential_info**, **budget_basics**, **local_flavor**
-- Run three trip-planning queries (Ireland, Japan, Portugal) with destination, duration, and interests
-- Send all traces to Phoenix for visualization
+- 创建带有三个工具的 LangChain Agent：**essential_info**、**budget_basics**、**local_flavor**
+- 运行三次旅行规划查询（爱尔兰、日本、葡萄牙），包含目的地、时长和兴趣
+- 将所有追踪发送到 Phoenix 以进行可视化
 
-The agent is instructed to call all three tools per request and to structure replies as: (a) Essentials, (b) Budget, (c) Local flavor.
+Agent 接到的指令是每次请求都调用全部三个工具，并按以下结构回复：(a) Essentials（基本信息），(b) Budget（预算），(c) Local flavor（当地特色）。
 
-## Evaluations
+<a id="evaluations"></a>
 
-After running the agent and sending traces to Phoenix, you can run evaluations against those traces.
+## 评估
 
-**Pre-built correctness evaluator** (uses OpenAI by default):
+运行 Agent 并向 Phoenix 发送追踪后，可对这些追踪运行评估。
+
+**预置正确性评估器**（默认使用 OpenAI）：
 
 ```bash
 npm run pre_built_evals
 ```
 
-- Fetches LangGraph (agent) spans from Phoenix, runs a built-in correctness evaluator, and logs annotations back to Phoenix.
-- Set `OPENAI_API_KEY` for the default evaluator model. Optional: use a custom LLM (e.g. Fireworks) by uncommenting and configuring the block in `src/pre_built_evals.ts`.
+- 从 Phoenix 获取 LangGraph（Agent）Span，运行内置正确性评估器，并将标注写回 Phoenix。
+- 为默认评估器模型设置 `OPENAI_API_KEY`。可选：取消 `src/pre_built_evals.ts` 中相应代码块的注释并配置，以使用自定义 LLM（如 Fireworks）。
 
-**Custom correctness evaluator** (travel-agent rubric, uses Fireworks):
+**自定义正确性评估器**（旅行 Agent 评判标准，使用 Fireworks）：
 
 ```bash
 npm run custom_evals
 ```
 
-- Uses a custom classification evaluator with a travel-plan correctness template.
-- Requires `PHOENIX_ENDPOINT` and `FIREWORKS_API_KEY`.
-- Evaluates the same LangGraph spans and logs annotations as `custom_correctness`.
+- 使用带旅行计划正确性模板的自定义分类评估器。
+- 需要 `PHOENIX_ENDPOINT` 和 `FIREWORKS_API_KEY`。
+- 评估相同的 LangGraph Span，并以 `custom_correctness` 记录标注。
 
-## What to Look For in Phoenix
+<a id="what-to-look-for-in-phoenix"></a>
 
-Open Phoenix at `http://localhost:6006` after running the application.
+## 在 Phoenix 中查看什么
 
-### Traces
+运行应用后，在 `http://localhost:6006` 打开 Phoenix。
 
-Each agent invocation creates a trace that shows:
+<a id="traces"></a>
 
-- **LangGraph** (agent) span with input messages and final output
-- Tool calls: **essential_info**, **budget_basics**, **local_flavor** (Tavily-backed)
-- Token usage, latency, prompts, and responses
+### 追踪
 
-After running evals, you’ll see span annotations (e.g. correctness / custom_correctness) on the LangGraph spans.
+每次 Agent 调用都会创建一条追踪，展示：
 
-### Project Structure
+- 包含输入消息和最终输出的 **LangGraph**（Agent）Span
+- 工具调用：**essential_info**、**budget_basics**、**local_flavor**（由 Tavily 支持）
+- Token 用量、延迟、提示词及响应
+
+运行评估后，可在 LangGraph Span 上看到 Span 标注（如 correctness / custom_correctness）。
+
+<a id="project-structure"></a>
+
+### 项目结构
 
 ```
 langchain-quickstart/
@@ -112,42 +128,44 @@ langchain-quickstart/
 └── SETUP.md
 ```
 
-**Key files:**
+**关键文件：**
 
-- `src/index.ts` – Registers Phoenix (`@arizeai/phoenix-otel`), instruments LangChain, and runs the travel agent with `travelTools`.
-- `src/tools.ts` – Defines the three Tavily-backed tools and their schemas (destination, duration, interests).
-- `src/pre_built_evals.ts` – Fetches agent spans, runs Phoenix correctness evaluator, logs annotations.
-- `src/custom_evals.ts` – Same span fetch, custom correctness template and Fireworks LLM, logs annotations.
+- `src/index.ts` – 注册 Phoenix（`@arizeai/phoenix-otel`），为 LangChain 插桩，并使用 `travelTools` 运行旅行 Agent。
+- `src/tools.ts` – 定义三个由 Tavily 支持的工具及其模式（目的地、时长、兴趣）。
+- `src/pre_built_evals.ts` – 获取 Agent Span，运行 Phoenix 正确性评估器并记录标注。
+- `src/custom_evals.ts` – 获取相同 Span，使用自定义正确性模板和 Fireworks LLM，并记录标注。
 
-**Dependencies (high level):** `langchain`, `@langchain/core`, `@arizeai/phoenix-otel`, `@arizeai/openinference-instrumentation-langchain`, `@arizeai/phoenix-client`, `@arizeai/phoenix-evals`, `@ai-sdk/openai`, `dotenv`, `zod`.
+**主要依赖：** `langchain`, `@langchain/core`, `@arizeai/phoenix-otel`, `@arizeai/openinference-instrumentation-langchain`, `@arizeai/phoenix-client`, `@arizeai/phoenix-evals`, `@ai-sdk/openai`, `dotenv`, `zod`.
 
-## Troubleshooting
+<a id="troubleshooting"></a>
 
-**Error: OPENAI_API_KEY or TAVILY_API_KEY not set**
+## 故障排查
 
-- Ensure both are set (e.g. in `.env` or `export OPENAI_API_KEY=...` and `export TAVILY_API_KEY=...`).
+**错误：未设置 OPENAI_API_KEY 或 TAVILY_API_KEY**
 
-**No traces appearing in Phoenix**
+- 确保两者均已设置（例如在 `.env` 中，或通过 `export OPENAI_API_KEY=...` 和 `export TAVILY_API_KEY=...`）。
 
-- Ensure Phoenix is running: `phoenix serve`
-- Check that the Phoenix endpoint is accessible (default: http://localhost:6006)
-- Verify `PHOENIX_PROJECT_NAME` matches what you open in the UI (default: `langchain-travel-agent`)
+**Phoenix 中未出现追踪**
 
-**TypeScript / module errors**
+- 确保 Phoenix 正在运行：`phoenix serve`
+- 检查 Phoenix 端点是否可访问（默认：http://localhost:6006 ）
+- 确认 `PHOENIX_PROJECT_NAME` 与 UI 中打开的项目一致（默认：`langchain-travel-agent`）
 
-- Run `npm install` and use Node.js 18+
-- Confirm `"type": "module"` and import paths match your setup
+**TypeScript / 模块错误**
 
-**"Failed to log annotations to Phoenix: ... 404 Not Found"** (when running `npm run pre_built_evals` or `npm run custom_evals`)
+- 运行 `npm install` 并使用 Node.js 18+
+- 确认 `"type": "module"` 及导入路径与你的配置匹配
 
-- The Phoenix server may not expose the span annotations API. Upgrade and restart:
+**"Failed to log annotations to Phoenix: ... 404 Not Found"** （运行 `npm run pre_built_evals` 或 `npm run custom_evals` 时）
+
+- Phoenix 服务器可能未提供 Span 标注 API。请升级并重启：
   ```bash
   pip install -U arize-phoenix
   phoenix serve
   ```
-- Or run from the Phoenix repo root: `uv run phoenix serve`
-- Evals still run and print results; only sending annotations to Phoenix fails until the server is upgraded.
+- 或在 Phoenix 仓库根目录运行：`uv run phoenix serve`
+- 评估仍会运行并打印结果；在服务器升级前，仅向 Phoenix 发送标注会失败。
 
-**custom_evals: Set PHOENIX_ENDPOINT**
+**custom_evals：设置 PHOENIX_ENDPOINT**
 
-- Set it in `.env` (e.g. `PHOENIX_ENDPOINT=http://localhost:6006`) and ensure `FIREWORKS_API_KEY` is set for the Fireworks evaluator model.
+- 在 `.env` 中设置它（如 `PHOENIX_ENDPOINT=http://localhost:6006`），并确保为 Fireworks 评估器模型设置 `FIREWORKS_API_KEY`。

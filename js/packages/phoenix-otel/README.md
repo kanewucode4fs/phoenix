@@ -4,7 +4,7 @@
             <picture>
                 <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg">
                 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix-white.svg">
-                <img alt="Arize Phoenix logo" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
+                <img alt="Arize Phoenix 标志" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
             </picture>
         </a>
         <br>
@@ -13,40 +13,48 @@
 </h1>
 <p align="center">
     <a href="https://www.npmjs.com/package/@arizeai/phoenix-otel">
-        <img src="https://img.shields.io/npm/v/@arizeai/phoenix-otel" alt="NPM Version">
+        <img src="https://img.shields.io/npm/v/@arizeai/phoenix-otel" alt="NPM 版本">
     </a>
     <a href="https://arize.com/docs/phoenix">
-        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="Documentation">
+        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="文档">
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=js/packages/phoenix-otel/README.md" />
 </p>
 
-A lightweight wrapper around OpenTelemetry for Node.js applications that simplifies sending traces to [Arize Phoenix](https://github.com/Arize-ai/phoenix). `@arizeai/phoenix-otel` handles provider registration and OTLP export, then re-exports the full `@arizeai/openinference-core` helper surface from the same package path so you can register tracing and author manual spans from one import.
+面向 Node.js 应用的轻量 OpenTelemetry 封装，简化向 [Arize Phoenix](https://github.com/Arize-ai/phoenix) 发送追踪的过程。`@arizeai/phoenix-otel` 处理提供程序注册和 OTLP 导出，并从同一包路径重新导出 `@arizeai/openinference-core` 的全部辅助 API，使你通过一次导入即可注册追踪和编写手动 Span。
 
-> **Note**: This package is under active development and APIs may change.
+> **注意**：此包正在积极开发中，API 可能变化。
 
-## Features
+<a id="features"></a>
 
-- **Simple Setup** - One-line configuration with sensible defaults
-- **Environment Variables** - Automatic configuration from environment variables
-- **Batch Processing** - Built-in batch span processing for production use
-- **OpenInference Helpers Included** - Re-exports `withSpan`, the span-kind wrappers (`traceChain`, `traceAgent`, `traceTool`, `traceLLM`, `traceRetriever`, `traceReranker`, `traceEmbedding`, `traceGuardrail`, `traceEvaluator`, `tracePrompt`), `observe`, context setters, attribute builders, `OITracer`, and utility helpers
-- **Provider-Swap Safe Wrappers** - The re-exported OpenInference helpers resolve the default tracer when the wrapped function executes, so module-scoped wrappers continue following global provider changes
-- **Agent-Friendly Local Docs** - Ships curated docs and source in `node_modules/@arizeai/phoenix-otel/`
+## 功能
 
-## Installation
+- **简单配置**：一行配置，提供合理默认值
+- **环境变量**：从环境变量自动配置
+- **批处理**：内置适用于生产的 Span 批处理
+- **内含 OpenInference 辅助函数**：重新导出 `withSpan`、Span 类型封装（`traceChain`、`traceAgent`、`traceTool`、`traceLLM`、`traceRetriever`、`traceReranker`、`traceEmbedding`、`traceGuardrail`、`traceEvaluator`、`tracePrompt`）、`observe`、上下文设置函数、属性构建器、`OITracer` 和辅助工具
+- **支持安全切换提供程序的封装**：重新导出的 OpenInference 辅助函数在被封装函数执行时解析默认追踪器，因此模块作用域封装会持续跟随全局提供程序变化
+- **适合 Agent 的本地文档**：在 `node_modules/@arizeai/phoenix-otel/` 中附带整理过的文档和源码
+
+<a id="installation"></a>
+
+## 安装
 
 ```bash
 npm install @arizeai/phoenix-otel
 ```
 
-Requires Node.js 18 or newer. Both ESM and CommonJS entry points are provided.
+要求 Node.js 18 或更高版本，同时提供 ESM 和 CommonJS 入口。
 
-## Quick Start
+<a id="quick-start"></a>
 
-### Basic Usage
+## 快速开始
 
-The simplest way to get started is to use `register()` together with the built-in tracing helpers:
+<a id="basic-usage"></a>
+
+### 基本用法
+
+最简单的入门方式是将 `register()` 与内置追踪辅助函数配合使用：
 
 ```typescript
 import { register, traceChain } from "@arizeai/phoenix-otel";
@@ -64,11 +72,13 @@ await answerQuestion("What is Phoenix?");
 await provider.shutdown();
 ```
 
-`register()` sets up the Phoenix exporter. The tracing helpers come from `@arizeai/openinference-core`, re-exported through `@arizeai/phoenix-otel`.
+`register()` 配置 Phoenix 导出器。追踪辅助函数来自 `@arizeai/openinference-core`，通过 `@arizeai/phoenix-otel` 重新导出。
 
-### Production Setup
+<a id="production-setup"></a>
 
-For production use with a remote Phoenix instance:
+### 生产配置
+
+在生产中使用远程 Phoenix 实例：
 
 ```typescript
 import { register } from "@arizeai/phoenix-otel";
@@ -80,11 +90,15 @@ register({
 });
 ```
 
-## Configuration
+<a id="configuration"></a>
 
-### Environment Variables
+## 配置
 
-The `register` function automatically reads from environment variables:
+<a id="environment-variables"></a>
+
+### 环境变量
+
+`register` 函数自动读取环境变量：
 
 ```bash
 # For local Phoenix server (default)
@@ -95,42 +109,32 @@ export PHOENIX_COLLECTOR_ENDPOINT="https://your-phoenix-instance.com"
 export PHOENIX_API_KEY="your-api-key"
 ```
 
-When a setting is not provided by argument or environment variable, `register`
-also looks for a `.env.phoenix` file in the current working directory — walking
-up toward the filesystem root and stopping at the first match — and reads
-`PHOENIX_`-prefixed keys from it (dotenv format). Environment variables always
-take precedence over the file; set `PHOENIX_DISCOVER_CONFIG=false` to disable
-discovery entirely.
+参数或环境变量未提供某项配置时，`register` 还会从当前工作目录开始向文件系统根目录逐级查找 `.env.phoenix`，在首个匹配处停止，并读取其中以 `PHOENIX_` 为前缀的键（dotenv 格式）。环境变量始终优先于文件；设置 `PHOENIX_DISCOVER_CONFIG=false` 可完全禁用发现。
 
-`PHOENIX_API_KEY` and `PHOENIX_CLIENT_HEADERS` are resolved as one credential
-group. Explicit `Authorization` headers are preserved case-insensitively. If an
-explicit or process credential is paired with `PHOENIX_COLLECTOR_ENDPOINT` from
-the file, the exporter warns once and continues without logging credential
-values.
+`PHOENIX_API_KEY` 和 `PHOENIX_CLIENT_HEADERS` 作为同一凭证组解析。显式 `Authorization` 头会以不区分大小写的方式保留。若显式或进程凭证与文件中的 `PHOENIX_COLLECTOR_ENDPOINT` 配对，导出器会发出一次警告后继续，不记录凭证值。
 
-### Configuration Options
+<a id="configuration-options"></a>
 
-The `register` function accepts the following parameters:
+### 配置选项
 
-| Parameter          | Type                     | Default                   | Description                                            |
+`register` 函数接收以下参数：
+
+| 参数          | 类型                     | 默认值                   | 说明                                            |
 | ------------------ | ------------------------ | ------------------------- | ------------------------------------------------------ |
-| `projectName`      | `string`                 | `"default"`               | The project name for organizing traces in Phoenix      |
-| `url`              | `string`                 | `"http://localhost:6006"` | The URL to your Phoenix instance                       |
-| `apiKey`           | `string`                 | `undefined`               | API key for Phoenix authentication                     |
-| `headers`          | `Record<string, string>` | `{}`                      | Custom headers for OTLP requests                       |
-| `batch`            | `boolean`                | `true`                    | Use batch span processing (recommended for production) |
-| `instrumentations` | `Instrumentation[]`      | `undefined`               | Array of OpenTelemetry instrumentations to register    |
-| `global`           | `boolean`                | `true`                    | Register the tracer provider globally                  |
-| `diagLogLevel`     | `DiagLogLevel`           | `undefined`               | Diagnostic logging level for debugging                 |
+| `projectName`      | `string`                 | `"default"`               | 用于在 Phoenix 中组织追踪的项目名称      |
+| `url`              | `string`                 | `"http://localhost:6006"` | Phoenix 实例的 URL                       |
+| `apiKey`           | `string`                 | `undefined`               | Phoenix 身份验证的 API 密钥                     |
+| `headers`          | `Record<string, string>` | `{}`                      | OTLP 请求的自定义头                       |
+| `batch`            | `boolean`                | `true`                    | 使用 Span 批处理（生产推荐） |
+| `instrumentations` | `Instrumentation[]`      | `undefined`               | 要注册的 OpenTelemetry 插桩数组    |
+| `global`           | `boolean`                | `true`                    | 全局注册追踪提供程序                  |
+| `diagLogLevel`     | `DiagLogLevel`           | `undefined`               | 调试使用的诊断日志级别                 |
 
-### Custom Span Processors
+<a id="custom-span-processors"></a>
 
-`register()` also accepts `spanProcessors`, which replaces the default Phoenix
-exporter setup. For these setups the package root re-exports
-`OTLPTraceExporter`, and the ESM-only `@arizeai/phoenix-otel/vercel` subpath
-re-exports `@arizeai/openinference-vercel` (`OpenInferenceSimpleSpanProcessor`,
-`OpenInferenceBatchSpanProcessor`, `isOpenInferenceSpan`, and types) — no need
-to install the underlying packages:
+### 自定义 Span 处理器
+
+`register()` 还接收 `spanProcessors`，用于替换默认 Phoenix 导出器配置。为此，包根入口重新导出 `OTLPTraceExporter`，仅支持 ESM 的 `@arizeai/phoenix-otel/vercel` 子路径重新导出 `@arizeai/openinference-vercel`（`OpenInferenceSimpleSpanProcessor`、`OpenInferenceBatchSpanProcessor`、`isOpenInferenceSpan` 和类型），无需安装底层包：
 
 ```typescript
 import {
@@ -158,14 +162,15 @@ register({
 });
 ```
 
-## Usage Examples
+<a id="usage-examples"></a>
 
-### With the Vercel AI SDK (v7+)
+## 使用示例
 
-AI SDK v7 telemetry registration is process-global, so applications configure
-it explicitly. Install `ai` and `@ai-sdk/otel`, then register the integration
-alongside the Phoenix provider. Request-header capture is disabled below
-because headers can contain authorization tokens and cookies.
+<a id="with-the-vercel-ai-sdk-v7"></a>
+
+### 配合 Vercel AI SDK（v7+）
+
+AI SDK v7 遥测注册作用于整个进程，因此应用需要显式配置。安装 `ai` 和 `@ai-sdk/otel`，然后将此集成与 Phoenix 提供程序一起注册。下方禁用了请求头捕获，因为请求头可能包含授权令牌和 Cookie。
 
 ```typescript
 // instrumentation.ts
@@ -197,13 +202,13 @@ const result = await generateText({
 });
 ```
 
-> **Note**: AI SDK v6 and older emit a different span shape that is not
-> supported by the bundled span processors. Use `@arizeai/phoenix-otel` 1.x
-> (with `@arizeai/openinference-vercel` 2.x) for AI SDK v6.
+> **注意**：AI SDK v6 及更早版本生成不同的 Span 结构，捆绑的 Span 处理器不支持该结构。使用 AI SDK v6 时，请使用 `@arizeai/phoenix-otel` 1.x（搭配 `@arizeai/openinference-vercel` 2.x）。
 
-### With Auto-Instrumentation
+<a id="with-auto-instrumentation"></a>
 
-Automatically instrument common libraries (works best with CommonJS):
+### 配合自动插桩
+
+自动为常用库插桩（最适合 CommonJS）：
 
 ```typescript
 import { register } from "@arizeai/phoenix-otel";
@@ -216,11 +221,13 @@ register({
 });
 ```
 
-> **Note**: Auto-instrumentation via the `instrumentations` parameter works best with CommonJS projects. ESM projects require manual instrumentation.
+> **注意**：通过 `instrumentations` 参数自动插桩最适合 CommonJS 项目，ESM 项目需要手动插桩。
 
-### With OpenAI (ESM)
+<a id="with-openai-esm"></a>
 
-For ESM projects, manually instrument libraries:
+### 配合 OpenAI（ESM）
+
+ESM 项目需手动为库插桩：
 
 ```typescript
 // instrumentation.ts
@@ -254,9 +261,11 @@ const response = await openai.chat.completions.create({
 });
 ```
 
-### Tracing Helpers
+<a id="tracing-helpers"></a>
 
-The package includes `withSpan` plus span-kind shorthands — `traceChain`, `traceAgent`, and `traceTool` — for wrapping functions with OpenInference spans. Each helper automatically records inputs, outputs, errors, and span kind.
+### 追踪辅助函数
+
+此包包含 `withSpan` 及 Span 类型简写函数 `traceChain`、`traceAgent` 和 `traceTool`，用于通过 OpenInference Span 封装函数。每个辅助函数都会自动记录输入、输出、错误和 Span 类型。
 
 ```typescript
 import {
@@ -301,21 +310,23 @@ const retrieveDocs = withSpan(
 );
 ```
 
-These helpers resolve the default tracer when the wrapped function runs, so traced functions defined at module scope keep following global provider changes.
+这些辅助函数在被封装函数运行时解析默认追踪器，因此模块作用域定义的追踪函数会持续跟随全局提供程序变化。
 
-#### Additional Span-Kind Wrappers
+<a id="additional-span-kind-wrappers"></a>
 
-The full set of OpenInference span kinds is covered by matching wrappers, each a shorthand for `withSpan(fn, { ...options, kind })`. They accept the same options as `traceChain`/`traceAgent`/`traceTool` (everything except `kind`, which is pre-set). These wrappers are marked `@experimental` in `@arizeai/openinference-core`.
+#### 其他 Span 类型封装
 
-| Wrapper          | Span kind   | Use it for                                                                    |
+所有 OpenInference Span 类型都有对应封装，均为 `withSpan(fn, { ...options, kind })` 的简写。它们接受与 `traceChain`/`traceAgent`/`traceTool` 相同的选项（除预先设置的 `kind` 外）。这些封装在 `@arizeai/openinference-core` 中标记为 `@experimental`。
+
+| 封装          | Span 类型   | 用途                                                                    |
 | ---------------- | ----------- | ----------------------------------------------------------------------------- |
-| `traceLLM`       | `LLM`       | Language-model invocations — chat/text completions and other inference calls  |
-| `traceRetriever` | `RETRIEVER` | Fetching documents from a knowledge base, vector store, or search index (RAG) |
-| `traceReranker`  | `RERANKER`  | Reordering or scoring candidate documents by relevance                        |
-| `traceEmbedding` | `EMBEDDING` | Converting text or data into vector representations                           |
-| `traceGuardrail` | `GUARDRAIL` | Safety, validation, or policy checks (moderation, PII, compliance)            |
-| `traceEvaluator` | `EVALUATOR` | Scoring output quality — relevance, correctness, or LLM-as-a-judge            |
-| `tracePrompt`    | `PROMPT`    | Constructing, rendering, or templating a prompt before a model call           |
+| `traceLLM`       | `LLM`       | 语言模型调用，包括聊天/文本补全及其他推断调用  |
+| `traceRetriever` | `RETRIEVER` | 从知识库、向量存储或搜索索引获取文档（RAG） |
+| `traceReranker`  | `RERANKER`  | 按相关性对候选文档重排或评分                        |
+| `traceEmbedding` | `EMBEDDING` | 将文本或数据转换为向量表示                           |
+| `traceGuardrail` | `GUARDRAIL` | 安全、验证或策略检查（内容审核、个人身份信息、合规）            |
+| `traceEvaluator` | `EVALUATOR` | 评估输出质量，包括相关性、正确性或 LLM 裁判            |
+| `tracePrompt`    | `PROMPT`    | 模型调用前构建、渲染提示词或处理提示词模板           |
 
 ```typescript
 import {
@@ -339,9 +350,11 @@ const evaluateAnswer = traceEvaluator(
 );
 ```
 
-### Custom Input And Output Processing
+<a id="custom-input-and-output-processing"></a>
 
-Use `processInput` and `processOutput` when you want richer OpenInference attributes than the default JSON-serialized `input.value` and `output.value`.
+### 自定义输入与输出处理
+
+若需要比默认 JSON 序列化的 `input.value` 和 `output.value` 更丰富的 OpenInference 属性，请使用 `processInput` 和 `processOutput`。
 
 ```typescript
 import {
@@ -368,9 +381,11 @@ const retrieveDocs = withSpan(
 );
 ```
 
-### Context Attributes
+<a id="context-attributes"></a>
 
-Propagate session IDs, user IDs, metadata, and tags to all child spans using context setters:
+### 上下文属性
+
+通过上下文设置函数，将会话 ID、用户 ID、元数据和标签传播到所有子 Span：
 
 ```typescript
 import {
@@ -400,9 +415,9 @@ await context.with(
 );
 ```
 
-Available setters: `setSession`, `setUser`, `setMetadata`, `setTags`, `setAttributes`, `setPromptTemplate`.
+可用设置函数： `setSession`, `setUser`, `setMetadata`, `setTags`, `setAttributes`, `setPromptTemplate`.
 
-If you create spans manually with a plain OpenTelemetry tracer, copy the propagated context attributes onto the span explicitly:
+若使用普通 OpenTelemetry 追踪器手动创建 Span，请将传播的上下文属性显式复制到 Span：
 
 ```typescript
 import {
@@ -420,9 +435,11 @@ span.setAttributes(getAttributesFromContext(context.active()));
 span.end();
 ```
 
-### Decorators
+<a id="decorators"></a>
 
-`observe` wraps class methods with tracing while preserving method `this` context. Use TypeScript 5+ standard decorators.
+### 装饰器
+
+`observe` 为类方法封装追踪，同时保留方法的 `this` 上下文。使用 TypeScript 5+ 标准装饰器。
 
 ```typescript
 import { OpenInferenceSpanKind, observe } from "@arizeai/phoenix-otel";
@@ -440,9 +457,11 @@ class ChatService {
 }
 ```
 
-### Attribute Helper APIs
+<a id="attribute-helper-apis"></a>
 
-Use the attribute helpers when you want to build OpenInference-compatible span attributes directly:
+### 属性辅助 API
+
+要直接构建兼容 OpenInference 的 Span 属性时，使用属性辅助函数：
 
 ```typescript
 import { getLLMAttributes, trace } from "@arizeai/phoenix-otel";
@@ -464,7 +483,7 @@ tracer.startActiveSpan("llm-inference", (span) => {
 });
 ```
 
-Available helpers include:
+可用辅助函数包括：
 
 - `getLLMAttributes`
 - `getEmbeddingAttributes`
@@ -474,9 +493,11 @@ Available helpers include:
 - `getInputAttributes` / `getOutputAttributes`
 - `defaultProcessInput` / `defaultProcessOutput`
 
-### Trace Config And Redaction
+<a id="trace-config-and-redaction"></a>
 
-`OITracer` wraps an OpenTelemetry tracer and can redact or drop sensitive OpenInference attributes before spans are written:
+### 追踪配置与脱敏
+
+`OITracer` 封装 OpenTelemetry 追踪器，可在 Span 写入前对敏感 OpenInference 属性脱敏或移除：
 
 ```typescript
 import {
@@ -507,7 +528,7 @@ const safeLLMCall = withSpan(
 );
 ```
 
-Supported environment variables include:
+支持的环境变量包括：
 
 - `OPENINFERENCE_HIDE_INPUTS`
 - `OPENINFERENCE_HIDE_OUTPUTS`
@@ -521,9 +542,11 @@ Supported environment variables include:
 - `OPENINFERENCE_HIDE_PROMPTS`
 - `OPENINFERENCE_HIDE_LLM_TOOLS`
 
-### Raw OpenTelemetry Spans
+<a id="raw-opentelemetry-spans"></a>
 
-For full control over attributes and timing, use the OpenTelemetry API directly:
+### 原始 OpenTelemetry Span
+
+要完全控制属性和时间，请直接使用 OpenTelemetry API：
 
 ```typescript
 import { register, trace, SpanStatusCode } from "@arizeai/phoenix-otel";
@@ -550,16 +573,20 @@ async function processOrder(orderId: string) {
 }
 ```
 
-### Utility Helpers
+<a id="utility-helpers"></a>
 
-The package also re-exports small utilities from `@arizeai/openinference-core`:
+### 辅助工具
 
-- `withSafety({ fn, onError? })` wraps a function and returns `null` on error
-- `safelyJSONStringify(value)` and `safelyJSONParse(value)` guard JSON operations
+此包还重新导出 `@arizeai/openinference-core` 的小型工具：
 
-### Development vs Production
+- `withSafety({ fn, onError? })` 封装函数，出错时返回 `null`
+- `safelyJSONStringify(value)` 和 `safelyJSONParse(value)` 保护 JSON 操作
 
-**Development** (with debug logging):
+<a id="development-vs-production"></a>
+
+### 开发与生产
+
+**开发**（带调试日志）：
 
 ```typescript
 import { DiagLogLevel, register } from "@arizeai/phoenix-otel";
@@ -572,7 +599,7 @@ register({
 });
 ```
 
-**Production** (optimized for performance):
+**生产**（性能优化）：
 
 ```typescript
 import { register } from "@arizeai/phoenix-otel";
@@ -585,9 +612,11 @@ register({
 });
 ```
 
-### Custom Headers
+<a id="custom-headers"></a>
 
-Add custom headers to OTLP requests:
+### 自定义请求头
+
+为 OTLP 请求添加自定义头：
 
 ```typescript
 import { register } from "@arizeai/phoenix-otel";
@@ -602,9 +631,11 @@ register({
 });
 ```
 
-### Non-Global Provider
+<a id="non-global-provider"></a>
 
-Use the provider explicitly without registering globally:
+### 非全局提供程序
+
+显式使用提供程序，不进行全局注册：
 
 ```typescript
 import { register } from "@arizeai/phoenix-otel";
@@ -618,31 +649,35 @@ const provider = register({
 const tracer = provider.getTracer("my-tracer");
 ```
 
-## Docs And Source Code In `node_modules`
+<a id="docs-and-source-code-in-node_modules"></a>
 
-After install, a coding agent can inspect the exact versioned docs and implementation that shipped with the package:
+## `node_modules` 中的文档与源代码
+
+安装后，编码 Agent 可以查看随包分发的确切版本文档及实现：
 
 ```text
 node_modules/@arizeai/phoenix-otel/docs/
 node_modules/@arizeai/phoenix-otel/src/
 ```
 
-Because `@arizeai/phoenix-otel` re-exports `@arizeai/openinference-core`, the dependency docs are also useful local references:
+由于 `@arizeai/phoenix-otel` 重新导出 `@arizeai/openinference-core`，该依赖文档也是有用的本地参考：
 
 ```text
 node_modules/@arizeai/openinference-core/docs/
 node_modules/@arizeai/openinference-core/src/
 ```
 
-## Coding Agent Skill
+<a id="coding-agent-skill"></a>
 
-The Phoenix repo includes a [phoenix-tracing skill](https://github.com/Arize-ai/phoenix/tree/main/.agents/skills/phoenix-tracing) that teaches coding agents (Claude Code, Cursor, etc.) how to instrument LLM applications with OpenInference tracing. Install it with:
+## 编码 Agent 技能
+
+Phoenix 仓库包含 [phoenix-tracing 技能](https://github.com/Arize-ai/phoenix/tree/main/.agents/skills/phoenix-tracing)，指导编码 Agent（Claude Code、Cursor 等）使用 OpenInference 追踪为 LLM 应用插桩。安装方式：
 
 ```bash
 npx skills add Arize-ai/phoenix --skill phoenix-tracing
 ```
 
-Tracing helpers:
+追踪辅助函数：
 
 ```typescript
 import {
@@ -661,7 +696,7 @@ import {
 } from "@arizeai/phoenix-otel";
 ```
 
-Context attribute setters:
+上下文属性设置函数：
 
 ```typescript
 import {
@@ -674,7 +709,7 @@ import {
 } from "@arizeai/phoenix-otel";
 ```
 
-Attribute builders for rich span data:
+用于丰富 Span 数据的属性构建器：
 
 ```typescript
 import {
@@ -687,7 +722,7 @@ import {
 } from "@arizeai/phoenix-otel";
 ```
 
-Redaction and utility helpers:
+脱敏与辅助工具：
 
 ```typescript
 import {
@@ -698,24 +733,28 @@ import {
 } from "@arizeai/phoenix-otel";
 ```
 
-The tracing helper wrappers resolve the default tracer when they run. That keeps spans attached to the current provider in experiments and in any workflow that swaps providers during process lifetime.
+追踪辅助封装在运行时解析默认追踪器，使实验及进程生命周期内切换提供程序的工作流中，Span 始终关联当前提供程序。
 
-## Documentation
+<a id="documentation"></a>
 
-- **[Phoenix Documentation](https://arize.com/docs/phoenix)** - Complete Phoenix documentation
-- **[@arizeai/phoenix-otel package docs](https://arize.com/docs/phoenix/sdk-api-reference/typescript/arizeai-phoenix-otel)** - Curated website docs for this package
-- **[@arizeai/openinference-core package docs](https://arize.com/docs/phoenix/sdk-api-reference/typescript/arizeai-openinference-core)** - Upstream helper and attribute-builder reference
-- **[OpenTelemetry JS](https://opentelemetry.io/docs/languages/js/)** - OpenTelemetry for JavaScript
-- **[OpenInference](https://github.com/Arize-ai/openinference)** - OpenInference semantic conventions
+## 文档
 
-## Community
+- **[Phoenix 文档](https://arize.com/docs/phoenix)** - 完整 Phoenix 文档
+- **[@arizeai/phoenix-otel 包文档](https://arize.com/docs/phoenix/sdk-api-reference/typescript/arizeai-phoenix-otel)** - 此包整理后的站点文档
+- **[@arizeai/openinference-core 包文档](https://arize.com/docs/phoenix/sdk-api-reference/typescript/arizeai-openinference-core)** - 上游辅助函数和属性构建器参考
+- **[OpenTelemetry JS](https://opentelemetry.io/docs/languages/js/)** - JavaScript 的 OpenTelemetry
+- **[OpenInference](https://github.com/Arize-ai/openinference)** - OpenInference 语义约定
 
-Join our community to connect with thousands of AI builders:
+<a id="community"></a>
 
-- 🌍 Join our [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g)
-- 💡 Ask questions and provide feedback in the _#phoenix-support_ channel
-- 🌟 Leave a star on our [GitHub](https://github.com/Arize-ai/phoenix)
-- 🐞 Report bugs with [GitHub Issues](https://github.com/Arize-ai/phoenix/issues)
-- 𝕏 Follow us on [𝕏](https://twitter.com/ArizePhoenix)
-- 💼 Follow us on [LinkedIn](https://www.linkedin.com/showcase/113218220)
-- 🗺️ Check out our [roadmap](https://github.com/orgs/Arize-ai/projects/45)
+## 社区
+
+加入我们的社区，与数千名 AI 开发者交流：
+
+- 🌍 加入我们的 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g)
+- 💡 在 _#phoenix-support_ 频道提问并反馈
+- 🌟 为我们的 [GitHub](https://github.com/Arize-ai/phoenix) 加星
+- 🐞 通过 [GitHub Issues](https://github.com/Arize-ai/phoenix/issues) 报告问题。
+- 𝕏 在 [𝕏](https://twitter.com/ArizePhoenix) 关注我们。
+- 💼 在 [LinkedIn](https://www.linkedin.com/showcase/113218220) 关注我们。
+- 🗺️ 查看我们的[路线图](https://github.com/orgs/Arize-ai/projects/45)

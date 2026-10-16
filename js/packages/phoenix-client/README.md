@@ -4,7 +4,7 @@
             <picture>
                 <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg">
                 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix-white.svg">
-                <img alt="Arize Phoenix logo" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
+                <img alt="Arize Phoenix 标志" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
             </picture>
         </a>
         <br>
@@ -14,33 +14,37 @@
 
 <p align="center">
     <a href="https://www.npmjs.com/package/@arizeai/phoenix-client">
-        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-client" alt="NPM Version">
+        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-client" alt="NPM 版本">
     </a>
     <a href="https://arize-ai.github.io/phoenix/">
-        <img src="https://img.shields.io/badge/docs-blue?logo=typescript&logoColor=white" alt="Documentation">
+        <img src="https://img.shields.io/badge/docs-blue?logo=typescript&logoColor=white" alt="文档">
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=js/packages/phoenix-client/README.md" />
 </p>
 
-This package provides a TypeScript client for the [Arize Phoenix](https://github.com/Arize-ai/phoenix) API. It is still under active development and is subject to change.
+此包提供 [Arize Phoenix](https://github.com/Arize-ai/phoenix) API 的 TypeScript 客户端。它仍在积极开发中，可能发生变更。
 
-## Installation
+<a id="installation"></a>
+
+## 安装
 
 ```bash
 # or yarn, pnpm, bun, etc...
 npm install @arizeai/phoenix-client
 ```
 
-## Configuration
+<a id="configuration"></a>
 
-The client will automatically read environment variables from your environment, if available.
+## 配置
 
-The following environment variables are used:
+如果环境变量存在，客户端会自动读取。
 
-- `PHOENIX_ENDPOINT` - The base URL of your Phoenix. This is the canonical setting for the client.
-- `PHOENIX_API_KEY` - The API key to use for authentication.
-- `PHOENIX_CLIENT_HEADERS` - Custom headers to add to all requests. A JSON stringified object.
-- `PHOENIX_COLLECTOR_ENDPOINT` - Read by the OTel SDK for trace export, usually the same URL as `PHOENIX_ENDPOINT`. The client uses it for API access when `PHOENIX_ENDPOINT` is unset.
+使用以下环境变量：
+
+- `PHOENIX_ENDPOINT` - Phoenix 基础 URL，这是客户端的规范配置。
+- `PHOENIX_API_KEY` - 用于身份验证的 API 密钥。
+- `PHOENIX_CLIENT_HEADERS` - 添加到所有请求的自定义头，格式为 JSON 字符串化对象。
+- `PHOENIX_COLLECTOR_ENDPOINT` - 由 OTel SDK 读取，用于追踪导出，通常与 `PHOENIX_ENDPOINT` URL 相同。未设置 `PHOENIX_ENDPOINT` 时，客户端用它访问 API。
 
 ```bash
 PHOENIX_ENDPOINT='http://localhost:12345' PHOENIX_API_KEY='xxxxxx' pnpx tsx examples/list_datasets.ts
@@ -51,7 +55,7 @@ PHOENIX_ENDPOINT='http://localhost:12345' PHOENIX_API_KEY='xxxxxx' pnpx tsx exam
 # }
 ```
 
-Alternatively, you can pass configuration options to the client directly, and they will be prioritized over environment variables and default values.
+也可直接向客户端传入配置选项，其优先级高于环境变量和默认值。
 
 ```ts
 const phoenix = createClient({
@@ -64,10 +68,7 @@ const phoenix = createClient({
 });
 ```
 
-For credentials that can expire, create an authenticated fetch implementation
-and pass it to the client. The token provider controls storage and refresh-token
-rotation. Requests that receive a `401` share one refresh operation and are
-retried once.
+对于可能过期的凭证，请创建带身份验证的 fetch 实现并传给客户端。令牌提供方负责存储和刷新令牌轮换。收到 `401` 的请求共享一次刷新操作，并重试一次。
 
 ```ts
 import { createAuthFetch, createClient } from "@arizeai/phoenix-client";
@@ -89,13 +90,17 @@ const phoenix = createClient({
 });
 ```
 
-## Prompts
+<a id="prompts"></a>
 
-`@arizeai/phoenix-client` provides a `prompts` export that exposes utilities for working with prompts for LLMs.
+## 提示词
 
-### Creating a Prompt and push it to Phoenix
+`@arizeai/phoenix-client` 提供 `prompts` 导出，包含操作 LLM 提示词的工具。
 
-The `createPrompt` function can be used to create a prompt in Phoenix for version control and reuse.
+<a id="creating-a-prompt-and-push-it-to-phoenix"></a>
+
+### 创建提示词并推送到 Phoenix
+
+`createPrompt` 函数可在 Phoenix 中创建提示词，以进行版本管理和复用。
 
 ```ts
 import { createPrompt, promptVersion } from "@arizeai/phoenix-client/prompts";
@@ -120,11 +125,13 @@ const version = createPrompt({
 });
 ```
 
-Prompts that are pushed to Phoenix are versioned and can be tagged.
+推送到 Phoenix 的提示词会进行版本管理，并可打标签。
 
-### Pulling a Prompt from Phoenix
+<a id="pulling-a-prompt-from-phoenix"></a>
 
-The `getPrompt` function can be used to pull a prompt from Phoenix based on some Prompt Identifier and returns it in the Phoenix SDK Prompt type.
+### 从 Phoenix 拉取提示词
+
+`getPrompt` 函数可根据提示词标识符从 Phoenix 拉取提示词，并以 Phoenix SDK Prompt 类型返回。
 
 ```ts
 import { getPrompt } from "@arizeai/phoenix-client/prompts";
@@ -141,20 +148,21 @@ const promptByVersionId = await getPrompt({
 // ^ you can optionally specify a prompt version Id to filter by
 ```
 
-### Using a Phoenix Prompt with an LLM Provider SDK
+<a id="using-a-phoenix-prompt-with-an-llm-provider-sdk"></a>
 
-The `toSDK` helper function can be used to convert a Phoenix Prompt to the format expected by an LLM provider SDK. You can then use the LLM provider SDK as normal, with your prompt.
+### 配合 LLM 提供商 SDK 使用 Phoenix 提示词
 
-If your Prompt is saved in Phoenix as `openai`, you can use the `toSDK` function to convert the prompt to the format expected by OpenAI, or even Anthropic and Vercel AI SDK. We will do a best
-effort conversion to your LLM provider SDK of choice.
+`toSDK` 辅助函数可将 Phoenix Prompt 转换为 LLM 提供商 SDK 预期的格式，随后即可像往常一样使用该 SDK 和提示词。
 
-The following LLM provider SDKs are supported:
+若提示词在 Phoenix 中以 `openai` 格式保存，可用 `toSDK` 转换为 OpenAI，甚至 Anthropic 和 Vercel AI SDK 预期的格式。我们会尽力将其转换为你所选 LLM 提供商 SDK 的格式。
+
+支持以下 LLM 提供商 SDK：
 
 - Vercel AI SDK: `ai` [ai](https://www.npmjs.com/package/ai)
-- OpenAI: `openai` [openai](https://www.npmjs.com/package/openai) (v6 and v7)
+- OpenAI: `openai` [openai](https://www.npmjs.com/package/openai) （v6 和 v7）
 - Anthropic: `anthropic` [@anthropic-ai/sdk](https://www.npmjs.com/package/@anthropic-ai/sdk)
 
-> **Note:** These provider SDKs are optional peer dependencies — installing `@arizeai/phoenix-client` does not pull them in. Install the one you convert to yourself, e.g. `npm install ai`, `npm install openai`, or `npm install @anthropic-ai/sdk`. Calling `toSDK({ sdk: "ai" | "openai" | "anthropic" })` without the matching SDK installed fails at runtime.
+> **注意：** 这些提供商 SDK 是可选 peer 依赖，安装 `@arizeai/phoenix-client` 不会安装它们。请自行安装转换目标 SDK，例如 `npm install ai`、`npm install openai` 或 `npm install @anthropic-ai/sdk`。未安装对应 SDK 时调用 `toSDK({ sdk: "ai" | "openai" | "anthropic" })` 会在运行时失败。
 
 ```ts
 import { generateText } from "ai";
@@ -183,11 +191,13 @@ const response = await generateText({
 });
 ```
 
-## REST Endpoints
+<a id="rest-endpoints"></a>
 
-The client provides a REST API for all endpoints defined in the [Phoenix OpenAPI spec](https://github.com/Arize-ai/phoenix/blob/main/schemas/openapi.json).
+## REST 端点
 
-Endpoints are accessible via strongly-typed string literals and TypeScript auto-completion inside of the client object.
+客户端为 [Phoenix OpenAPI 规范](https://github.com/Arize-ai/phoenix/blob/main/schemas/openapi.json)定义的全部端点提供 REST API。
+
+可在客户端对象中通过强类型字符串字面量及 TypeScript 自动补全访问端点。
 
 ```ts
 import { createClient } from "@arizeai/phoenix-client";
@@ -207,15 +217,19 @@ const prompt = await phoenix.GET("/v1/prompts/{prompt_identifier}/latest", {
 });
 ```
 
-A comprehensive overview of the available endpoints and their parameters is available in the OpenAPI viewer within Phoenix, or in the [Phoenix OpenAPI spec](https://github.com/Arize-ai/phoenix/blob/main/schemas/openapi.json).
+可在 Phoenix 内的 OpenAPI 查看器或 [Phoenix OpenAPI 规范](https://github.com/Arize-ai/phoenix/blob/main/schemas/openapi.json)中查看可用端点及参数的完整概览。
 
-## Datasets
+<a id="datasets"></a>
 
-The `@arizeai/phoenix-client` package allows you to create and manage datasets, which are collections of examples used for experiments and evaluation.
+## 数据集
 
-### Creating a Dataset
+`@arizeai/phoenix-client` 可创建和管理数据集，即用于实验和评估的示例集合。
 
-You can create a dataset by providing a name, description, and an array of examples (each with `input`, `output`, and optional `metadata`).
+<a id="creating-a-dataset"></a>
+
+### 创建数据集
+
+提供名称、说明及示例数组即可创建数据集（每个示例包含 `input`、`output` 和可选的 `metadata`）。
 
 ```ts
 import { createDataset } from "@arizeai/phoenix-client/datasets";
@@ -239,20 +253,24 @@ const { datasetId } = await createDataset({
 // You can now use datasetId to run experiments or add more examples
 ```
 
-## Experiments
+<a id="experiments"></a>
 
-The `@arizeai/phoenix-client` package provides an experiments API for running and evaluating tasks on datasets. This is useful for benchmarking models, evaluating outputs, and tracking experiment results in Phoenix.
+## 实验
 
-### Running an Experiment
+`@arizeai/phoenix-client` 提供实验 API，在数据集上运行和评估任务，适用于模型基准测试、输出评估和在 Phoenix 中跟踪实验结果。
 
-To run an experiment, you typically:
+<a id="running-an-experiment"></a>
 
-1. Create a dataset (or use an existing one)
-2. Define a task function to run on each example
-3. Define one or more evaluators to score or label the outputs
-4. Run the experiment and inspect the results
+### 运行实验
 
-Below is a complete example:
+运行实验通常需要：
+
+1. 创建数据集（或使用已有数据集）
+2. 定义对每个示例运行的任务函数
+3. 定义一个或多个评估器，为输出评分或打标签
+4. 运行实验并检查结果
+
+下面是完整示例：
 
 ```ts
 import { createDataset } from "@arizeai/phoenix-client/datasets";
@@ -324,12 +342,13 @@ const experiment = await runExperiment({
 });
 ```
 
-> **Hint:** Tasks and evaluators are instrumented using [OpenTelemetry](https://opentelemetry.io/). You can view detailed traces of experiment runs and evaluations directly in the Phoenix UI for debugging and performance analysis.
+> **提示：** 任务和评估器通过 [OpenTelemetry](https://opentelemetry.io/) 插桩。可直接在 Phoenix UI 查看实验运行和评估的详细追踪，用于调试和性能分析。
 
-## Eval Tests
+<a id="eval-tests"></a>
 
-The package also exposes Vitest and Jest submodules for writing
-dataset-backed evaluations as normal test suites.
+## 评估测试
+
+此包还提供 Vitest 和 Jest 子模块，可将基于数据集的评估编写为普通测试套件。
 
 ```bash
 npm install -D @arizeai/phoenix-client vitest dotenv
@@ -369,35 +388,23 @@ px.describe(
 );
 ```
 
-The reference output can be supplied under any one of three interchangeable
-keys — `expected`, `reference`, or `output` — so you can match whichever name
-your evaluators expect. They all resolve to the same slot: the dataset
-example's `output`, exposed to evaluators and the test body as `expected`.
-Supplying more than one at a time is a type error.
+参考输出可通过三个可互换键之一提供：`expected`、`reference` 或 `output`，以匹配评估器预期的名称。它们都解析到同一位置，即数据集示例的 `output`，并以 `expected` 暴露给评估器和测试主体。同时提供多个键会产生类型错误。
 
-Use `@arizeai/phoenix-client/vitest/reporter` or
-`@arizeai/phoenix-client/jest/reporter` to print Phoenix dataset and
-experiment links, annotation aggregates, and acceptance criteria at the end
-of a run. Acceptance criteria gate the suite after it finishes — `average`
-checks an aggregate bar (so CI can allow a mean of 80% while still running
-every case), and `passRate` requires a minimum fraction of runs to satisfy a
-per-run `passFn` predicate.
+使用 `@arizeai/phoenix-client/vitest/reporter` 或 `@arizeai/phoenix-client/jest/reporter`，在运行结束时打印 Phoenix 数据集和实验链接、标注汇总及验收标准。验收标准在套件完成后决定是否通过：`average` 检查聚合阈值（因此 CI 可允许平均值为 80%，同时仍运行每个用例），`passRate` 则要求至少一定比例的运行满足逐次运行的 `passFn` 谓词。
 
-See the [CI Eval Tests](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals),
-[Vitest](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals-vitest),
-[Jest](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals-jest),
-and [Annotations](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals-annotations)
-guides for setup, the full
-`describe` / `test` / `test.each` API, acceptance criteria, repetitions,
-dry-run mode, and annotation details.
+配置、完整 `describe` / `test` / `test.each` API、验收标准、重复执行、试运行模式及标注详情见 [CI 评估测试](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals)、[Vitest](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals-vitest)、[Jest](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals-jest)和[标注](https://arize.com/docs/phoenix/sdk-api-reference/typescript/packages/phoenix-client/ci-evals-annotations)指南。
 
-## Traces
+<a id="traces"></a>
 
-The `@arizeai/phoenix-client` package provides a `traces` export for retrieving trace data from Phoenix projects.
+## 追踪
 
-### Fetching Traces
+`@arizeai/phoenix-client` 提供 `traces` 导出，用于从 Phoenix 项目获取追踪数据。
 
-Use `getTraces` to retrieve traces with optional filtering, sorting, and pagination.
+<a id="fetching-traces"></a>
+
+### 获取追踪
+
+使用 `getTraces` 获取追踪，可选过滤、排序和分页。
 
 ```ts
 import { getTraces } from "@arizeai/phoenix-client/traces";
@@ -432,30 +439,29 @@ const slowFailures = await getTraces({
 });
 ```
 
-| Parameter      | Type                           | Description                                                  |
+| 参数      | 类型                           | 说明                                                  |
 | -------------- | ------------------------------ | ------------------------------------------------------------ |
-| `project`      | `ProjectIdentifier`            | The project (by name or ID) — **required**                   |
-| `startTime`    | `Date \| string \| null`       | Inclusive lower bound on trace start time                    |
-| `endTime`      | `Date \| string \| null`       | Exclusive upper bound on trace start time                    |
-| `sort`         | `"start_time" \| "latency_ms"` | Sort field                                                   |
-| `order`        | `"asc" \| "desc"`              | Sort direction                                               |
-| `limit`        | `number`                       | Maximum number of traces to return                           |
-| `cursor`       | `string \| null`               | Pagination cursor                                            |
-| `includeSpans` | `boolean`                      | Include full span details for each trace                     |
-| `sessionId`    | `string \| string[] \| null`   | Filter traces by session identifier(s)                       |
-| `filter`       | `string \| null`               | Trace filter expression                                      |
-| `error`        | `boolean \| null`              | Only traces with (`true`) or without (`false`) errored spans |
-| `minLatencyMs` | `number \| null`               | Inclusive lower bound on trace latency (ms)                  |
-| `maxLatencyMs` | `number \| null`               | Inclusive upper bound on trace latency (ms)                  |
+| `project`      | `ProjectIdentifier`            | 项目（按名称或 ID），**必填**                   |
+| `startTime`    | `Date \| string \| null`       | 追踪开始时间下界（包含）                    |
+| `endTime`      | `Date \| string \| null`       | 追踪开始时间上界（不包含）                    |
+| `sort`         | `"start_time" \| "latency_ms"` | 排序字段                                                   |
+| `order`        | `"asc" \| "desc"`              | 排序方向                                               |
+| `limit`        | `number`                       | 返回追踪的最大数量                           |
+| `cursor`       | `string \| null`               | 分页游标                                            |
+| `includeSpans` | `boolean`                      | 包含每条追踪的完整 Span 详情                     |
+| `sessionId`    | `string \| string[] \| null`   | 按会话标识符过滤追踪                       |
+| `filter`       | `string \| null`               | 追踪过滤表达式                                      |
+| `error`        | `boolean \| null`              | 仅返回含有（`true`）或不含（`false`）出错 Span 的追踪 |
+| `minLatencyMs` | `number \| null`               | 追踪延迟下界（毫秒，包含）                  |
+| `maxLatencyMs` | `number \| null`               | 追踪延迟上界（毫秒，包含）                  |
 
-`error`, `minLatencyMs`, and `maxLatencyMs` are deprecated but remain supported on
-server >= 20.8.0. Use `error_count > 0` / `error_count == 0`, `latency_ms >= N`, and
-`latency_ms <= N` in `filter` instead. Empty expressions do not filter; invalid
-expressions return HTTP 400. Keep the same expression when requesting the next page.
+`error`、`minLatencyMs` 和 `maxLatencyMs` 已弃用，但服务器 >= 20.8.0 仍支持。请改用 `filter` 中的 `error_count > 0` / `error_count == 0`、`latency_ms >= N` 和 `latency_ms <= N`。空表达式不执行过滤，无效表达式返回 HTTP 400。请求下一页时保持相同表达式。
 
-### Pagination
+<a id="pagination"></a>
 
-Use the `cursor` from a previous result to fetch the next page:
+### 分页
+
+使用上一次结果的 `cursor` 获取下一页：
 
 ```ts
 import { getTraces } from "@arizeai/phoenix-client/traces";
@@ -474,11 +480,13 @@ do {
 } while (cursor);
 ```
 
-> **Note:** Requires Phoenix server >= 13.15.0.
+> **注意：** 要求 Phoenix 服务器 >= 13.15.0。
 
-### Trace Annotations
+<a id="trace-annotations"></a>
 
-Add structured feedback (label/score by name) to entire traces. Use `addTraceAnnotation` for one trace or `logTraceAnnotations` for batches.
+### 追踪标注
+
+为整个追踪添加结构化反馈（按名称记录标签/分数）。单条追踪使用 `addTraceAnnotation`，批量使用 `logTraceAnnotations`。
 
 ```ts
 import {
@@ -520,11 +528,13 @@ await logTraceAnnotations({
 });
 ```
 
-The reserved name `note` is rejected — use `addTraceNote` instead for free-form notes (see below).
+保留名称 `note` 会被拒绝；自由文本笔记请使用 `addTraceNote`（见下文）。
 
-### Trace Notes
+<a id="trace-notes"></a>
 
-Notes are a special type of annotation for free-form text — useful for open coding, where reviewers leave qualitative observations on a trace before any rubric exists. Multiple notes can coexist on the same trace.
+### 追踪笔记
+
+笔记是一种用于自由文本的特殊标注，适用于开放编码：评审者在尚未建立评判标准时，对追踪记录定性观察。同一追踪可有多条笔记。
 
 ```ts
 import { addTraceNote } from "@arizeai/phoenix-client/traces";
@@ -537,15 +547,19 @@ await addTraceNote({
 });
 ```
 
-> **Note:** `addTraceNote` requires Phoenix server >= 14.13.0.
+> **注意：** `addTraceNote` 要求 Phoenix 服务器 >= 14.13.0。
 
-## Spans
+<a id="spans"></a>
 
-The `@arizeai/phoenix-client` package provides a `spans` export for querying spans with powerful filtering.
+## Span
 
-### Fetching Spans
+`@arizeai/phoenix-client` 提供 `spans` 导出，通过强大过滤能力查询 Span。
 
-Use `getSpans` to retrieve spans with filtering by kind, status, name, trace, and more.
+<a id="fetching-spans"></a>
+
+### 获取 Span
+
+使用 `getSpans` 获取 Span，可按类型、状态、名称、追踪等过滤。
 
 ```ts
 import { getSpans } from "@arizeai/phoenix-client/spans";
@@ -577,22 +591,24 @@ const rootSpans = await getSpans({
 });
 ```
 
-| Parameter    | Type                                 | Description                                                     |
+| 参数    | 类型                                 | 说明                                                     |
 | ------------ | ------------------------------------ | --------------------------------------------------------------- |
-| `project`    | `ProjectIdentifier`                  | The project (by name or ID) — **required**                      |
-| `startTime`  | `Date \| string \| null`             | Inclusive lower bound time                                      |
-| `endTime`    | `Date \| string \| null`             | Exclusive upper bound time                                      |
-| `limit`      | `number`                             | Maximum number of spans to return                               |
-| `cursor`     | `string \| null`                     | Pagination cursor (Span GlobalID)                               |
-| `traceIds`   | `string[] \| null`                   | Filter by trace ID(s)                                           |
-| `parentId`   | `string \| null`                     | Filter by parent span ID (`null` for root spans only)           |
-| `name`       | `string \| string[] \| null`         | Filter by span name(s)                                          |
-| `spanKind`   | `SpanKindFilter \| SpanKindFilter[]` | Filter by span kind (`LLM`, `CHAIN`, `TOOL`, `RETRIEVER`, etc.) |
-| `statusCode` | `SpanStatusCode \| SpanStatusCode[]` | Filter by status code (`OK`, `ERROR`, `UNSET`)                  |
+| `project`    | `ProjectIdentifier`                  | 项目（按名称或 ID），**必填**                      |
+| `startTime`  | `Date \| string \| null`             | 时间下界（包含）                                      |
+| `endTime`    | `Date \| string \| null`             | 时间上界（不包含）                                      |
+| `limit`      | `number`                             | 返回 Span 的最大数量                               |
+| `cursor`     | `string \| null`                     | 分页游标（Span GlobalID）                               |
+| `traceIds`   | `string[] \| null`                   | 按追踪 ID 过滤                                           |
+| `parentId`   | `string \| null`                     | 按父 Span ID 过滤（`null` 表示仅根 Span）           |
+| `name`       | `string \| string[] \| null`         | 按 Span 名称过滤                                          |
+| `spanKind`   | `SpanKindFilter \| SpanKindFilter[]` | 按 Span 类型过滤（`LLM`、`CHAIN`、`TOOL`、`RETRIEVER` 等） |
+| `statusCode` | `SpanStatusCode \| SpanStatusCode[]` | 按状态码过滤（`OK`、`ERROR`、`UNSET`）                  |
 
-### Logging Spans
+<a id="logging-spans"></a>
 
-Use `logSpans` to submit spans directly to a project using Phoenix's simplified span structure — the same shape returned by `getSpans`. This is useful for backfilling or migrating spans without going through OpenTelemetry. If your application is already instrumented with OpenTelemetry, export spans via `@arizeai/phoenix-otel` instead.
+### 写入 Span
+
+使用 `logSpans` 以 Phoenix 简化 Span 结构直接向项目提交 Span，该结构与 `getSpans` 的返回结构相同，适用于无需经过 OpenTelemetry 的 Span 回填或迁移。若应用已通过 OpenTelemetry 插桩，请改用 `@arizeai/phoenix-otel` 导出 Span。
 
 ```ts
 import { logSpans } from "@arizeai/phoenix-client/spans";
@@ -614,13 +630,17 @@ const result = await logSpans({
 console.log(`Queued ${result.totalQueued} of ${result.totalReceived} spans`);
 ```
 
-If any span in the request is invalid or a duplicate of a span that already exists, none of the spans are queued and `logSpans` throws a `SpanCreationError` with `invalidSpans` and `duplicateSpans` details.
+若请求中的任意 Span 无效或与已有 Span 重复，则不会将任何 Span 加入队列，`logSpans` 会抛出包含 `invalidSpans` 和 `duplicateSpans` 详情的 `SpanCreationError`。
 
-## Span Annotations
+<a id="span-annotations"></a>
 
-The `spans` export also provides functions for managing span annotations — adding evaluations, feedback, and labels to spans.
+## Span 标注
 
-### Adding a Single Annotation
+`spans` 导出还提供管理 Span 标注的函数，可为 Span 添加评估、反馈和标签。
+
+<a id="adding-a-single-annotation"></a>
+
+### 添加单个标注
 
 ```ts
 import { addSpanAnnotation } from "@arizeai/phoenix-client/spans";
@@ -639,7 +659,9 @@ const result = await addSpanAnnotation({
 // result: { id: "annotation-id" } when sync: true, null when sync: false
 ```
 
-### Logging Multiple Annotations
+<a id="logging-multiple-annotations"></a>
+
+### 写入多个标注
 
 ```ts
 import { logSpanAnnotations } from "@arizeai/phoenix-client/spans";
@@ -666,7 +688,9 @@ const results = await logSpanAnnotations({
 // results: [{ id: "..." }, { id: "..." }]
 ```
 
-### Fetching Span Annotations
+<a id="fetching-span-annotations"></a>
+
+### 获取 Span 标注
 
 ```ts
 import { getSpanAnnotations } from "@arizeai/phoenix-client/spans";
@@ -680,22 +704,26 @@ const result = await getSpanAnnotations({
 console.log(result.data); // array of span annotation objects
 ```
 
-| Parameter                | Type                | Description                                      |
+| 参数                | 类型                | 说明                                      |
 | ------------------------ | ------------------- | ------------------------------------------------ |
-| `project`                | `ProjectIdentifier` | The project (by name or ID) — **required**       |
-| `spanIds`                | `string[]`          | Span IDs to fetch annotations for — **required** |
-| `includeAnnotationNames` | `string[]`          | Only return annotations with these names         |
-| `excludeAnnotationNames` | `string[]`          | Exclude annotations with these names             |
-| `cursor`                 | `string \| null`    | Pagination cursor                                |
-| `limit`                  | `number`            | Maximum annotations to return                    |
+| `project`                | `ProjectIdentifier` | 项目（按名称或 ID），**必填**       |
+| `spanIds`                | `string[]`          | 需要获取标注的 Span ID，**必填** |
+| `includeAnnotationNames` | `string[]`          | 只返回指定名称的标注         |
+| `excludeAnnotationNames` | `string[]`          | 排除指定名称的标注             |
+| `cursor`                 | `string \| null`    | 分页游标                                |
+| `limit`                  | `number`            | 返回标注的最大数量                    |
 
-## Sessions
+<a id="sessions"></a>
 
-The `@arizeai/phoenix-client` package provides a `sessions` export for managing conversation sessions and their annotations.
+## 会话
 
-### Fetching Sessions
+`@arizeai/phoenix-client` 提供 `sessions` 导出，用于管理对话会话及其标注。
 
-Use `listSessions` to list all sessions for a project, or `getSession` to retrieve a single session by ID.
+<a id="fetching-sessions"></a>
+
+### 获取会话
+
+使用 `listSessions` 列出项目所有会话，或用 `getSession` 按 ID 获取单个会话。
 
 ```ts
 import {
@@ -721,7 +749,9 @@ const session = await getSession({ sessionId: "my-session-id" });
 console.log(session.traces); // array of trace summaries in the session
 ```
 
-### Adding Session Annotations
+<a id="adding-session-annotations"></a>
+
+### 添加会话标注
 
 ```ts
 await addSessionAnnotation({
@@ -735,9 +765,11 @@ await addSessionAnnotation({
 });
 ```
 
-### Adding Session Notes
+<a id="adding-session-notes"></a>
 
-Session notes require Phoenix server `14.17.0` or newer.
+### 添加会话笔记
+
+会话笔记要求 Phoenix 服务器 `14.17.0` 或更高版本。
 
 ```ts
 await addSessionNote({
@@ -748,13 +780,17 @@ await addSessionNote({
 });
 ```
 
-## Projects
+<a id="projects"></a>
 
-The `@arizeai/phoenix-client` package provides a `projects` export for listing projects and managing their retention-policy and annotation-config assignments.
+## 项目
 
-### Fetching Projects
+`@arizeai/phoenix-client` 提供 `projects` 导出，用于列出项目及管理分配给项目的保留策略和标注配置。
 
-Use `getProjects` to list projects. Pagination is handled for you.
+<a id="fetching-projects"></a>
+
+### 获取项目
+
+使用 `getProjects` 列出项目，分页会自动处理。
 
 ```ts
 import { getProjects } from "@arizeai/phoenix-client/projects";
@@ -767,15 +803,17 @@ for (const project of projects) {
 }
 ```
 
-Pass `nameContains` to filter by a case-insensitive substring of the project name. The filter is applied server-side and requires Phoenix server `17.16.0` or newer.
+传入 `nameContains` 可按不区分大小写的项目名称子串过滤。过滤在服务器端执行，要求 Phoenix 服务器 `17.16.0` 或更高版本。
 
 ```ts
 const agentProjects = await getProjects({ nameContains: "agent" });
 ```
 
-### Assigning a Retention Policy
+<a id="assigning-a-retention-policy"></a>
 
-Use `setProjectRetentionPolicy` to assign an existing trace retention policy by GlobalID. Select the project by name or GlobalID.
+### 分配保留策略
+
+使用 `setProjectRetentionPolicy` 按 GlobalID 分配已有追踪保留策略，通过名称或 GlobalID 选择项目。
 
 ```ts
 import { setProjectRetentionPolicy } from "@arizeai/phoenix-client/projects";
@@ -786,7 +824,7 @@ await setProjectRetentionPolicy({
 });
 ```
 
-Pass `policyId: null` to reset the project to Phoenix's default retention policy:
+传入 `policyId: null` 可将项目重置为 Phoenix 默认保留策略：
 
 ```ts
 await setProjectRetentionPolicy({
@@ -795,11 +833,13 @@ await setProjectRetentionPolicy({
 });
 ```
 
-This helper only changes a project's assignment to an existing policy. Creating, reading, updating, and deleting retention policies is outside the scope of the TypeScript projects helper.
+此辅助函数只修改项目与已有策略的分配关系。创建、读取、更新和删除保留策略不属于 TypeScript 项目辅助函数的范围。
 
-### Assigning Annotation Configs
+<a id="assigning-annotation-configs"></a>
 
-Use `assignProjectAnnotationConfig` and `unassignProjectAnnotationConfig` to add or remove a single annotation config. Select the project and the config by name or GlobalID. Both calls are idempotent. These helpers require Phoenix server `17.16.0` or newer.
+### 分配标注配置
+
+使用 `assignProjectAnnotationConfig` 和 `unassignProjectAnnotationConfig` 添加或移除单个标注配置，通过名称或 GlobalID 选择项目和配置。两个调用均幂等。这些辅助函数要求 Phoenix 服务器 `17.16.0` 或更高版本。
 
 ```ts
 import {
@@ -820,7 +860,7 @@ await unassignProjectAnnotationConfig({
 });
 ```
 
-Use `setProjectAnnotationConfigs` to replace the whole set by config GlobalID. Pass an empty list to clear every assignment:
+使用 `setProjectAnnotationConfigs` 通过配置 GlobalID 替换整个集合。传入空列表可清除所有分配：
 
 ```ts
 const configs = await listProjectAnnotationConfigs({
@@ -841,14 +881,13 @@ await setProjectAnnotationConfigs({
 });
 ```
 
-If a config name contains `/`, select it by `configId` instead. The server can't route a `/` in the URL path.
+若配置名称包含 `/`，请改用 `configId` 选择，因为服务器无法在 URL 路径中路由名称中的 `/`。
 
-## Secrets
+<a id="secrets"></a>
 
-Use the `secrets` entrypoint to atomically create, update, or delete encrypted
-provider credentials. A string value creates or updates a key, while `null`
-deletes it. Duplicate keys use the last occurrence in the batch. The result
-contains only changed key names and never returns secret values.
+## 密钥
+
+使用 `secrets` 入口以原子方式创建、更新或删除加密的提供商凭证。字符串值创建或更新键，`null` 则删除键。重复键取批次中最后一次出现的值。结果仅包含已变更的键名，绝不返回密钥值。
 
 ```ts
 import { upsertOrDeleteSecrets } from "@arizeai/phoenix-client/secrets";
@@ -867,12 +906,13 @@ console.log(result.upsertedKeys);
 console.log(result.deletedKeys);
 ```
 
-Managing secrets requires an administrator when Phoenix authentication is
-enabled. Avoid logging the request batch or otherwise retaining its values.
+启用 Phoenix 身份验证时，管理密钥需要管理员权限。避免记录请求批次或以其他方式保留其中的值。
 
-## Examples
+<a id="examples"></a>
 
-To run examples, install dependencies using `pnpm` and run:
+## 示例
+
+运行示例时，使用 `pnpm` 安装依赖并运行：
 
 ```bash
 pnpm install
@@ -880,30 +920,34 @@ pnpx tsx examples/list_datasets.ts
 # change the file name to run other examples
 ```
 
-## Compatibility
+<a id="compatibility"></a>
 
-This package utilizes [openapi-ts](https://openapi-ts.pages.dev/) to generate the types from the Phoenix OpenAPI spec.
+## 兼容性
 
-Because of this, this package only works with the `arize-phonix` server 8.0.0 and above.
+此包使用 [openapi-ts](https://openapi-ts.pages.dev/) 从 Phoenix OpenAPI 规范生成类型。
 
-Compatibility Table:
+因此，此包只支持 `arize-phonix` 服务器 8.0.0 及更高版本。
 
-| Phoenix Client Version | Phoenix Server Version |
+兼容性表：
+
+| Phoenix Client 版本 | Phoenix Server 版本 |
 | ---------------------- | ---------------------- |
 | ^2.0.0                 | ^9.0.0                 |
 | ^1.0.0                 | ^8.0.0                 |
 
 ---
 
-## Community
+<a id="community"></a>
 
-Join our community to connect with thousands of AI builders:
+## 社区
 
-- 🌍 Join our [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
-- 📚 Read the [Phoenix documentation](https://arize.com/docs/phoenix).
-- 💡 Ask questions and provide feedback in the _#phoenix-support_ channel.
-- 🌟 Leave a star on our [GitHub](https://github.com/Arize-ai/phoenix).
-- 🐞 Report bugs with [GitHub Issues](https://github.com/Arize-ai/phoenix/issues).
-- 𝕏 Follow us on [𝕏](https://twitter.com/ArizePhoenix).
-- 💼 Follow us on [LinkedIn](https://www.linkedin.com/showcase/113218220).
-- 🗺️ Check out our [roadmap](https://github.com/orgs/Arize-ai/projects/45) to see where we're heading next.
+加入我们的社区，与数千名 AI 开发者交流：
+
+- 🌍 加入我们的 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
+- 📚 阅读 [Phoenix 文档](https://arize.com/docs/phoenix).
+- 💡 在 _#phoenix-support_ 频道提问并反馈。
+- 🌟 为我们的 [GitHub](https://github.com/Arize-ai/phoenix) 加星。
+- 🐞 通过 [GitHub Issues](https://github.com/Arize-ai/phoenix/issues) 报告问题。
+- 𝕏 在 [𝕏](https://twitter.com/ArizePhoenix) 关注我们。
+- 💼 在 [LinkedIn](https://www.linkedin.com/showcase/113218220) 关注我们。
+- 🗺️ 查看我们的[路线图](https://github.com/orgs/Arize-ai/projects/45)，了解未来方向。

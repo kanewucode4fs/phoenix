@@ -1,28 +1,34 @@
-# Phoenix Tracing Tutorial (TypeScript)
+<a id="phoenix-tracing-tutorial-typescript"></a>
 
-Build a support agent and trace every LLM call, tool execution, and RAG retrieval with Phoenix. Evaluate response quality with annotations and LLM-as-Judge. Track multi-turn conversations as sessions.
+# Phoenix 追踪教程（TypeScript）
 
-This tutorial accompanies the Phoenix Tracing Tutorial documentation:
+构建客服 Agent，使用 Phoenix 追踪每次 LLM 调用、工具执行及 RAG 检索。通过标注和 LLM 裁判评估响应质量，将多轮对话作为会话跟踪。
 
-- [Chapter 1: Your First Traces](https://docs.arize.com/phoenix/tracing/tutorial/your-first-traces)
-- [Chapter 2: Annotations and Evaluation](https://docs.arize.com/phoenix/tracing/tutorial/annotations-and-evaluation)
-- [Chapter 3: Sessions](https://docs.arize.com/phoenix/tracing/tutorial/sessions)
+本教程与 Phoenix 追踪教程文档配套：
 
-## Prerequisites
+- [第 1 章：第一批追踪](https://docs.arize.com/phoenix/tracing/tutorial/your-first-traces)
+- [第 2 章：标注与评估](https://docs.arize.com/phoenix/tracing/tutorial/annotations-and-evaluation)
+- [第 3 章：会话](https://docs.arize.com/phoenix/tracing/tutorial/sessions)
 
-- **Node.js 18+** installed
-- **Phoenix** running locally (`uvx arize-phoenix serve`, or `pip install arize-phoenix && phoenix serve`)
-- **OpenAI API key**
+<a id="prerequisites"></a>
 
-## Setup
+## 前置条件
 
-1. **Install dependencies:**
+- 已安装 **Node.js 18+**
+- **Phoenix** 在本地运行 (`uvx arize-phoenix serve`，或 `pip install arize-phoenix && phoenix serve`)
+- **OpenAI API 密钥**
+
+<a id="setup"></a>
+
+## 配置
+
+1. **安装依赖：**
 
 ```bash
 pnpm install
 ```
 
-2. **Set environment variables:**
+2. **设置环境变量：**
 
 ```bash
 # OpenAI API key (required)
@@ -32,78 +38,88 @@ export OPENAI_API_KEY=your-openai-api-key
 export PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
 ```
 
-3. **Start Phoenix** (if running locally):
+3. **启动 Phoenix**（若在本地运行）：
 
 ```bash
 pip install arize-phoenix
 phoenix serve
 ```
 
-## Chapter 1: Your First Traces
+<a id="chapter-1-your-first-traces"></a>
+
+## 第 1 章：第一批追踪
 
 ```bash
 pnpm start
 ```
 
-This runs the complete support agent that demonstrates:
+这会运行完整的客服 Agent，展示：
 
-- **Query Classification** - LLM decides if it's an order status or FAQ question
-- **Tool Calls** - For order status, calls `lookupOrderStatus` tool and summarizes results
-- **RAG Pipeline** - For FAQs, embeds the query, searches knowledge base, generates answer
-- **Interactive Feedback** - After all responses, prompts you to rate each one (y/n/s)
+- **查询分类**：LLM 判断是订单状态问题还是常见问题
+- **工具调用**：针对订单状态，调用 `lookupOrderStatus` 工具并总结结果
+- **RAG 流水线**：针对常见问题，嵌入查询、搜索知识库并生成答案
+- **交互反馈**：完成所有响应后，提示你逐一评价（y/n/s）
 
-## Chapter 2: Annotations and Evaluation
+<a id="chapter-2-annotations-and-evaluation"></a>
 
-After running the agent, evaluate the responses:
+## 第 2 章：标注与评估
+
+运行 Agent 后评估响应：
 
 ```bash
 pnpm evaluate
 ```
 
-This runs LLM-as-Judge evaluations that:
+这会运行 LLM 裁判评估，执行：
 
-- Fetch recent spans from Phoenix
-- Run **tool_result** (success/error) checks on tool calls
-- Run **retrieval_relevance** (LLM-as-Judge) on RAG queries
-- Log evaluation results back to Phoenix as annotations
-- Print a summary of pass/fail rates
+- 从 Phoenix 获取近期 Span
+- 对工具调用运行 **tool_result**（成功/错误）检查
+- 对 RAG 查询运行 **retrieval_relevance**（LLM 裁判）评估
+- 将评估结果作为标注写回 Phoenix
+- 打印通过/失败率摘要
 
-## Chapter 3: Sessions
+<a id="chapter-3-sessions"></a>
 
-Run multi-turn conversation demos:
+## 第 3 章：会话
+
+运行多轮对话演示：
 
 ```bash
 pnpm sessions
 ```
 
-This runs three conversation scenarios:
+这会运行三种对话场景：
 
-- **Order Inquiry** - Customer asks about order, then follow-up questions
-- **FAQ Conversation** - Multiple FAQ questions in one session
-- **Mixed Conversation** - Switching between order and FAQ topics
+- **订单咨询**：客户询问订单后继续追问
+- **常见问题对话**：同一会话中包含多个常见问题
+- **混合对话**：在订单和常见问题之间切换
 
-Each conversation gets a unique session ID. View them in Phoenix's **Sessions** tab.
+每段对话都有唯一会话 ID，可在 Phoenix 的**会话**选项卡查看。
 
-Then evaluate sessions:
+然后评估会话：
 
 ```bash
 pnpm evaluate:sessions
 ```
 
-This runs session-level evaluations:
+这会运行会话级评估：
 
-- **Conversation Coherence** - Did the agent maintain context?
-- **Resolution Status** - Was the customer's issue resolved?
+- **对话连贯性**：Agent 是否保持上下文？
+- **解决状态**：客户问题是否得到解决？
 
-## What to Look For in Phoenix
+<a id="what-to-look-for-in-phoenix"></a>
 
-Open Phoenix at `http://localhost:6006` after running the scripts.
+## 在 Phoenix 中查看什么
 
-### Traces (Chapter 1)
+运行脚本后，在 `http://localhost:6006` 打开 Phoenix。
 
-Each `support-agent` trace shows the complete request flow:
+<a id="traces-chapter-1"></a>
 
-**Order Status Query:**
+### 追踪（第 1 章）
+
+每条 `support-agent` 追踪都展示完整请求流程：
+
+**订单状态查询：**
 
 ```
 support-agent (AGENT)
@@ -113,7 +129,7 @@ support-agent (AGENT)
 └── ai.generateText (summarizes tool result)
 ```
 
-**FAQ Query:**
+**常见问题查询：**
 
 ```
 support-agent (AGENT)
@@ -122,27 +138,33 @@ support-agent (AGENT)
 └── ai.generateText (RAG generation)
 ```
 
-### Annotations (Chapter 2)
+<a id="annotations-chapter-2"></a>
 
-Check the **Annotations** tab on each trace to see:
+### 标注（第 2 章）
 
-- **user_feedback** - Interactive thumbs up/down from users
-- **tool_result** - Code-based: success/error
-- **retrieval_relevance** - LLM evaluation: relevant/irrelevant
+查看每条追踪的**标注**选项卡，了解：
 
-Filter traces by annotation values to find patterns in failures.
+- **user_feedback** - 用户交互式点赞/点踩反馈
+- **tool_result** - 基于代码：success/error
+- **retrieval_relevance** - LLM 评估：relevant/irrelevant
 
-### Sessions (Chapter 3)
+按标注值过滤追踪，发现失败模式。
 
-Click the **Sessions** tab in Phoenix to see:
+<a id="sessions-chapter-3"></a>
 
-- **Conversation threads** - All turns grouped by session ID
-- **Chat view** - Click into a session to see the full back-and-forth
-- **Session annotations** - Coherence and resolution status on the last turn
+### 会话（第 3 章）
 
-Filter sessions by `conversation_coherence` or `resolution_status` to find problematic conversations.
+点击 Phoenix 的**会话**选项卡，查看：
 
-## Project Structure
+- **对话线程**：按会话 ID 分组的所有轮次
+- **聊天视图**：点击会话查看完整往返对话
+- **会话标注**：最后一轮上的连贯性和解决状态标注
+
+按 `conversation_coherence` 或 `resolution_status` 过滤会话，找到存在问题的对话。
+
+<a id="project-structure"></a>
+
+## 项目结构
 
 ```
 ts-tutorial/

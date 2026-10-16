@@ -5,7 +5,7 @@ allowed_tools: [Skill, Read]
 runs: 3
 tags: [phoenix-cli]
 ---
-A user asked our analytics assistant (Phoenix project `analytics-assistant`) to export a report as a PDF and email it. We have a `pdf-export` skill that does exactly that, plus `get_report` and `send_email` tools. Instead the bot gave generic "use your browser's print dialog" advice. Here's the full trace. You can't reach my Phoenix from here. What happened, and how do I find out how often we're missing the skill like this?
+用户要求我们的分析助手（Phoenix 项目 `analytics-assistant`）将报告导出为 PDF 并通过邮件发送。我们已有专门完成该任务的 `pdf-export` 技能，以及 `get_report` 和 `send_email` 工具。机器人却给出了“使用浏览器打印对话框”这样的通用建议。下面是完整追踪记录。你无法从这里访问我的 Phoenix。发生了什么？如何查出这种未使用技能的情况发生了多少次？
 
 ```json
 {

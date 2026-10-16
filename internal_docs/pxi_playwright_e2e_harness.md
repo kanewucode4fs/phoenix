@@ -1,43 +1,48 @@
-# PXI Playwright E2E Harness Proposal
+<a id="pxi-playwright-e2e-harness-proposal"></a>
+# PXI Playwright 端到端测试框架提案
 
-This proposal describes a Playwright harness for evaluating PXI through the Phoenix frontend, grounded in the current PXI request flow and Phoenix experiment APIs.
+本提案基于现有 PXI 请求流程和 Phoenix 实验 API，描述通过 Phoenix 前端评测 PXI 的 Playwright 测试框架。
 
-## Goals
+<a id="goals"></a>
+## 目标
 
-- Make PXI E2E tests easy to author for complex, frontend-driven agent scenarios.
-- Run Phoenix in an isolated test environment with deterministic seed data.
-- Exercise PXI through the real UI, including route context, model selection, streaming, and browser-executed tools.
-- Persist each test case as a Phoenix experiment run with an LLM-as-judge evaluation.
-- Capture enough artifacts to debug agent failures without rerunning locally.
+- 让复杂的前端驱动 Agent 场景易于编写 PXI 端到端测试。
+- 在隔离环境中运行 Phoenix，使用确定性的种子数据。
+- 通过真实界面测试 PXI，包括路由上下文、模型选择、流式传输和浏览器执行的工具。
+- 将每个用例持久化为 Phoenix 实验运行，并附加 LLM 裁判评估。
+- 收集足够的产物，无需本地重跑即可调试 Agent 故障。
 
-## Current PXI Mechanisms
+<a id="current-pxi-mechanisms"></a>
+## 当前 PXI 机制
 
-PXI chat is owned by the frontend runtime but server-defined at the model boundary.
+PXI 聊天由前端运行时管理，但模型边界由服务端定义。
 
-- `js/app/src/components/agent/useAgentChat.ts` creates an AI SDK `Chat` runtime and binds it to React with `useChat`.
-- `js/app/src/components/agent/useAgentChatPanelState.ts` builds the chat URL as `/chat?provider_type=...&provider=...&model_name=...` or `/chat?provider_type=custom&provider_id=...&model_name=...`.
-- `js/app/src/agent/chat/buildAgentChatRequestBody.ts` adds PXI-specific request fields: `userInstructions`, `traceNameSuffix`, `sessionId`, `ingestTraces`, `exportRemoteTraces`, `contexts`, and `capabilities`.
-- `src/phoenix/server/api/routers/chat.py` handles `POST /chat`, builds the model from query params, injects Phoenix context into the message history, resolves server-owned tools, and streams the response.
-- `src/phoenix/server/agents/tools/registry.py` advertises external tools and context-gated tools. External tools currently include `ask_user` and `bash`; contextual tools currently include `set_spans_filter` when required UI context is present.
-- `js/app/src/agent/extensions/toolRegistry.ts` dispatches browser-executed tools by name, validates tool inputs, checks capabilities, and returns tool outputs through the AI SDK runtime.
-- `js/app/src/store/agentStore.ts` persists sessions in local storage under `arize-phoenix-agent` and stores ephemeral runtime state for contexts, client actions, pending elicitations, and chat status.
+- `js/app/src/components/agent/useAgentChat.ts` 创建 AI SDK `Chat` 运行时，并通过 `useChat` 绑定 React。
+- `js/app/src/components/agent/useAgentChatPanelState.ts` 将聊天 URL 构造为 `/chat?provider_type=...&provider=...&model_name=...` 或 `/chat?provider_type=custom&provider_id=...&model_name=...`。
+- `js/app/src/agent/chat/buildAgentChatRequestBody.ts` 添加 PXI 专用请求字段：`userInstructions`、`traceNameSuffix`、`sessionId`、`ingestTraces`、`exportRemoteTraces`、`contexts` 和 `capabilities`。
+- `src/phoenix/server/api/routers/chat.py` 处理 `POST /chat`，根据查询参数构建模型，向消息历史注入 Phoenix 上下文，解析服务端管理的工具，并流式返回响应。
+- `src/phoenix/server/agents/tools/registry.py` 公布外部工具和受上下文控制的工具。外部工具目前有 `ask_user` 和 `bash`；提供所需界面上下文时，上下文工具目前有 `set_spans_filter`。
+- `js/app/src/agent/extensions/toolRegistry.ts` 按名称分派浏览器执行工具，验证输入、检查能力，并通过 AI SDK 运行时返回工具输出。
+- `js/app/src/store/agentStore.ts` 在本地存储的 `arize-phoenix-agent` 下持久化会话，并保存上下文、客户端操作、待处理信息征询和聊天状态等临时运行时状态。
 
-The harness should not duplicate tool schemas in tests. It should observe the same user-visible transcript and, where needed, instrument the existing stream/store/request surfaces.
+框架不应在测试中重复工具 schema。应观察与用户所见相同的对话记录，并按需为现有流、存储和请求接口添加插桩。
 
-## Current Experiment APIs
+<a id="current-experiment-apis"></a>
+## 当前实验 API
 
-Phoenix already has the REST endpoints needed to persist PXI test results as experiments.
+Phoenix 已有将 PXI 测试结果持久化为实验所需的 REST 端点。
 
-- Create or update a dataset with examples: `POST /v1/datasets/upload?sync=true` from `src/phoenix/server/api/routers/v1/datasets.py`.
-- Create an experiment for a dataset: `POST /v1/datasets/{dataset_id}/experiments` from `src/phoenix/server/api/routers/v1/experiments.py`.
-- Create an experiment run: `POST /v1/experiments/{experiment_id}/runs` from `src/phoenix/server/api/routers/v1/experiment_runs.py`.
-- Upsert an experiment evaluation: `POST /v1/experiment_evaluations` from `src/phoenix/server/api/routers/v1/experiment_evaluations.py`.
+- 创建或更新带示例的数据集：`src/phoenix/server/api/routers/v1/datasets.py` 中的 `POST /v1/datasets/upload?sync=true`。
+- 为数据集创建实验：`src/phoenix/server/api/routers/v1/experiments.py` 中的 `POST /v1/datasets/{dataset_id}/experiments`。
+- 创建实验运行：`src/phoenix/server/api/routers/v1/experiment_runs.py` 中的 `POST /v1/experiments/{experiment_id}/runs`。
+- 更新或插入实验评估：`src/phoenix/server/api/routers/v1/experiment_evaluations.py` 中的 `POST /v1/experiment_evaluations`。
 
-The TypeScript client already wraps most of this flow for normal task experiments in `js/packages/phoenix-client/src/experiments/runExperiment.ts`, but PXI tests should use direct REST calls or small wrappers because the task is an already-completed browser interaction, not a function that the experiment runner owns.
+TypeScript 客户端的 `js/packages/phoenix-client/src/experiments/runExperiment.ts` 已为普通任务实验封装了大部分流程。但 PXI 测试应直接调用 REST 或使用小型封装，因为任务是已完成的浏览器交互，而非由实验运行器管理的函数。
 
-## Harness Architecture
+<a id="harness-architecture"></a>
+## 测试框架架构
 
-Add a PXI-specific Playwright fixture under `js/app/tests/pxi/`.
+在 `js/app/tests/pxi/` 下添加 PXI 专用 Playwright fixture。
 
 ```ts
 import { test as base } from "@playwright/test";
@@ -59,7 +64,7 @@ export const test = base.extend<{
 });
 ```
 
-`PhoenixE2EApp` should encapsulate server lifecycle and API access.
+`PhoenixE2EApp` 应封装服务端生命周期和 API 访问。
 
 ```ts
 type PhoenixE2EApp = {
@@ -72,29 +77,30 @@ type PhoenixE2EApp = {
 };
 ```
 
-The first implementation can reuse the existing Playwright `webServer` path when practical, but the target state should be a per-worker Phoenix server so PXI tests can opt into LLM credentials, isolated DB paths, and seed scripts without affecting the rest of `js/app/tests`.
+首个实现可在可行时复用现有 Playwright `webServer` 路径，但目标应是每个工作进程独享 Phoenix 服务端，让 PXI 测试自行启用 LLM 凭证、隔离数据库路径和种子脚本，而不影响 `js/app/tests` 其余测试。
 
-## Skill Layer
+<a id="skill-layer"></a>
+## 技能层
 
-The PXI E2E workflow should also be packaged as an agent skill, but the skill should complement the concrete harness rather than replace it.
+PXI 端到端测试工作流也应打包为 Agent 技能，但技能应补充具体测试框架，而非替代它。
 
-The harness is required for deterministic runtime behavior: starting Phoenix, isolating SQLite, seeding data, driving Playwright, observing PXI turns, judging outcomes, persisting experiment records, and collecting artifacts. A skill cannot provide those guarantees by itself because tests still need importable code that runs in CI without an agent interpreting instructions.
+确定性运行时行为必须由框架提供：启动 Phoenix、隔离 SQLite、初始化数据、驱动 Playwright、观察 PXI 轮次、判断结果、持久化实验记录和收集产物。技能自身无法保证这些，因为测试仍需可导入的代码，在 CI 中运行而无需 Agent 解读指令。
 
-The skill should provide the authoring layer: reusable guidance, templates, examples, and scaffolding scripts for humans or coding agents adding new PXI E2E scenarios.
+技能应提供编写层：可复用指引、模板、示例和脚手架脚本，供人工或编码 Agent 添加新场景。
 
-Recommended skill name:
+建议技能名称：
 
 ```txt
 phoenix-pxi-playwright
 ```
 
-Recommended location:
+建议位置：
 
 ```txt
 .agents/skills/phoenix-pxi-playwright/
 ```
 
-Recommended structure:
+建议结构：
 
 ```txt
 .agents/skills/phoenix-pxi-playwright/
@@ -113,7 +119,7 @@ Recommended structure:
     scaffold-pxi-test.ts
 ```
 
-The skill metadata should trigger when someone asks to add, update, debug, or review PXI Playwright tests.
+有人要求添加、更新、调试或评审 PXI Playwright 测试时，应触发该技能元数据。
 
 ```yaml
 ---
@@ -122,26 +128,26 @@ description: Write, extend, and debug PXI Playwright E2E tests for Phoenix. Use 
 ---
 ```
 
-`SKILL.md` should stay short and point to focused resources. It should instruct the agent to use the concrete harness under `js/app/tests/pxi/`, not to generate bespoke Playwright infrastructure in each test.
+`SKILL.md` 应保持简短，指向聚焦的资源。应要求 Agent 使用 `js/app/tests/pxi/` 下的具体框架，而非在每个测试中生成专用 Playwright 基础设施。
 
-The skill should include:
+技能应包含：
 
-- How to choose `real`, `recorded`, or `stubbed` LLM mode.
-- How to choose or create a seed fixture.
-- How to write deterministic assertions before judge assertions.
-- How to write a rubric for `assertOutcome()`.
-- How to persist a run as a Phoenix experiment.
-- How to inspect artifacts and experiment records after failure.
-- What PXI internals matter: `POST /chat`, `buildAgentChatRequestBody`, `agentStore`, `resolve_tools`, and frontend tool dispatch.
+- 如何选择 `real`、`recorded` 或 `stubbed` LLM 模式。
+- 如何选择或创建种子 fixture。
+- 如何先编写确定性断言，再编写裁判断言。
+- 如何为 `assertOutcome()` 编写评分标准。
+- 如何将运行持久化为 Phoenix 实验。
+- 失败后如何检查产物和实验记录。
+- 哪些 PXI 内部机制重要：`POST /chat`、`buildAgentChatRequestBody`、`agentStore`、`resolve_tools` 和前端工具分派。
 
-The skill should not include:
+技能不应包含：
 
-- A separate implementation of `PxiDriver`.
-- A duplicate experiment client.
-- Duplicated PXI tool schemas.
-- Instructions that ask agents to bypass the shared harness.
+- 单独实现的 `PxiDriver`。
+- 重复的实验客户端。
+- 重复的 PXI 工具 schema。
+- 要求 Agent 绕过共享框架的指令。
 
-The intended split is:
+预期分工：
 
 ```txt
 js/app/tests/pxi/*
@@ -151,20 +157,21 @@ js/app/tests/pxi/*
   Authoring workflow used by coding agents and teammates.
 ```
 
-Example skill-driven workflow:
+技能驱动工作流示例：
 
-1. User asks: “Add a PXI E2E test for explaining trace errors.”
-2. The skill loads and tells the agent to inspect available seed fixtures.
-3. The agent scaffolds a test from `templates/pxi-scenario.spec.ts`.
-4. The test imports the shared `test` fixture and uses `pxi.askAndWait()`, `pxi.expectToolCalled()`, and `pxi.assertOutcome()`.
-5. The test persists its result through `pxi.persistExperiment()`.
-6. The agent runs the relevant Playwright command and reports experiment IDs or artifacts.
+1. 用户要求：“添加解释追踪错误的 PXI 端到端测试。”
+2. 加载技能，要求 Agent 检查可用种子 fixture。
+3. Agent 从 `templates/pxi-scenario.spec.ts` 搭建测试。
+4. 测试导入共享 `test` fixture，使用 `pxi.askAndWait()`、`pxi.expectToolCalled()` 和 `pxi.assertOutcome()`。
+5. 测试通过 `pxi.persistExperiment()` 持久化结果。
+6. Agent 运行相关 Playwright 命令，并报告实验 ID 或产物。
 
-## Phoenix Startup
+<a id="phoenix-startup"></a>
+## Phoenix 启动
 
-The harness should start Phoenix with an isolated SQLite database.
+框架应使用隔离的 SQLite 数据库启动 Phoenix。
 
-Use a temporary file-backed SQLite database by default rather than literal `sqlite:///:memory:`. A file-backed DB is still isolated and disposable, but it avoids cross-process visibility issues if the test runner, seed script, and Phoenix server do not share a process.
+默认使用临时文件型 SQLite 数据库，而非字面上的 `sqlite:///:memory:`。文件数据库仍隔离且可丢弃，但当测试运行器、种子脚本和 Phoenix 服务端不在同一进程时，可避免跨进程可见性问题。
 
 ```ts
 type PhoenixStartupOptions = {
@@ -175,7 +182,7 @@ type PhoenixStartupOptions = {
 };
 ```
 
-Set environment variables explicitly.
+显式设置环境变量。
 
 ```txt
 PHOENIX_SQL_DATABASE_URL=sqlite:////tmp/pxi-e2e/worker-0/phoenix.db
@@ -183,7 +190,7 @@ PHOENIX_AGENTS_ASSISTANT_PROJECT_NAME=pxi-e2e-agent-{workerIndex}
 PHOENIX_DISABLE_RATE_LIMIT=True
 ```
 
-LLM credentials should be opt-in per run.
+每次运行都应主动选择是否启用 LLM 凭证。
 
 ```txt
 PXI_E2E_ASSISTANT_PROVIDER=OPENAI
@@ -193,25 +200,27 @@ PXI_E2E_JUDGE_MODEL=gpt-4.1
 OPENAI_API_KEY=...
 ```
 
-The harness should skip real-LLM tests when required credentials are absent unless the test explicitly uses a stubbed or recorded mode.
+缺少所需凭证时，框架应跳过真实 LLM 测试，除非测试显式使用桩响应或录制模式。
 
-## LLM Modes
+<a id="llm-modes"></a>
+## LLM 模式
 
-PXI E2E tests need multiple reliability profiles.
+PXI 端到端测试需要多种可靠性配置。
 
 ```ts
 type PxiLlmMode = "real" | "recorded" | "stubbed";
 ```
 
-- `real`: use the selected built-in or custom model through `POST /chat`; best for nightly runs and release-blocking smoke tests.
-- `recorded`: replay a captured data stream or model/tool trajectory; best for deterministic CI checks around UI and protocol behavior.
-- `stubbed`: route `POST /chat` or the model provider to a deterministic response; best for frontend stream/tool-dispatch tests.
+- `real`：通过 `POST /chat` 使用所选内置或自定义模型，最适合每夜运行和阻止发布的冒烟测试。
+- `recorded`：重放捕获的数据流或模型/工具轨迹，最适合针对界面和协议行为的确定性 CI 检查。
+- `stubbed`：将 `POST /chat` 或模型提供商路由到确定性响应，最适合前端流和工具分派测试。
 
-The first pass should support `real` and leave clear seams for `recorded` and `stubbed`.
+第一阶段应支持 `real`，并为 `recorded` 和 `stubbed` 留出明确接入点。
 
-## PXI Driver API
+<a id="pxi-driver-api"></a>
+## PXI 驱动 API
 
-`PxiDriver` should wrap user-visible actions and PXI-specific assertions.
+`PxiDriver` 应封装用户可见操作和 PXI 专用断言。
 
 ```ts
 class PxiDriver {
@@ -242,7 +251,7 @@ class PxiDriver {
 }
 ```
 
-`waitForTurn()` should wait for state, not time. It should observe that the submitted user message is rendered, the assistant has finished streaming, the `Thinking...` loading affordance is gone, there is no inline chat error, and any visible elicitation state is resolved or reported.
+`waitForTurn()` 应等待状态，而非固定时间。应观察已提交用户消息完成渲染、助手停止流式输出、`Thinking...` 加载提示消失、无内联聊天错误，且所有可见的信息征询状态已解决或报告。
 
 ```ts
 type PxiTurn = {
@@ -257,15 +266,16 @@ type PxiTurn = {
 };
 ```
 
-The initial implementation can parse `AgentUIMessage.parts` from local storage or from an exposed test hook. A more robust implementation should add test-only instrumentation that records each PXI request, streamed assistant parts, tool calls, and tool outputs without relying on DOM text alone.
+初始实现可从本地存储或暴露的测试钩子解析 `AgentUIMessage.parts`。更稳健的实现应添加仅测试用插桩，记录每个 PXI 请求、助手流式片段、工具调用和输出，不只依赖 DOM 文本。
 
-`enumerateTools()` cannot be implemented reliably from the visible DOM today. It should come from instrumentation around the chat request/response path or a test-only server debug surface that captures the `ToolDefinition`s resolved by `src/phoenix/server/agents/tools/registry.py` for the current contexts.
+当前无法仅通过可见 DOM 可靠实现 `enumerateTools()`。应基于聊天请求/响应路径的插桩，或仅测试用服务端调试接口，捕获 `src/phoenix/server/agents/tools/registry.py` 为当前上下文解析的 `ToolDefinition`。
 
-## Test Instrumentation
+<a id="test-instrumentation"></a>
+## 测试插桩
 
-The current UI does not expose all data that good PXI tests need. Add lightweight test-only instrumentation guarded by `import.meta.env.MODE === "test"` or an equivalent Playwright env flag.
+当前界面未暴露完善 PXI 测试所需的全部数据。应增加轻量、仅测试用插桩，由 `import.meta.env.MODE === "test"` 或等效 Playwright 环境标志保护。
 
-Expose a browser-global collector such as:
+暴露浏览器全局收集器，例如：
 
 ```ts
 window.__PXI_E2E__ = {
@@ -277,17 +287,18 @@ window.__PXI_E2E__ = {
 };
 ```
 
-Recommended hooks:
+建议钩子：
 
-- In `buildAgentChatRequestBody`, record the outgoing `contexts`, `capabilities`, `sessionId`, `ingestTraces`, and model URL.
-- In `handleRegisteredAgentToolCall`, record raw tool calls, parse errors, capability errors, handler errors, and successful tool outputs.
-- In `useAgentChat` `onFinish`, record final messages and assistant metadata.
+- 在 `buildAgentChatRequestBody` 中，记录发出的 `contexts`、`capabilities`、`sessionId`、`ingestTraces` 和模型 URL。
+- 在 `handleRegisteredAgentToolCall` 中，记录原始工具调用、解析错误、能力错误、处理器错误和成功输出。
+- 在 `useAgentChat` 的 `onFinish` 中，记录最终消息和助手元数据。
 
-This preserves production behavior while making tests reliable and inspectable.
+这样保持生产行为不变，同时使测试可靠且可检查。
 
-## Outcome Assertion
+<a id="outcome-assertion"></a>
+## 结果断言
 
-`assertOutcome()` should be LLM-as-judge in the first pass. It should still run alongside deterministic assertions for tool usage and absence of agent errors.
+`assertOutcome()` 首阶段应使用 LLM 裁判，同时继续运行工具使用和无 Agent 错误的确定性断言。
 
 ```ts
 await pxi.expectToolCalled("set_spans_filter");
@@ -304,7 +315,7 @@ await pxi.assertOutcome({
 });
 ```
 
-The judge input should include the dataset example input, expected output if provided, page URL, PXI transcript, advertised/observed tools, tool results, and UI context snapshot.
+裁判输入应包含数据集示例输入、预期输出（如提供）、页面 URL、PXI 对话记录、公布和观察到的工具、工具结果及界面上下文快照。
 
 ```ts
 type PxiOutcomeExpectation = {
@@ -327,7 +338,7 @@ type PxiOutcomeAssertion = {
 };
 ```
 
-The judge model must be stored separately from the PXI model under test.
+裁判模型必须与被测 PXI 模型分开存储。
 
 ```ts
 type PxiModelConfig = {
@@ -338,23 +349,24 @@ type PxiModelConfig = {
 };
 ```
 
-## Persisting As Phoenix Experiments
+<a id="persisting-as-phoenix-experiments"></a>
+## 持久化为 Phoenix 实验
 
-Each PXI test case should map to one Phoenix dataset example. Each Playwright execution should map to one experiment run and one LLM evaluation annotation.
+每个 PXI 测试用例应映射为一个 Phoenix 数据集示例，每次 Playwright 执行应映射为一次实验运行和一条 LLM 评估标注。
 
-Dataset name:
+数据集名称：
 
 ```txt
 PXI E2E Agent Tests
 ```
 
-Example ID:
+示例 ID：
 
 ```txt
 {suiteName}:{testName}:{fixtureName}:{scenarioVersion}
 ```
 
-Example shape:
+示例结构：
 
 ```ts
 type PxiDatasetExample = {
@@ -377,15 +389,15 @@ type PxiDatasetExample = {
 };
 ```
 
-Persist flow:
+持久化流程：
 
-1. Upsert the dataset with `POST /v1/datasets/upload?sync=true`, using `action: "update"` and stable `example_ids`.
-2. Fetch examples from `GET /v1/datasets/{id}/examples` to resolve the `DatasetExample` GlobalID needed by experiment runs.
-3. Create the experiment with `POST /v1/datasets/{dataset_id}/experiments`.
-4. Create a run with `POST /v1/experiments/{experiment_id}/runs`.
-5. Upsert the judge result with `POST /v1/experiment_evaluations`.
+1. 使用 `action: "update"` 和稳定的 `example_ids`，通过 `POST /v1/datasets/upload?sync=true` 更新或插入数据集。
+2. 从 `GET /v1/datasets/{id}/examples` 获取示例，解析实验运行所需的 `DatasetExample` GlobalID。
+3. 通过 `POST /v1/datasets/{dataset_id}/experiments` 创建实验。
+4. 通过 `POST /v1/experiments/{experiment_id}/runs` 创建运行。
+5. 通过 `POST /v1/experiment_evaluations` 更新或插入裁判结果。
 
-Experiment naming:
+实验命名：
 
 ```txt
 pxi-e2e-{branch}-{sha}
@@ -393,7 +405,7 @@ pxi-e2e-nightly-{date}
 pxi-e2e-local-{user}-{timestamp}
 ```
 
-Experiment metadata:
+实验元数据：
 
 ```ts
 type PxiExperimentMetadata = {
@@ -410,7 +422,7 @@ type PxiExperimentMetadata = {
 };
 ```
 
-Experiment run output:
+实验运行输出：
 
 ```ts
 type PxiExperimentRunOutput = {
@@ -427,7 +439,7 @@ type PxiExperimentRunOutput = {
 };
 ```
 
-Evaluation result:
+评估结果：
 
 ```ts
 {
@@ -446,11 +458,12 @@ Evaluation result:
 }
 ```
 
-The test should be allowed to fail after persistence. If `assertOutcome()` fails, the experiment run and failed evaluation are more valuable when they are still recorded.
+应允许测试在持久化之后失败。即使 `assertOutcome()` 失败，保留实验运行和失败评估记录也更有价值。
 
-## Seed Fixtures
+<a id="seed-fixtures"></a>
+## 种子 fixture
 
-Seed fixtures should be scenario-oriented instead of table-oriented.
+种子 fixture 应面向场景，而非面向数据表。
 
 ```txt
 empty-project
@@ -461,7 +474,7 @@ project-with-span-filterable-traces
 dataset-with-experiments
 ```
 
-Each seed should return stable handles.
+每个种子应返回稳定句柄。
 
 ```ts
 type PxiSeedResult = {
@@ -475,9 +488,10 @@ type PxiSeedResult = {
 };
 ```
 
-Seed scripts can either copy a prepared SQLite DB into the worker temp directory or run a script against `PHOENIX_SQL_DATABASE_URL` before the server starts.
+种子脚本可以将准备好的 SQLite 数据库复制到工作进程临时目录，也可在服务端启动前，对 `PHOENIX_SQL_DATABASE_URL` 运行脚本。
 
-## Example Test
+<a id="example-test"></a>
+## 测试示例
 
 ```ts
 import { test } from "./pxi";
@@ -509,36 +523,39 @@ test("PXI explains trace latency", async ({ pxi }) => {
 });
 ```
 
-The exact expected tool names should be scenario-specific. Today, `set_spans_filter` is the only contextual PXI tool in the checked code, while `ask_user` and `bash` are always advertised external tools.
+预期的具体工具名应因场景而异。当前已检查代码中，`set_spans_filter` 是唯一的上下文 PXI 工具，而 `ask_user` 和 `bash` 始终作为外部工具公布。
 
-## Debug Artifacts
+<a id="debug-artifacts"></a>
+## 调试产物
 
-On failure, the harness should attach:
+失败时，框架应附加：
 
-- Playwright trace.
-- Browser console logs.
-- Network failures and failed `POST /chat` responses.
-- Phoenix server logs.
-- PXI request body snapshots.
-- Streamed PXI message snapshots.
-- Tool calls and tool outputs.
-- Active route contexts and mounted contexts.
-- Experiment IDs, run IDs, and evaluation IDs when persistence succeeded.
+- Playwright 追踪。
+- 浏览器控制台日志。
+- 网络失败及失败的 `POST /chat` 响应。
+- Phoenix 服务端日志。
+- PXI 请求体快照。
+- PXI 流式消息快照。
+- 工具调用和输出。
+- 活动路由上下文与已挂载上下文。
+- 持久化成功时的实验 ID、运行 ID 和评估 ID。
 
-## Implementation Plan
+<a id="implementation-plan"></a>
+## 实施计划
 
-1. Add `js/app/tests/pxi/fixtures.ts` with `PhoenixE2EApp` and `PxiDriver` fixtures.
-2. Add per-worker Phoenix startup with temp file-backed SQLite and env injection.
-3. Add seed fixture convention and one `trace-with-slow-span` seed.
-4. Add test-only PXI instrumentation for request, turn, tool, and context snapshots.
-5. Implement `open`, `acknowledgeConsent`, `sendMessage`, `waitForTurn`, `askAndWait`, `expectNoAgentError`, and transcript extraction.
-6. Implement `assertOutcome()` with a configured judge model and structured JSON output.
-7. Implement experiment persistence through the existing REST endpoints.
-8. Add one real-LLM smoke test and one deterministic/stubbed harness test.
+1. 添加 `js/app/tests/pxi/fixtures.ts`，提供 `PhoenixE2EApp` 和 `PxiDriver` fixture。
+2. 为每个工作进程添加独立 Phoenix 启动，使用临时文件型 SQLite 和环境变量注入。
+3. 添加种子 fixture 约定及一个 `trace-with-slow-span` 种子。
+4. 添加仅测试用 PXI 插桩，记录请求、轮次、工具和上下文快照。
+5. 实现 `open`、`acknowledgeConsent`、`sendMessage`、`waitForTurn`、`askAndWait`、`expectNoAgentError` 和对话记录提取。
+6. 使用配置的裁判模型和结构化 JSON 输出，实现 `assertOutcome()`。
+7. 通过现有 REST 端点实现实验持久化。
+8. 添加一个真实 LLM 冒烟测试，以及一个确定性或桩响应框架测试。
 
-## Open Questions
+<a id="open-questions"></a>
+## 待解决问题
 
-- Should PXI E2E tests live in the normal `js/app/tests` Playwright project or in a separate project that only runs on demand/nightly because it requires LLM credentials?
-- Should experiment persistence go to the same isolated Phoenix instance under test, or optionally to a long-lived Phoenix instance for trend tracking across CI runs?
-- Should test-only PXI instrumentation be browser-global, or should it be exposed through a small app-level testing provider to avoid globals?
-- Should `recorded` mode replay the full AI SDK data stream, or should it stub at the model provider layer before the stream protocol?
+- PXI 端到端测试应放在常规 `js/app/tests` Playwright 项目中，还是因需要 LLM 凭证而单独建项目，仅按需或每夜运行？
+- 实验结果应持久化到被测隔离 Phoenix 实例，还是可选地记录到长期运行实例，以跨 CI 运行跟踪趋势？
+- 仅测试用 PXI 插桩应使用浏览器全局变量，还是通过小型应用级测试 provider 暴露，以避免全局变量？
+- `recorded` 模式应重放完整 AI SDK 数据流，还是在流协议之前的模型提供商层设置桩响应？

@@ -1,1 +1,1 @@
-Find the most expensive trace in research-assistant. What question was the agent trying to answer in it?
+找出 research-assistant 中费用最高的追踪记录。智能体在该记录中试图回答什么问题？

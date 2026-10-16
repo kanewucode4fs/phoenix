@@ -4,7 +4,7 @@
             <picture>
                 <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg">
                 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix-white.svg">
-                <img alt="Arize Phoenix logo" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
+                <img alt="Arize Phoenix 标志" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
             </picture>
         </a>
         <br>
@@ -14,30 +14,36 @@
 
 <p align="center">
     <a href="https://www.npmjs.com/package/@arizeai/phoenix-evals">
-        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-evals" alt="NPM Version">
+        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-evals" alt="NPM 版本">
     </a>
     <a href="https://arize-ai.github.io/phoenix/">
-        <img src="https://img.shields.io/badge/docs-blue?logo=typescript&logoColor=white" alt="Documentation">
+        <img src="https://img.shields.io/badge/docs-blue?logo=typescript&logoColor=white" alt="文档">
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=js/packages/phoenix-evals/README.md" />
 </p>
 
-This package provides a TypeScript evaluation library. It is vendor agnostic and can be used in isolation of any framework or platform. This package is still under active development and is subject to change.
+此包提供与供应商无关的 TypeScript 评估库，可独立于任何框架或平台使用。此包仍在积极开发中，可能发生变更。
 
-## Installation
+<a id="installation"></a>
+
+## 安装
 
 ```bash
 # or yarn, pnpm, bun, etc...
 npm install @arizeai/phoenix-evals
 ```
 
-This package is built on [AI SDK](https://ai-sdk.dev/) v7, which is ESM-only. Node.js 22.12 or newer is required (the CommonJS build relies on `require()` of ESM). Use AI SDK v7-compatible model provider packages (e.g. `@ai-sdk/openai` v4+).
+此包基于仅支持 ESM 的 [AI SDK](https://ai-sdk.dev/) v7，要求 Node.js 22.12 或更高版本（CommonJS 构建依赖通过 `require()` 加载 ESM）。请使用兼容 AI SDK v7 的模型提供商包（如 `@ai-sdk/openai` v4+）。
 
-## Usage
+<a id="usage"></a>
 
-### Creating a Classifier
+## 用法
 
-The library provides a `createClassifier` function that allows you to create custom evaluators for different tasks like hallucination detection, relevance scoring, or any binary/multi-class classification.
+<a id="creating-a-classifier"></a>
+
+### 创建分类器
+
+本库提供 `createClassifier` 函数，可为幻觉检测、相关性评分及任意二分类/多分类任务创建自定义评估器。
 
 ```typescript
 import { createClassifier } from "@arizeai/phoenix-evals/llm";
@@ -87,26 +93,28 @@ console.log(result);
 // Output: { label: "hallucinated", score: 0 }
 ```
 
-See the complete example in [`examples/classifier_example.ts`](examples/classifier_example.ts).
+完整示例见 [`examples/classifier_example.ts`](examples/classifier_example.ts)。
 
-### Pre-Built Evaluators
+<a id="pre-built-evaluators"></a>
 
-The library includes several pre-built evaluators for common evaluation tasks. These evaluators come with optimized prompts and can be used directly with any AI SDK model.
+### 预置评估器
 
-All pre-built evaluators are available from the `@arizeai/phoenix-evals/llm` module:
+本库包含多个常见任务的预置评估器，附带优化后的提示词，可直接与任何 AI SDK 模型配合使用。
 
-| Evaluator              | Function                              | Description                                                                       |
+所有预置评估器均从 `@arizeai/phoenix-evals/llm` 模块导出：
+
+| 评估器              | 函数                              | 说明                                                                       |
 | ---------------------- | ------------------------------------- | --------------------------------------------------------------------------------- |
-| Faithfulness           | `createFaithfulnessEvaluator`         | Detects hallucinations — checks if the output is grounded in the provided context |
-| Completeness           | `createCompletenessEvaluator`         | Checks whether every active user request in a conversation was actually completed |
-| Conciseness            | `createConcisenessEvaluator`          | Evaluates whether the response is appropriately concise                           |
-| Correctness            | `createCorrectnessEvaluator`          | Checks if the output is factually correct given the input                         |
-| Retrieval Relevance    | `createRetrievalRelevanceEvaluator`   | Measures how relevant retrieved information is to a request                       |
-| Refusal                | `createRefusalEvaluator`              | Detects whether the model refused to answer                                       |
-| Tool Invocation        | `createToolInvocationEvaluator`       | Evaluates whether the correct tool was invoked with the right arguments           |
-| Tool Selection         | `createToolSelectionEvaluator`        | Checks whether the right tool was selected for the task                           |
-| Tool Response Handling | `createToolResponseHandlingEvaluator` | Evaluates how well the model uses a tool's response                               |
-| PII Detection          | `createPiiDetectionEvaluator`         | Screens a conversation record for personally identifiable information             |
+| 忠实度           | `createFaithfulnessEvaluator`         | 检测幻觉，检查输出是否基于提供的上下文 |
+| 完整性           | `createCompletenessEvaluator`         | 检查对话中每个有效用户请求是否确实完成 |
+| 简洁性            | `createConcisenessEvaluator`          | 评估响应是否适度简洁                           |
+| 正确性            | `createCorrectnessEvaluator`          | 检查在给定输入下，输出是否符合事实                         |
+| 检索相关性    | `createRetrievalRelevanceEvaluator`   | 衡量检索信息与请求的相关程度                       |
+| 拒绝回答                | `createRefusalEvaluator`              | 检测模型是否拒绝回答                                       |
+| 工具调用        | `createToolInvocationEvaluator`       | 评估是否使用正确参数调用正确工具           |
+| 工具选择         | `createToolSelectionEvaluator`        | 检查是否为任务选择正确工具                           |
+| 工具响应处理 | `createToolResponseHandlingEvaluator` | 评估模型利用工具响应的效果                               |
+| 个人身份信息检测          | `createPiiDetectionEvaluator`         | 筛查对话记录中的个人身份信息             |
 
 ```typescript
 import {
@@ -149,13 +157,15 @@ console.log(relevanceResult);
 // Output: { label: "relevant", score: 1, explanation: "..." }
 ```
 
-### Code Evaluators
+<a id="code-evaluators"></a>
 
-The library also includes built-in, deterministic (non-LLM) code evaluators for common classification metrics: precision, recall, and F-beta (including F1). These are available from the `@arizeai/phoenix-evals/code` module and work over a batch of expected vs. predicted labels, supporting both binary classification (via `positiveLabel`) and multi-class classification (via `macro`/`micro`/`weighted` averaging).
+### 代码评估器
 
-- **Precision** — of everything predicted as a class, the fraction that was actually that class (`TP / (TP + FP)`). Lower precision means more false alarms.
-- **Recall** — of everything that actually belongs to a class, the fraction the model found (`TP / (TP + FN)`). Lower recall means more misses.
-- **F-beta** — the weighted harmonic mean of precision and recall. `beta = 1` (F1, the default) weights them equally; `beta > 1` weights recall more (use when missing a true positive is costlier, e.g. medical screening); `beta < 1` weights precision more (use when a false alarm is costlier, e.g. spam filtering).
+本库还内置了用于常见分类指标的确定性（非 LLM）代码评估器：精确率、召回率和 F-beta（包括 F1）。它们从 `@arizeai/phoenix-evals/code` 模块导出，针对一批预期标签与预测标签进行计算，既支持二分类（通过 `positiveLabel`），也支持多分类（通过 `macro`/`micro`/`weighted` 平均）。
+
+- **精确率**：所有预测为某一类别的样本中，实际属于该类的比例（`TP / (TP + FP)`）。精确率越低，误报越多。
+- **召回率**：实际属于某类的所有样本中，模型成功找到的比例（`TP / (TP + FN)`）。召回率越低，漏报越多。
+- **F-beta**：精确率与召回率的加权调和平均。`beta = 1`（F1，默认）赋予两者相同权重；`beta > 1` 更重视召回率（漏掉真实正例代价更高时使用，如医疗筛查）；`beta < 1` 更重视精确率（误报代价更高时使用，如垃圾邮件过滤）。
 
 ```typescript
 import {
@@ -179,17 +189,19 @@ const { precision, recall, fScore } = createPrecisionRecallFScoreEvaluators({
 });
 ```
 
-Use `createFBetaEvaluator({ beta })` for F-scores other than F1 (e.g. `beta: 2` weights recall higher than precision). `createPrecisionRecallFScoreEvaluators` returns three separate evaluators (`{ precision, recall, fScore }`) sharing one options object — each yields a single score, matching the individual factories.
+需要 F1 之外的 F 分数时，使用 `createFBetaEvaluator({ beta })`（例如 `beta: 2` 使召回率权重高于精确率）。`createPrecisionRecallFScoreEvaluators` 返回共享同一个选项对象的三个独立评估器（`{ precision, recall, fScore }`），各自产生单个分数，与单独的工厂函数一致。
 
-For multi-class data, `average` controls how per-class scores combine into one number: `"macro"` (default) weights every class equally — good for surfacing whether a rare class is being ignored; `"weighted"` weights each class by how often it occurs — good when overall performance matters more than parity across classes; `"micro"` pools every true/false positive and false negative across classes first — for single-label multi-class problems this equals overall accuracy.
+对于多分类数据，`average` 控制如何将各类别分数合为一个数值：`"macro"`（默认）对各类赋予相同权重，适合发现稀有类别是否被忽略；`"weighted"` 按类别出现频率加权，适合更看重总体表现而非类别间均衡的情况；`"micro"` 先汇总各类别的真正例、假正例和假负例，对于单标签多分类问题，其结果等于总体准确率。
 
-See [`examples/classification_metrics_example.ts`](examples/classification_metrics_example.ts) for a runnable walkthrough covering binary classification, F-beta tradeoffs, and all three averaging strategies. For the underlying formulas, the precision/recall tradeoff, and citations, see the [Precision / Recall / F-Score docs](https://arize.com/docs/phoenix/evaluation/pre-built-metrics/precision-recall-fscore).
+可运行教程见 [`examples/classification_metrics_example.ts`](examples/classification_metrics_example.ts)，涵盖二分类、F-beta 取舍以及三种平均策略。底层公式、精确率/召回率取舍及参考文献见[精确率 / 召回率 / F 分数文档](https://arize.com/docs/phoenix/evaluation/pre-built-metrics/precision-recall-fscore)。
 
-> **Note:** unlike the per-row LLM evaluators above, these classification-metric evaluators are batch/dataset-level: `expected`/`output` are the full sequence of labels across every example, not a single row's labels. Don't wire them directly into `runExperiment` as a per-row evaluator — instead, collect every row's expected/predicted label first, then call `.evaluate({ expected, output })` once over the full arrays.
+> **注意：** 与上述逐行 LLM 评估器不同，这些分类指标评估器工作在批次/数据集层面：`expected`/`output` 是全部示例的完整标签序列，而非单行标签。不要将其作为逐行评估器直接接入 `runExperiment`；应先收集每行的预期/预测标签，再对完整数组调用一次 `.evaluate({ expected, output })`。
 
-### Data Mapping
+<a id="data-mapping"></a>
 
-When your data structure doesn't match what an evaluator expects, use `bindEvaluator` to map your fields to the evaluator's expected input format:
+### 数据映射
+
+数据结构与评估器预期不一致时，使用 `bindEvaluator` 将字段映射为评估器预期的输入格式：
 
 ```typescript
 import { bindEvaluator } from "@arizeai/phoenix-evals";
@@ -223,17 +235,21 @@ const result = await evaluator.evaluate({
 });
 ```
 
-Mapping supports simple properties (`"fieldName"`), dot notation (`"user.profile.name"`), array access (`"items[0].id"`), JSONPath expressions (`"$.items[*].id"`), and function extractors (`(data) => data.customField`).
+映射支持简单属性（`"fieldName"`）、点号路径（`"user.profile.name"`）、数组访问（`"items[0].id"`）、JSONPath 表达式（`"$.items[*].id"`）和函数提取器（`(data) => data.customField`）。
 
-See the complete example in [`examples/bind_evaluator_example.ts`](examples/bind_evaluator_example.ts).
+完整示例见 [`examples/bind_evaluator_example.ts`](examples/bind_evaluator_example.ts)。
 
-## Experimentation with Phoenix
+<a id="experimentation-with-phoenix"></a>
 
-This package works seamlessly with [`@arizeai/phoenix-client`](https://www.npmjs.com/package/@arizeai/phoenix-client) to enable experimentation workflows. You can create datasets, run experiments, and trace evaluation calls for analysis and debugging.
+## 使用 Phoenix 进行实验
 
-### Running Experiments
+此包与 [`@arizeai/phoenix-client`](https://www.npmjs.com/package/@arizeai/phoenix-client) 无缝配合，支持实验工作流。你可以创建数据集、运行实验，并追踪评估调用以进行分析和调试。
 
-To run experiments with your evaluations, install the phoenix-client
+<a id="running-experiments"></a>
+
+### 运行实验
+
+要结合评估运行实验，请安装 phoenix-client
 
 ```bash
 npm install @arizeai/phoenix-client
@@ -300,9 +316,11 @@ runExperiment({
 });
 ```
 
-## Examples
+<a id="examples"></a>
 
-To run examples, install dependencies using `pnpm` and run:
+## 示例
+
+运行示例时，使用 `pnpm` 安装依赖并运行：
 
 ```bash
 pnpm install
@@ -310,15 +328,17 @@ pnpx tsx examples/classifier_example.ts
 # change the file name to run other examples
 ```
 
-## Community
+<a id="community"></a>
 
-Join our community to connect with thousands of AI builders:
+## 社区
 
-- 🌍 Join our [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
-- 📚 Read the [Phoenix documentation](https://arize.com/docs/phoenix).
-- 💡 Ask questions and provide feedback in the _#phoenix-support_ channel.
-- 🌟 Leave a star on our [GitHub](https://github.com/Arize-ai/phoenix).
-- 🐞 Report bugs with [GitHub Issues](https://github.com/Arize-ai/phoenix/issues).
-- 𝕏 Follow us on [𝕏](https://twitter.com/ArizePhoenix).
-- 💼 Follow us on [LinkedIn](https://www.linkedin.com/showcase/113218220).
-- 🗺️ Check out our [roadmap](https://github.com/orgs/Arize-ai/projects/45) to see where we're heading next.
+加入我们的社区，与数千名 AI 开发者交流：
+
+- 🌍 加入我们的 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
+- 📚 阅读 [Phoenix 文档](https://arize.com/docs/phoenix).
+- 💡 在 _#phoenix-support_ 频道提问并反馈。
+- 🌟 为我们的 [GitHub](https://github.com/Arize-ai/phoenix) 加星。
+- 🐞 通过 [GitHub Issues](https://github.com/Arize-ai/phoenix/issues) 报告问题。
+- 𝕏 在 [𝕏](https://twitter.com/ArizePhoenix) 关注我们。
+- 💼 在 [LinkedIn](https://www.linkedin.com/showcase/113218220) 关注我们。
+- 🗺️ 查看我们的[路线图](https://github.com/orgs/Arize-ai/projects/45)，了解未来方向。

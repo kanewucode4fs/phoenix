@@ -1,17 +1,23 @@
-# Phoenix SMTP Development Server
+<a id="phoenix-smtp-development-server"></a>
 
-A simple SMTP server for visualizing and debugging emails emitted from Phoenix during development. **Not for production use.**
+# Phoenix SMTP 开发服务
 
-## What It Does
+一个简单的 SMTP 服务，用于在开发期间可视化查看和调试 Phoenix 发出的邮件。**不能用于生产环境。**
 
-- Catches emails sent by Phoenix during development
-- Provides a web UI to view email content (HTML, text, headers)
-- Stores emails in memory for easy debugging
-- No actual email delivery - just visualization
+<a id="what-it-does"></a>
 
-## Quick Start
+## 功能
 
-The SMTP server runs automatically with the Phoenix development environment:
+- 捕获 Phoenix 在开发期间发送的邮件
+- 提供 Web 界面查看邮件内容（HTML、文本、邮件头）
+- 将邮件存储在内存中，便于调试
+- 仅用于可视化查看，不实际投递邮件
+
+<a id="quick-start"></a>
+
+## 快速开始
+
+SMTP 服务随 Phoenix 开发环境自动运行：
 
 ```bash
 # Start Phoenix dev environment (includes SMTP server)
@@ -21,40 +27,48 @@ tox r -e docker_devops
 # http://localhost:18273/mail
 ```
 
-## How to Use
+<a id="how-to-use"></a>
 
-1. **Start the dev environment** - SMTP server starts automatically
-2. **Trigger emails in Phoenix** - use your app's email functionality
-3. **View emails** - go to http://localhost:18273/mail
-4. **Debug email content** - see exactly what Phoenix sent
+## 使用方法
 
-## Email Viewing
+1. **启动开发环境**：SMTP 服务会自动启动
+2. **在 Phoenix 中触发邮件**：使用应用的邮件功能
+3. **查看邮件**：访问 http://localhost:18273/mail
+4. **调试邮件内容**：查看 Phoenix 实际发送的内容
 
-- **HTML view**: See rendered emails
-- **Text view**: Plain text content
-- **Raw view**: Full email data as JSON
-- **Headers view**: SMTP headers and metadata
+<a id="email-viewing"></a>
 
-## Configuration
+## 邮件查看方式
 
-The server uses these defaults (configured in Phoenix dev environment):
+- **HTML 视图**：查看渲染后的邮件
+- **文本视图**：查看纯文本内容
+- **原始视图**：以 JSON 查看完整邮件数据
+- **邮件头视图**：查看 SMTP 头和元数据
 
-- **SMTP Port**: 1025 (where Phoenix sends emails)
-- **Web Port**: 8025 (served via Traefik at `/mail`)
-- **Storage**: In-memory (emails reset on restart)
-- **Max Emails**: 1000 (oldest emails auto-deleted)
+<a id="configuration"></a>
 
-## Troubleshooting
+## 配置
 
-**No emails showing?**
+服务使用以下默认值（在 Phoenix 开发环境中配置）：
 
-- Check Phoenix is configured to send emails to `localhost:1025`
-- Verify the dev environment is running
-- Check browser console for errors
+- **SMTP 端口**：1025（Phoenix 向此端口发送邮件）
+- **Web 端口**：8025（通过 Traefik 在 `/mail` 提供访问）
+- **存储**：内存（重启后邮件清空）
+- **最大邮件数**：1000（自动删除最早的邮件）
 
-**Can't access web UI?**
+<a id="troubleshooting"></a>
 
-- Ensure you're using http://localhost:18273/mail (not port 8025 directly)
-- Confirm Traefik is routing properly in dev environment
+## 故障排查
 
-That's it! This is intentionally a simple tool focused on email debugging during Phoenix development.
+**没有显示邮件时：**
+
+- 检查 Phoenix 是否配置为向 `localhost:1025` 发送邮件
+- 确认开发环境正在运行
+- 检查浏览器控制台是否报错
+
+**无法访问 Web 界面时：**
+
+- 确认使用 http://localhost:18273/mail 访问（不要直接访问 8025 端口）
+- 确认开发环境中的 Traefik 路由正常
+
+此工具有意保持简单，专注于 Phoenix 开发期间的邮件调试。

@@ -1,25 +1,35 @@
-# Project, Span, Trace
+<a id="project-span-trace"></a>
 
-## Project
+# 项目、跨度与追踪（Project、Span、Trace）
 
-- `Project.spans(first, after, timeRange, sort: SpanSort, filterCondition: String, traceFilterCondition: String)` → connection of `Span`. There is **no `traces` connection on `Project`** and no root-span argument: list traces with `spans(filterCondition: "parent_span is None")`, which keeps root spans including orphans whose parent was never received (what the UI's traces table runs), usually one per trace; `parent_id is None` keeps only spans with no parent id. Pair with `traceFilterCondition` to keep the roots of matching traces.
-- `Project.trace(traceId: ID!)` → `Trace` — lookup by OTel hex trace id.
-- Aggregates, most accepting `timeRange` and `filterCondition`: `traceCount`, `recordCount` (span count), `tokenCountTotal`, `tokenCountPrompt`, `tokenCountCompletion`, `costSummary`, `latencyMsQuantile(probability: Float!)`, `spanLatencyMsQuantile(probability: Float!)`.
-- Discovery fields: `spanAnnotationNames`, `traceAnnotationNames`, `spanAnnotationSummary`, `documentEvaluationNames` — check which evals/annotations exist before querying them.
-- `validateSpanFilterCondition(condition: String!)` — check a filter string without running it.
-- `filterCondition` is a span filter expression and `traceFilterCondition` a trace filter expression; both languages are specified in `references/filter-expressions.md` (vocabulary, operators, root-span scoping, compiled examples).
+<a id="project"></a>
 
-## Span
+## 项目（Project）
 
-Key fields: `spanId` (OTel hex), `name`, `spanKind`, `statusCode`, `startTime`, `latencyMs`, `cumulativeTokenCountTotal`, `input { truncatedValue value }`, `output { truncatedValue value }`, `spanAnnotations { name label score }`, `trace { traceId }`. **`Span` has no `traceId` field** — read the OTel trace id via the nested `trace { traceId }`.
+- `Project.spans(first, after, timeRange, sort: SpanSort, filterCondition: String, traceFilterCondition: String)` → `Span` 连接。**`Project` 上没有 `traces` 连接**，也没有根跨度参数。应使用 `spans(filterCondition: "parent_span is None")` 列出追踪记录，它保留根跨度，包括父跨度从未收到的孤儿跨度，与界面追踪表使用的查询一致，通常每条追踪一个；`parent_id is None` 只保留没有父 ID 的跨度。结合 `traceFilterCondition` 可保留匹配追踪的根跨度。
+- `Project.trace(traceId: ID!)` → `Trace`：按 OTel 十六进制追踪 ID 查询。
+- 汇总指标多数接收 `timeRange` 和 `filterCondition`：`traceCount`、`recordCount`（跨度数）、`tokenCountTotal`、`tokenCountPrompt`、`tokenCountCompletion`、`costSummary`、`latencyMsQuantile(probability: Float!)`、`spanLatencyMsQuantile(probability: Float!)`。
+- 发现字段：`spanAnnotationNames`、`traceAnnotationNames`、`spanAnnotationSummary`、`documentEvaluationNames`，查询前先检查存在哪些评估或标注。
+- `validateSpanFilterCondition(condition: String!)`：只检查筛选字符串，不运行查询。
+- `filterCondition` 是跨度筛选表达式，`traceFilterCondition` 是追踪筛选表达式。两种语言均定义在 `references/filter-expressions.md` 中，包含词汇、运算符、根跨度作用域和可编译示例。
 
-## Trace
+<a id="span"></a>
 
-Key fields: `traceId`, `latencyMs`, `numSpans`, `rootSpan { ... }` (the representative root span: the earliest span with no parent, or whose parent was never received — use it for a one-line turn/trace summary), `spans(first, after, filterCondition)`, `projectSessionId`.
+## 跨度（Span）
 
-## Examples
+主要字段：`spanId`（OTel 十六进制 ID）、`name`、`spanKind`、`statusCode`、`startTime`、`latencyMs`、`cumulativeTokenCountTotal`、`input { truncatedValue value }`、`output { truncatedValue value }`、`spanAnnotations { name label score }`、`trace { traceId }`。**`Span` 没有 `traceId` 字段**，应通过嵌套的 `trace { traceId }` 读取 OTel 追踪 ID。
 
-Recent root spans (usually one per trace), slowest first:
+<a id="trace"></a>
+
+## 追踪（Trace）
+
+主要字段：`traceId`、`latencyMs`、`numSpans`、`rootSpan { ... }`（代表性根跨度，即最早的无父跨度，或父跨度从未收到的跨度，可用作一行式轮次或追踪摘要）、`spans(first, after, filterCondition)`、`projectSessionId`。
+
+<a id="examples"></a>
+
+## 示例
+
+最近的根跨度，通常每条追踪一个，按耗时从长到短排列：
 
 ```graphql
 query RecentTraces($id: ID!, $first: Int = 20) {
@@ -44,7 +54,7 @@ query RecentTraces($id: ID!, $first: Int = 20) {
 }
 ```
 
-Root spans of errored traces in a time window:
+时间窗口内出错追踪记录的根跨度：
 
 ```graphql
 query ErroredTraces($id: ID!, $timeRange: TimeRange) {
@@ -63,7 +73,7 @@ query ErroredTraces($id: ID!, $timeRange: TimeRange) {
 }
 ```
 
-Filtered spans (error LLM spans):
+筛选跨度，例如出错的 LLM 跨度：
 
 ```graphql
 query ErrorSpans($id: ID!) {

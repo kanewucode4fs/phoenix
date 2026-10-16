@@ -1,61 +1,68 @@
-# Database
+<a id="database"></a>
 
-This module is responsible for the database connection and the migrations.
+# 数据库
 
+本模块负责数据库连接和迁移。
 
-## Migrations
+<a id="migrations"></a>
 
-All migrations are managed by Alembic. Migrations are applied to the database automatically when the application starts.
+## 迁移
 
+全部迁移由 Alembic 管理，应用启动时会自动应用到数据库。
 
-### Manually Applying Migrations
+<a id="manually-applying-migrations"></a>
 
-Sometimes, it's necessary to manually apply migrations, e.g., to recover from a failed migration. To manually apply migrations, you must first clone the Phoenix repository.
+### 手动应用迁移
+
+有时需要手动应用迁移，例如从迁移失败中恢复。手动迁移前必须先克隆 Phoenix 仓库。
 
 ```bash
 git clone https://github.com/Arize-ai/phoenix.git
 ```
 
-Then navigate to the current directory.
+然后进入当前目录。
 
 ```bash
 cd phoenix/src/phoenix/db
 ```
 
-If you are using a non-default SQL database URL (e.g., for running PostgreSQL), ensure your `PHOENIX_SQL_DATABASE_URL` is set. This is not needed if you are running Phoenix with the default SQLite URL.
+如果使用非默认 SQL 数据库 URL（例如运行 PostgreSQL），请确保设置 `PHOENIX_SQL_DATABASE_URL`。使用默认 SQLite URL 运行 Phoenix 时不需要设置。
 
 ```bash
 export PHOENIX_SQL_DATABASE_URL=<sql-database-url>
 ```
 
-
-To manually run up-migrations, run the following command:
+手动执行升级迁移，请运行：
 
 ```bash
 alembic upgrade head
 ```
 
-If the above command fails, it may be necessary to undo partially applied changes from a failed migration by first running down-migrations. This can be accomplished by identifying the ID of the migration revision you wish to return to. Revisions are defined [here](./migrations/versions/).
+如果上述命令失败，可能需要先执行降级迁移，撤销失败迁移中已经部分应用的改动。先找出希望回退到的迁移修订 ID，修订定义见[此目录](./migrations/versions/)。
 
-⚠️ Running down-migrations can result in lost data. Only run down-migrations if you know what you are doing and consider backing up your database first. If you have any questions or doubts, contact the Phoenix team in the `#phoenix-support` channel of the [Arize AI Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g) or via GitHub.
+⚠️ 降级迁移可能导致数据丢失。仅在明确了解操作影响时执行，并考虑先备份数据库。如有疑问，可在 [Arize AI Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g) 的 `#phoenix-support` 频道或通过 GitHub 联系 Phoenix 团队。
 
 ```bash
 alembic downgrade <revision-id>
 ```
 
-### Creating a Migration
+<a id="creating-a-migration"></a>
 
-All migrations are stored in the `migrations` folder. To create a new migration, run the following command:
+### 创建迁移
+
+所有迁移存放在 `migrations` 文件夹中。运行以下命令创建新迁移：
 
 ```bash
 alembic revision -m "your_revision_name"
 ```
 
-Then fill the migration file with the necessary changes.
+然后在迁移文件中填写所需改动。
 
-## Entity Relationship Diagram (ERD)
+<a id="entity-relationship-diagram-erd"></a>
 
-Below is a Mermaid diagram showing the current relationships between the main entities in the database:
+## 实体关系图（ERD）
+
+以下 Mermaid 图展示数据库主要实体当前的关系：
 
 ```mermaid
 erDiagram
@@ -576,13 +583,17 @@ erDiagram
 
 ---
 
-## Focused Relationship Views
+<a id="focused-relationship-views"></a>
 
-> **Note**: The following subsection diagrams show simplified table structures focusing only on foreign keys to highlight relationships. These tables contain additional columns (including primary keys and other fields) not shown here - refer to the comprehensive ERD above for complete table definitions.
+## 分组关系视图
 
-### Core Tracing & Projects
+> **注意**：以下各节的图表仅展示外键相关的简化表结构，以突出实体关系。表中还有其他列（包括主键等字段），此处未显示；完整表定义请参阅上方的总 ERD。
 
-This subgroup represents the core functionality of Phoenix - projects organize traces into sessions, traces contain spans, and retention policies manage data lifecycle:
+<a id="core-tracing--projects"></a>
+
+### 核心追踪与项目
+
+本组展示 Phoenix 的核心功能：项目将追踪记录组织为会话，追踪记录包含跨度，保留策略管理数据生命周期。
 
 ```mermaid
 erDiagram
@@ -613,9 +624,11 @@ erDiagram
     }
 ```
 
-### Datasets & Data Management
+<a id="datasets--data-management"></a>
 
-This subgroup shows how datasets are created from spans, organized with versions and splits, and labeled for better organization:
+### 数据集与数据管理
+
+本组展示如何从跨度创建数据集，通过版本和划分组织数据，并使用标签改善管理。
 
 ```mermaid
 erDiagram
@@ -681,9 +694,11 @@ erDiagram
     }
 ```
 
-### Experiments & Evaluation
+<a id="experiments--evaluation"></a>
 
-This subgroup shows how experiments use datasets to run evaluations, track results, and organize findings with tags and annotations:
+### 实验与评估
+
+本组展示实验如何使用数据集运行评估、跟踪结果，并通过标签和标注组织发现。
 
 ```mermaid
 erDiagram
@@ -752,9 +767,11 @@ erDiagram
     }
 ```
 
-### User Management & Authentication
+<a id="user-management--authentication"></a>
 
-This subgroup shows how users are managed with roles and different authentication methods:
+### 用户管理与认证
+
+本组展示通过角色和不同认证方式管理用户的方式。
 
 ```mermaid
 erDiagram
@@ -789,9 +806,11 @@ erDiagram
     }
 ```
 
-### Annotations
+<a id="annotations"></a>
 
-This subgroup shows how annotations are attached to spans, documents, traces, and project sessions, including their configuration:
+### 标注
+
+本组展示如何将标注附加到跨度、文档、追踪记录和项目会话，以及相应配置。
 
 ```mermaid
 erDiagram
@@ -855,9 +874,11 @@ erDiagram
     }
 ```
 
-### Prompts
+<a id="prompts"></a>
 
-This subgroup shows how users create and manage prompt templates, versions, labels, and tags:
+### 提示词
+
+本组展示用户如何创建和管理提示词模板、版本、版本标签及分类标签。
 
 ```mermaid
 erDiagram
@@ -896,9 +917,11 @@ erDiagram
     }
 ```
 
-### Cost & Pricing
+<a id="cost--pricing"></a>
 
-This subgroup shows how LLM costs are calculated and tracked for spans and traces:
+### 成本与定价
+
+本组展示如何计算并跟踪跨度和追踪记录的 LLM 费用。
 
 ```mermaid
 erDiagram
@@ -933,9 +956,11 @@ erDiagram
     }
 ```
 
-### Evaluators
+<a id="evaluators"></a>
 
-This subgroup shows how evaluators are defined and linked to datasets for running evaluations. Evaluators can be either code-based or LLM-based, with LLM evaluators referencing prompts for their evaluation logic:
+### 评估器
+
+本组展示如何定义评估器，并将其关联到数据集以运行评估。评估器可以基于代码或 LLM；LLM 评估器通过引用提示词定义评估逻辑。
 
 ```mermaid
 erDiagram
@@ -972,9 +997,11 @@ erDiagram
     }
 ```
 
-### User-Created Content
+<a id="user-created-content"></a>
 
-This subgroup shows all entities that track user ownership through user_id foreign keys, representing content created or managed by users across datasets, experiments, prompts, and annotations:
+### 用户创建的内容
+
+本组展示所有通过 user_id 外键跟踪用户所有权的实体，包括用户在数据集、实验、提示词和标注中创建或管理的内容。
 
 ```mermaid
 erDiagram

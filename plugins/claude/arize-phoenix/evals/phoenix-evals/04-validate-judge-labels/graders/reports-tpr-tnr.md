@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: validate_judge.py}
 weight: 0.5
 ---
-The user has 80 human pass/fail labels and their LLM judge's predictions over the same 80 examples, and wants to decide whether the judge is trustworthy.
+用户有 80 个人工 pass/fail 标签，以及 LLM 裁判对同一批 80 个示例的预测，希望判断裁判是否可信。
 
-Grade exactly one claim. PASS if the claim below holds for the file, FAIL otherwise. Ignore everything else about the file.
+只评定下面这一条判断条件。文件满足条件则为 PASS，否则为 FAIL；忽略文件中的其他内容。
 
-Claim: The script reports TPR and TNR (sensitivity/specificity) separately, not only an overall accuracy number, and judges the judge against a principled bar (accuracy above ~80% and both TPR and TNR above ~70%). Collapsing the decision to a single accuracy figure FAILS.
+判断条件：脚本分别报告 TPR 和 TNR（灵敏度与特异度），而非仅报告总体准确率，并依据有原则的标准评判裁判模型（准确率高于约 80%，且 TPR、TNR 均高于约 70%）。如果仅凭单个准确率数值作决定，则失败。

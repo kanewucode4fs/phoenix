@@ -1,26 +1,31 @@
-# Mustache Template System for Server Evaluators
+<a id="mustache-template-system-for-server-evaluators"></a>
+# 服务端评估器的 Mustache 模板系统
 
-## What We Built
+<a id="what-we-built"></a>
+## 已实现的功能
 
-This feature introduces full Mustache template support for Phoenix's server-side evaluators, enabling built-in classification evaluator templates to work seamlessly with structured data while maintaining compatibility with the Python/TypeScript evals libraries.
+此功能为 Phoenix 服务端评估器提供完整 Mustache 模板支持，使内置分类模板能无缝处理结构化数据，并保持与 Python/TypeScript 评估库兼容。
 
-### Key Capabilities
+<a id="key-capabilities"></a>
+### 核心能力
 
-1. **Native Mustache Rendering**: Replaced regex-based placeholder substitution with proper Mustache parsing and rendering using `pystache` (Python) and `mustache` (TypeScript)
+1. **原生 Mustache 渲染**：用 `pystache`（Python）和 `mustache`（TypeScript）进行正确解析和渲染，替代正则占位符替换。
 
-2. **Formatter Overlay System**: A mechanism to inject server-specific Mustache snippets into base templates without modifying the original templates used by the evals libraries
+2. **格式化器覆盖系统**：向基础模板注入服务端专用 Mustache 片段，无需修改评估库使用的原始模板。
 
-3. **Type-Aware Variable Extraction**: Templates now distinguish between string variables (`{{name}}`) and section variables (`{{#list}}...{{/list}}`), enabling proper input schema generation
+3. **类型感知变量提取**：区分字符串变量（`{{name}}`）与区段变量（`{{#list}}...{{/list}}`），以正确生成输入 schema。
 
-4. **Frontend Validation**: Real-time validation of Mustache syntax in the playground using native Mustache.js parser error messages
+4. **前端验证**：在 Playground 中使用原生 Mustache.js 解析器错误消息，实时验证语法。
 
-5. **Frontend/Backend Parity**: Python and TypeScript implementations use identical approaches for variable extraction (simple iteration of top-level tokens)
+5. **前后端一致性**：Python 和 TypeScript 使用相同变量提取方法，即简单遍历顶层 token。
 
 ---
 
-## How We Built It
+<a id="how-we-built-it"></a>
+## 实现方式
 
-### Architecture Overview
+<a id="architecture-overview"></a>
+### 架构概览
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -108,34 +113,37 @@ This feature introduces full Mustache template support for Phoenix's server-side
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Roles
+<a id="component-roles"></a>
+### 组件职责
 
-| Component                                                              | Role                                                                                                 |
+| 组件 | 职责 |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Base Templates** (`prompts/classification_evaluator_configs/*.yaml`) | Define evaluator prompt templates with simple placeholders. Used by both evals libraries and server. |
-| **Formatters** (`prompts/formatters/server.yaml`)                      | Named Mustache snippets that handle structured data (tool calls, available tools). Server-specific.  |
-| **Substitution Expander** (`substitutions.py`)                         | Expands simple `{{placeholder}}` into full Mustache sections at config load time.                    |
-| **Template Formatter** (`template_formatters.py`)                      | Parses templates, extracts variables with types, renders with pystache.                              |
-| **Input Schema** (`LLMEvaluator.input_schema`)                         | JSON Schema derived from template variables. Section vars → any type, string vars → string.          |
-| **Input Mapping** (`EvaluatorInputMapping.tsx`)                        | UI component for mapping context fields to template variables.                                       |
-| **Validation** (`validateMustacheSections()`)                          | Frontend validation using native Mustache.js parser error messages.                                  |
+| **基础模板**（`prompts/classification_evaluator_configs/*.yaml`） | 用简单占位符定义评估器提示词，评估库和服务端共用。 |
+| **格式化器**（`prompts/formatters/server.yaml`） | 具名 Mustache 片段，处理工具调用、可用工具等结构化数据，服务端专用。 |
+| **替换展开器**（`substitutions.py`） | 配置加载时将简单 `{{placeholder}}` 展开为完整 Mustache 区段。 |
+| **模板格式化器**（`template_formatters.py`） | 解析模板，提取带类型变量，并用 pystache 渲染。 |
+| **输入 schema**（`LLMEvaluator.input_schema`） | 从变量推导 JSON Schema，区段变量接受任意类型，字符串变量接受字符串。 |
+| **输入映射**（`EvaluatorInputMapping.tsx`） | 将上下文字段映射到模板变量的界面组件。 |
+| **验证**（`validateMustacheSections()`） | 使用原生 Mustache.js 解析器错误消息进行前端验证。 |
 
 ---
 
-## Key Decisions and Rationale
+<a id="key-decisions-and-rationale"></a>
+## 关键决策及理由
 
-### 1. Formatter Overlay vs. Modifying Base Templates
+<a id="1-formatter-overlay-vs-modifying-base-templates"></a>
+### 1. 格式化器覆盖与修改基础模板
 
-**Decision:** Create a separate substitution system that injects Mustache snippets at load time rather than modifying the base templates.
+**决策：** 建立独立替换系统，在加载时注入 Mustache 片段，而非修改基础模板。
 
-**Rationale:**
+**理由：**
 
-- Base templates remain simple string placeholders (`{{input}}`, `{{output}}`), usable by evals libraries without assumptions about data shape
-- Server can inject complex Mustache sections (loops, conditionals) for structured OpenAI-style data
-- Templates stay readable and maintainable
-- Clear separation between library templates and server-specific formatting
+- 基础模板保留简单字符串占位符（`{{input}}`、`{{output}}`），评估库无需假定数据结构即可使用。
+- 服务端可为结构化 OpenAI 风格数据注入循环、条件等复杂区段。
+- 模板保持易读和易维护。
+- 库模板与服务端专用格式化明确分离。
 
-**Example:**
+**示例：**
 
 ```yaml
 # Base template (simple, library-compatible)
@@ -151,17 +159,18 @@ No tools available.
 {{/output.available_tools}}
 ```
 
-### 2. Top-Level Variable Extraction Only
+<a id="2-top-level-variable-extraction-only"></a>
+### 2. 仅提取顶层变量
 
-**Decision:** Only extract variables at depth 0 (not nested inside sections).
+**决策：** 仅提取深度为 0 的变量，不提取区段内嵌套变量。
 
-**Rationale:**
+**理由：**
 
-- Variables inside `{{#section}}...{{/section}}` are resolved from the section context, not the root context
-- Asking users to provide `function.name` when they already provide `output.available_tools` would be confusing
-- Consistent with Mustache semantics: sections change the context for their children
+- `{{#section}}...{{/section}}` 内变量从区段上下文而非根上下文解析。
+- 用户已提供 `output.available_tools` 时，再要求提供 `function.name` 会造成困惑。
+- 符合 Mustache 语义：区段改变其子元素的上下文。
 
-**Example:**
+**示例：**
 
 ```mustache
 {{#output.available_tools}}
@@ -170,61 +179,67 @@ No tools available.
 {{query}}             ← EXTRACTED (depth 0)
 ```
 
-### 3. Root Variable Extraction for Dotted Paths
+<a id="3-root-variable-extraction-for-dotted-paths"></a>
+### 3. 点分路径只提取根变量
 
-**Decision:** For `{{output.available_tools}}`, extract only `output` as the required variable.
+**决策：** 对 `{{output.available_tools}}`，仅将 `output` 提取为必需变量。
 
-**Rationale:**
+**理由：**
 
-- Mustache traverses nested properties automatically: `context["output"]["available_tools"]`
-- User only needs to provide the root object; Mustache handles the rest
-- Simplifies input mapping: map `output` → entire output object, not individual nested fields
+- Mustache 自动遍历嵌套属性：`context["output"]["available_tools"]`。
+- 用户只需提供根对象，其余由 Mustache 处理。
+- 简化输入映射：将 `output` 映射到整个输出对象，而非逐个嵌套字段。
 
-### 4. Type-Aware Schema Generation
+<a id="4-type-aware-schema-generation"></a>
+### 4. 类型感知 schema 生成
 
-**Decision:** Section variables (`{{#var}}`) get empty schemas (accept any type); string variables (`{{var}}`) get `{"type": "string"}`.
+**决策：** 区段变量（`{{#var}}`）使用空 schema，接受任意类型；字符串变量（`{{var}}`）使用 `{"type": "string"}`。
 
-**Rationale:**
+**理由：**
 
-- Sections iterate over arrays or conditionally render based on truthiness → need to accept any JSON type
-- Simple interpolation expects string values → enforce type constraint
-- Enables automatic type casting in the pipeline (non-strings → string for string vars)
+- 区段遍历数组或根据真值有条件渲染，需要接受任意 JSON 类型。
+- 简单插值期望字符串，因此强制类型约束。
+- 支持流水线自动类型转换，将字符串变量的非字符串值转为字符串。
 
-### 5. Native Mustache Parser for Validation
+<a id="5-native-mustache-parser-for-validation"></a>
+### 5. 使用原生 Mustache 解析器验证
 
-**Decision:** Use native Mustache.js parser exclusively for template validation, surfacing parser exception messages directly to users.
+**决策：** 仅使用原生 Mustache.js 解析器验证模板，将异常消息直接展示给用户。
 
-**Rationale:**
+**理由：**
 
-- **Simplicity**: A single validation path is easier to maintain and reason about than a multi-layer regex fallback system
-- **Spec compliance**: Native parsers correctly handle all Mustache edge cases (comments, delimiter changes, etc.)
-- **Adequate error messages**: Native parser errors like `Unclosed section "foo" at 13` are sufficiently informative for users to locate and fix issues
-- **Avoid regex brittleness**: Custom regex-based parsers are difficult to validate exhaustively and can drift from the Mustache spec
+- **简单性**：单一验证路径比多层正则回退更易维护和推理。
+- **遵循规范**：原生解析器正确处理注释、分隔符变化等全部边界情况。
+- **错误信息足够明确**：如 `Unclosed section "foo" at 13`，足以帮助用户定位修复。
+- **避免正则脆弱性**：自定义正则解析器难以穷尽验证，且可能偏离规范。
 
-**Trade-off**: All parse failures are treated as errors (no warning vs. error distinction). Users may see error banners while still typing incomplete sections. This was deemed acceptable for code simplicity.
+**取舍：** 所有解析失败都作为错误，不区分警告和错误。用户尚在输入未完成区段时，也可能看到错误横幅。为简化代码，此代价可接受。
 
-### 6. Frontend/Backend Parity for Variable Extraction
+<a id="6-frontendbackend-parity-for-variable-extraction"></a>
+### 6. 前后端变量提取一致
 
-**Decision:** Python and TypeScript both extract only top-level variables, producing identical results.
+**决策：** Python 和 TypeScript 都只提取顶层变量，产生相同结果。
 
-**Rationale:**
+**理由：**
 
-- Frontend needs to know which variables to display in input mapping UI
-- Backend generates the canonical input_schema
-- If results differed, UI could show wrong variables or miss some
+- 前端需要知道输入映射界面应显示哪些变量。
+- 后端生成权威 input_schema。
+- 结果不同会导致界面显示错误变量或遗漏变量。
 
-**Implementation Note:** Both implementations use the same simple approach:
+**实现说明：** 两个实现都采用同一简单方法：
 
-- **Python**: Iterates only the top-level nodes of pystache's parse tree
-- **TypeScript**: Iterates only the top-level tokens from Mustache.parse()
+- **Python**：只遍历 pystache 解析树顶层节点。
+- **TypeScript**：只遍历 Mustache.parse() 顶层 token。
 
-Both parsers structure their output such that nested tokens (inside sections) are encapsulated in children arrays of section tokens. This means a simple iteration of the top-level array naturally extracts only top-level variables—no recursion or depth tracking needed.
+两个解析器都将嵌套 token（区段内部）封装到区段 token 的子数组。因此，简单遍历顶层数组自然只提取顶层变量，无需递归或深度跟踪。
 
 ---
 
-## Variable Identification and Input Mapping Flow
+<a id="variable-identification-and-input-mapping-flow"></a>
+## 变量识别和输入映射流程
 
-### How the UI Identifies Required Variables
+<a id="how-the-ui-identifies-required-variables"></a>
+### 界面如何识别必需变量
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -268,7 +283,8 @@ Both parsers structure their output such that nested tokens (inside sections) ar
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### How Input Mapping + Mustache Are Combined at Evaluation Time
+<a id="how-input-mapping--mustache-are-combined-at-evaluation-time"></a>
+### 评估时如何组合输入映射与 Mustache
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -333,85 +349,94 @@ Both parsers structure their output such that nested tokens (inside sections) ar
 
 ---
 
-## Error Handling and UI Feedback
+<a id="error-handling-and-ui-feedback"></a>
+## 错误处理和界面反馈
 
-### Template Validation Errors (Surfaced in Playground UI)
+<a id="template-validation-errors-surfaced-in-playground-ui"></a>
+### 模板验证错误（显示在 Playground 界面）
 
-Errors are detected by the native Mustache.js parser and displayed directly to users:
+原生 Mustache.js 解析器检测错误，并直接展示给用户：
 
-| Error Type                  | Example                           | Native Parser Message                |
+| 错误类型 | 示例 | 原生解析器消息 |
 | --------------------------- | --------------------------------- | ------------------------------------ |
-| **Unclosed Section**        | `{{#items}}...` (no `{{/items}}`) | `Unclosed section "items" at 13`     |
-| **Mismatched Closing Tag**  | `{{#items}}...{{/item}}`          | `Unclosed section "items" at 13`     |
-| **Unmatched Closing Tag**   | `{{/items}}` without opener       | `Unopened section "items" at 0`      |
-| **Invalid Mustache Syntax** | Other parse errors                | Parser-specific error message        |
+| **区段未闭合** | `{{#items}}...`，无 `{{/items}}` | `Unclosed section "items" at 13` |
+| **闭合标签不匹配** | `{{#items}}...{{/item}}` | `Unclosed section "items" at 13` |
+| **闭合标签无对应起始标签** | `{{/items}}` 没有起始标签 | `Unopened section "items" at 0` |
+| **Mustache 语法无效** | 其他解析错误 | 解析器专用错误消息 |
 
-All validation errors are displayed as red error banners in the UI. The native parser messages include position information to help users locate issues.
+全部验证错误以红色横幅显示。原生消息包含位置信息，便于定位。
 
-### Runtime Errors (During Evaluation)
+<a id="runtime-errors-during-evaluation"></a>
+### 运行时错误（评估期间）
 
-| Error                     | Cause                                      | Handling                                                                                 |
+| 错误 | 原因 | 处理 |
 | ------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Missing required variable | Input mapping didn't provide all variables | `validate_template_variables` raises `ValueError`, evaluation fails with error in result |
-| Type mismatch             | Variable doesn't match schema type         | `validate_template_variables` raises `ValueError`                                        |
-| Mustache rendering error  | Template has runtime issues                | `TemplateFormatterError` raised, evaluation fails                                        |
+| 缺少必需变量 | 输入映射未提供全部变量 | `validate_template_variables` 抛出 `ValueError`，评估失败并在结果中记录错误 |
+| 类型不匹配 | 变量不符合 schema 类型 | `validate_template_variables` 抛出 `ValueError` |
+| Mustache 渲染错误 | 模板存在运行时问题 | 抛出 `TemplateFormatterError`，评估失败 |
 
 ---
 
-## Edge Cases
+<a id="edge-cases"></a>
+## 边界情况
 
-### Handled
+<a id="handled"></a>
+### 已处理
 
-1. **Dotted paths in sections**: `{{#output.available_tools}}` correctly extracts `output` as the required variable
+1. **区段点分路径**：`{{#output.available_tools}}` 正确提取 `output` 为必需变量。
 
-2. **Nested sections**: Variables inside sections are not extracted as top-level requirements
+2. **嵌套区段**：区段内部变量不提取为顶层要求。
 
-3. **Inverted sections**: `{{^items}}No items{{/items}}` handled correctly, `items` extracted
+3. **反向区段**：正确处理 `{{^items}}No items{{/items}}`，提取 `items`。
 
-4. **Unescaped variables**: `{{{html}}}` and `{{& html}}` both work, extract `html`
+4. **不转义变量**：`{{{html}}}` 和 `{{& html}}` 均可用，提取 `html`。
 
-5. **Whitespace in tags**: `{{ name }}` works the same as `{{name}}`
+5. **标签中的空白**：`{{ name }}` 与 `{{name}}` 行为相同。
 
-6. **Comments**: `{{! comment }}` ignored during extraction
+6. **注释**：提取时忽略 `{{! comment }}`。
 
-7. **Dotted keys in input mapping**: Keys like `output.value` properly escaped for react-hook-form
+7. **输入映射点分键**：`output.value` 等键为 react-hook-form 正确转义。
 
-8. **HTML escaping disabled**: Mustache normally escapes HTML; we disable this for prompt templates
+8. **禁用 HTML 转义**：Mustache 通常转义 HTML；提示词模板中禁用此行为。
 
-### Unhandled / Known Limitations
+<a id="unhandled--known-limitations"></a>
+### 未处理或已知限制
 
-1. **Playground execution with structured inputs**: Templates can be written with Mustache syntax but running them with structured inputs (objects/arrays) in the playground is not yet supported. Only string variable values work for execution. This should be addressed in a follow-up PR.
+1. **Playground 结构化输入执行**：模板可采用 Mustache 语法，但尚不支持在 Playground 中以对象或数组等结构化输入执行，仅字符串变量值可执行，应在后续 PR 处理。
 
-2. **Section variable type inference on frontend**: The frontend extracts variable names but doesn't distinguish section vs. string types. It relies on the backend's input_schema for type information.
+2. **前端区段变量类型推断**：前端提取名称，但不区分区段和字符串类型，依赖后端 input_schema 提供类型信息。
 
-3. **Dynamic delimiter changes**: Mustache supports changing delimiters (`{{=<% %>=}}`), but this is not used or tested.
+3. **动态分隔符变化**：Mustache 支持改变分隔符（`{{=<% %>=}}`），但未使用或测试。
 
-4. **Partials**: Mustache partials (`{{> partial}}`) are not used in our templates.
+4. **局部模板**：当前模板不使用 Mustache 局部模板（`{{> partial}}`）。
 
-5. **Dot-delimited keys in data**: If your data has keys that literally contain dots (e.g., `{"input.query": "hello world"}`), the template `{{input.query}}` will **not** work. Mustache interprets dots as path separators for nested object traversal, so it looks for `context["input"]["query"]` rather than `context["input.query"]`.
+5. **数据中的点分键**：若数据键本身包含点，例如 `{"input.query": "hello world"}`，模板 `{{input.query}}` **不能**工作。Mustache 将点作为嵌套遍历路径分隔符，因此查找 `context["input"]["query"]`，而非 `context["input.query"]`。
 
-   This is a standard Mustache specification limitation—there is no escape syntax (`{{input\.query}}`) or bracket notation (`{{input["query"]}}`) to access literal dot-containing keys. The Mustache.js maintainers have explicitly declined to add this feature as it would conflict with the existing nested property access syntax.
+   这是标准 Mustache 规范限制，不存在访问字面含点键的转义语法（`{{input\.query}}`）或方括号写法（`{{input["query"]}}`）。Mustache.js 维护者明确拒绝增加此功能，因为会与现有嵌套属性语法冲突。
 
-   **Workaround**: Restructure data to use nested objects (`{"input": {"query": "hello world"}}`) or avoid dots in key names (use underscores: `{"input_query": "hello world"}`).
+   **替代方法：** 将数据重构为嵌套对象（`{"input": {"query": "hello world"}}`），或避免键名使用点，改用下划线（`{"input_query": "hello world"}`）。
 
-   Note: This was not supported before this change either—it's inherent to Mustache parsing behavior.
+   说明：本次变更前也不支持，这是 Mustache 解析的固有行为。
 
 ---
 
-## Handling Optional Nested Fields
+<a id="handling-optional-nested-fields"></a>
+## 处理可选嵌套字段
 
-A common question: what happens when data has optional nested fields like `tool_calls` that may or may not exist?
+一个常见问题：`tool_calls` 等可选嵌套字段可能存在，也可能不存在，会如何处理？
 
-### Input Mapping vs. Mustache Responsibilities
+<a id="input-mapping-vs-mustache-responsibilities"></a>
+### 输入映射与 Mustache 的职责
 
-| Level                                                          | Responsibility                   | Validation                                      |
+| 层级 | 职责 | 验证 |
 | -------------------------------------------------------------- | -------------------------------- | ----------------------------------------------- |
-| **Top-level variables** (`output`, `input`)                    | Input mapping must provide these | Validated as **required** by JSON Schema        |
-| **Nested fields** (`output.messages`, `messages[].tool_calls`) | Mustache handles at render time  | **No validation** - Mustache handles gracefully |
+| **顶层变量**（`output`、`input`） | 输入映射必须提供 | JSON Schema 验证为**必需** |
+| **嵌套字段**（`output.messages`、`messages[].tool_calls`） | Mustache 渲染时处理 | **不验证**，由 Mustache 平稳处理 |
 
-### Example: Optional `tool_calls`
+<a id="example-optional-tool_calls"></a>
+### 示例：可选 `tool_calls`
 
-Given data that sometimes has `tool_calls`:
+给定有时包含 `tool_calls` 的数据：
 
 ```json
 {"output": {"messages": [
@@ -420,7 +445,7 @@ Given data that sometimes has `tool_calls`:
 ]}}
 ```
 
-The `server.yaml` formatter handles this with sections and inverted sections:
+`server.yaml` 格式化器通过普通和反向区段处理：
 
 ```mustache
 {{#output.messages}}
@@ -434,54 +459,58 @@ No tools called.
 {{/output.messages}}
 ```
 
-- `{{#tool_calls}}...{{/tool_calls}}` - Renders only if `tool_calls` exists and is truthy
-- `{{^tool_calls}}...{{/tool_calls}}` - Renders when `tool_calls` is missing, `null`, `false`, or empty array
+- `{{#tool_calls}}...{{/tool_calls}}`：仅在 `tool_calls` 存在且真值为真时渲染。
+- `{{^tool_calls}}...{{/tool_calls}}`：`tool_calls` 缺失、为 `null`、`false` 或空数组时渲染。
 
-### Key Points
+<a id="key-points"></a>
+### 要点
 
-1. **You do NOT need to set `None` defaults for optional nested fields** - Mustache sections handle missing/null/empty values gracefully
+1. **无需为可选嵌套字段设置 `None` 默认值**，Mustache 区段会平稳处理缺失、null 和空值。
 
-2. **Top-level variables MUST be provided** - If your template uses `{{output}}` or `{{#output.messages}}`, then `output` must be mapped via input mapping
+2. **必须提供顶层变量**：模板使用 `{{output}}` 或 `{{#output.messages}}` 时，必须通过输入映射提供 `output`。
 
-3. **Use sections for optional data** - Always wrap potentially-missing nested fields in `{{#field}}...{{/field}}` sections, not bare `{{field}}` references
+3. **可选数据使用区段**：可能缺失的嵌套字段始终包装在 `{{#field}}...{{/field}}` 中，不要直接裸引用 `{{field}}`。
 
-4. **Inverted sections for fallbacks** - Use `{{^field}}...{{/field}}` to render fallback content when a field is missing
-
----
-
-## Open Questions
-
-1. **Should the UI show different indicators for section vs. string variables?**
-   - Currently both show the same input mapping UI
-   - Section variables accept any JSON type, which might confuse users expecting string inputs
-
-2. **Should we validate substitution expansions at config load time?**
-   - Currently we log warnings for missing substitutions but don't fail
-   - Could be more strict to catch config errors early
-
-3. **Should frontend extraction also return type information?**
-   - Would enable richer UI (e.g., showing that a variable expects an array)
-   - Currently relies on server's GraphQL response for input_schema
+4. **反向区段用于回退**：使用 `{{^field}}...{{/field}}` 在字段缺失时渲染备用内容。
 
 ---
 
-## Files Changed (Key Components)
+<a id="open-questions"></a>
+## 待解决问题
+
+1. **界面是否区分区段与字符串变量？**
+   - 当前二者采用相同输入映射界面。
+   - 区段变量接受任意 JSON 类型，可能让预期字符串输入的用户困惑。
+
+2. **是否在配置加载时验证替换展开？**
+   - 当前替换缺失仅记录警告，不失败。
+   - 可以更严格，提前发现配置错误。
+
+3. **前端提取是否也返回类型信息？**
+   - 可支持更丰富界面，例如表明变量需要数组。
+   - 当前依赖服务端 GraphQL 响应中的 input_schema。
+
+---
+
+<a id="files-changed-key-components"></a>
+## 改动文件（关键组件）
 
 ### Python
 
-- `src/phoenix/utilities/template_formatters.py` - Core Mustache parsing/rendering with pystache
-- `src/phoenix/server/api/helpers/substitutions.py` - Substitution expansion logic
-- `src/phoenix/server/api/evaluators.py` - Input schema generation, input mapping, evaluation pipeline
-- `prompts/formatters/server.yaml` - Named Mustache snippet definitions
-- `prompts/classification_evaluator_configs/*.yaml` - Evaluator templates with optional substitutions
+- `src/phoenix/utilities/template_formatters.py`：基于 pystache 的核心 Mustache 解析和渲染。
+- `src/phoenix/server/api/helpers/substitutions.py`：替换展开逻辑。
+- `src/phoenix/server/api/evaluators.py`：输入 schema 生成、输入映射和评估流水线。
+- `prompts/formatters/server.yaml`：具名 Mustache 片段定义。
+- `prompts/classification_evaluator_configs/*.yaml`：带可选替换的评估器模板。
 
 ### TypeScript
 
-- `js/app/src/components/templateEditor/language/mustacheLike/mustacheLikeTemplating.ts` - Frontend Mustache parsing, variable extraction, validation
-- `js/app/src/components/evaluators/EvaluatorInputMapping.tsx` - Input mapping UI
-- `js/app/src/pages/playground/PlaygroundChatTemplate.tsx` - Template editor with validation banners
+- `js/app/src/components/templateEditor/language/mustacheLike/mustacheLikeTemplating.ts`：前端 Mustache 解析、变量提取和验证。
+- `js/app/src/components/evaluators/EvaluatorInputMapping.tsx`：输入映射界面。
+- `js/app/src/pages/playground/PlaygroundChatTemplate.tsx`：带验证横幅的模板编辑器。
 
-### Dependencies Added
+<a id="dependencies-added"></a>
+### 新增依赖
 
-- `pystache` (Python) - Native Mustache rendering
-- `mustache` (TypeScript) - Already present, version 4.2.0
+- `pystache`（Python）：原生 Mustache 渲染。
+- `mustache`（TypeScript）：已有依赖，版本 4.2.0。

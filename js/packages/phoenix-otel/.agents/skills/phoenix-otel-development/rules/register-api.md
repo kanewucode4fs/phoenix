@@ -1,16 +1,22 @@
 # register() API
 
-## Key Behavior: `global` Parameter
+<a id="key-behavior-global-parameter"></a>
 
-- `global: true` (default): attaches provider to OTel globals and binds auto-detach to `shutdown()`.
-- `global: false`: provider is NOT attached. Callers can attach manually via `attachGlobalTracerProvider()`. This is how phoenix-client experiments use it.
+## 关键行为：`global` 参数
 
-## Span Processors
+- `global: true`（默认）：将提供程序挂载到 OTel 全局状态，并将自动分离绑定到 `shutdown()`。
+- `global: false`：**不**挂载提供程序。调用方可通过 `attachGlobalTracerProvider()` 手动挂载。phoenix-client 实验采用此方式。
 
-When `spanProcessors` is provided, those are used directly. Otherwise `getDefaultSpanProcessor()` creates an OTLP-backed processor.
+<a id="span-processors"></a>
 
-Processors come from `@arizeai/openinference-vercel` (`OpenInferenceBatchSpanProcessor` / `OpenInferenceSimpleSpanProcessor`), not from `@opentelemetry/sdk-trace-base`.
+## Span 处理器
 
-## Environment Variable Fallbacks
+提供 `spanProcessors` 时直接使用这些处理器，否则由 `getDefaultSpanProcessor()` 创建基于 OTLP 的处理器。
 
-`PHOENIX_COLLECTOR_ENDPOINT` and `PHOENIX_API_KEY` are used as fallbacks for the `url` and `apiKey` params respectively. Explicit params always take precedence.
+处理器来自 `@arizeai/openinference-vercel`（`OpenInferenceBatchSpanProcessor` / `OpenInferenceSimpleSpanProcessor`），而非 `@opentelemetry/sdk-trace-base`。
+
+<a id="environment-variable-fallbacks"></a>
+
+## 环境变量回退
+
+`PHOENIX_COLLECTOR_ENDPOINT` 和 `PHOENIX_API_KEY` 分别作为 `url` 和 `apiKey` 参数的回退值。显式参数始终优先。

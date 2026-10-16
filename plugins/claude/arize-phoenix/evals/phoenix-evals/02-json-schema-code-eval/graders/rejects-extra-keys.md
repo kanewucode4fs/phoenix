@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: schema_eval.py}
 weight: 0.5
 ---
-The user wants an evaluator for output that must be a JSON object with exactly three fields — `name` (string), `age` (integer), `email` (string) — and nothing extra.
+用户需要一个评估器，要求输出必须是 JSON 对象，且恰好包含三个字段：`name`（字符串）、`age`（整数）、`email`（字符串），不能有额外字段。
 
-Grade exactly one claim. PASS if the claim below holds, FAIL otherwise. Ignore everything else about the file.
+只评定下面这一条判断条件。文件满足条件则为 PASS，否则为 FAIL；忽略文件中的其他内容。
 
-Claim: The evaluator treats the schema as closed — output containing any field beyond `name`, `age`, and `email` is judged invalid (e.g. it checks the set of keys equals exactly those three, or uses a schema with `additionalProperties: false`). An evaluator that only checks the three required fields are present and ignores extra keys FAILS.
+判断条件：评估器将模式视为封闭模式，输出中出现 `name`、`age`、`email` 之外的任何字段都应判为无效（例如检查键集合是否恰好等于这三项，或使用带 `additionalProperties: false` 的模式）。如果只检查三个必需字段存在、忽略额外键，则失败。

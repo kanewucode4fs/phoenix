@@ -1,30 +1,38 @@
-# Annotations
+<a id="annotations"></a>
 
-Annotations are named labels/scores attached to spans, traces, sessions, or experiment runs by humans, code, or LLM judges. A **note** is an annotation with the reserved name `note` whose text lives in `explanation`; notes have their own mutations below.
+# 标注
 
-## Fields
+标注由人工、代码或 LLM 裁判添加到跨度、追踪记录、会话或实验运行上，包含具名标签或分数。**笔记**是保留名称为 `note` 的标注，正文位于 `explanation`；下文列出了专用笔记变更操作。
 
-`SpanAnnotation` and `TraceAnnotation` share these fields:
+<a id="fields"></a>
 
-- `name`, `label`, `score`, `explanation`
-- `annotatorKind` (`AnnotatorKind` enum: human / LLM / code)
-- `metadata`, `identifier`, `createdAt`, `updatedAt`
+## 字段
 
-`SpanAnnotation` additionally has `spanId: GlobalID!` and `span`; `TraceAnnotation` has `trace` (but no `traceId` global-id field). `ProjectSessionAnnotation` has the same scalar shape.
+`SpanAnnotation` 和 `TraceAnnotation` 共享以下字段：
 
-`ExperimentRunAnnotation` has the same scalar shape plus `error: String`, and uses `startTime`/`endTime` instead of `createdAt`/`updatedAt`.
+- `name`、`label`、`score`、`explanation`
+- `annotatorKind`（`AnnotatorKind` 枚举：human / LLM / code）
+- `metadata`、`identifier`、`createdAt`、`updatedAt`
 
-## Reading annotations
+`SpanAnnotation` 还包含 `spanId: GlobalID!` 和 `span`；`TraceAnnotation` 包含 `trace`，但没有 `traceId` 全局 ID 字段。`ProjectSessionAnnotation` 具有相同的标量结构。
 
-- Per span: `Span.spanAnnotations { name label score explanation annotatorKind identifier }`; notes alone via `Span.spanNotes { explanation identifier }`.
-- Per trace / session: `Trace.traceAnnotations { ... }` and `ProjectSession.sessionAnnotations { ... }`; notes are the entries with `name == "note"`.
-- Project-wide discovery and rollups: `Project.spanAnnotationNames`, `Project.spanAnnotationSummary`, `Project.traceAnnotationNames`, `Project.traceAnnotationSummary` — use these to learn which annotation names exist before drilling in.
-- In a span `filterCondition`, reference span annotations as `annotations['<name>'].label` / `.score` / `.explanation` (or the legacy `evals['<name>']`). Use the bare `annotations['<name>']` form to test existence.
-- Reference trace annotations as `trace_annotations['<name>'].label` / `.score` / `.explanation`, or use the bare form to test existence. A match returns spans belonging to the annotated trace; add `parent_id is None` to the same condition to return only root spans.
+`ExperimentRunAnnotation` 具有相同标量结构，并增加 `error: String`，使用 `startTime`/`endTime` 替代 `createdAt`/`updatedAt`。
 
-## Example
+<a id="reading-annotations"></a>
 
-Spans that an LLM judge labelled as hallucinated, with the annotation detail:
+## 读取标注
+
+- 按跨度：`Span.spanAnnotations { name label score explanation annotatorKind identifier }`；只读取笔记时使用 `Span.spanNotes { explanation identifier }`。
+- 按追踪或会话：`Trace.traceAnnotations { ... }` 和 `ProjectSession.sessionAnnotations { ... }`；笔记是 `name == "note"` 的条目。
+- 项目范围的发现和汇总：`Project.spanAnnotationNames`、`Project.spanAnnotationSummary`、`Project.traceAnnotationNames`、`Project.traceAnnotationSummary`；深入查询前先用这些字段了解已有标注名称。
+- 在跨度 `filterCondition` 中，通过 `annotations['<name>'].label` / `.score` / `.explanation` 引用跨度标注，旧形式为 `evals['<name>']`。单独使用 `annotations['<name>']` 检查是否存在。
+- 使用 `trace_annotations['<name>'].label` / `.score` / `.explanation` 引用追踪标注，也可用不带属性的形式检查是否存在。匹配时返回属于该标注追踪的跨度；在同一条件中添加 `parent_id is None` 可只返回根跨度。
+
+<a id="example"></a>
+
+## 示例
+
+LLM 裁判标为幻觉的跨度，并附标注详情：
 
 ```graphql
 query Hallucinations($id: ID!) {
@@ -43,7 +51,7 @@ query Hallucinations($id: ID!) {
 }
 ```
 
-Root spans for traces with a poor quality annotation:
+带有较差质量标注的追踪记录的根跨度：
 
 ```graphql
 query PoorQualityTraces($id: ID!) {
@@ -60,13 +68,15 @@ query PoorQualityTraces($id: ID!) {
 }
 ```
 
-## Writing notes
+<a id="writing-notes"></a>
 
-Notes are free-text observations, one mutation per entity kind. Each input takes the entity by **either** its OpenTelemetry id or its Phoenix node id (never both), the text, `annotatorKind` (`LLM` for your own judgment, `HUMAN` only for one the user gave you), `source: API`, and an optional `identifier`. Passing the same `identifier` again for the same entity upserts the note instead of adding a second one; passing none creates a fresh note each time.
+## 写入笔记
 
-- `createSpanNotes(input: [CreateSpanNoteInput!]!)` — `{ span: { otelId } | { id }, note, annotatorKind, source, identifier }`
-- `createTraceNotes(input: [CreateTraceNoteInput!]!)` — `{ trace: { otelId } | { id }, note, annotatorKind, source, identifier }`
-- `createProjectSessionNotes(input: [CreateProjectSessionNoteInput!]!)` — `{ session: { sessionId } | { id }, note, annotatorKind, source, identifier }` where `sessionId` is the application's raw `session.id`
+笔记是自由文本观察，每类实体有独立变更操作。每个输入只能通过 OpenTelemetry ID 或 Phoenix 节点 ID **二选一**指定实体，不能同时使用，并提供正文、`annotatorKind`（自己的判断使用 `LLM`，只有用户提供的判断才使用 `HUMAN`）、`source: API` 和可选 `identifier`。对同一实体再次传入相同 `identifier` 会更新或插入该笔记，不会新增第二条；省略时每次都会创建新笔记。
+
+- `createSpanNotes(input: [CreateSpanNoteInput!]!)`：`{ span: { otelId } | { id }, note, annotatorKind, source, identifier }`
+- `createTraceNotes(input: [CreateTraceNoteInput!]!)`：`{ trace: { otelId } | { id }, note, annotatorKind, source, identifier }`
+- `createProjectSessionNotes(input: [CreateProjectSessionNoteInput!]!)`：`{ session: { sessionId } | { id }, note, annotatorKind, source, identifier }`，其中 `sessionId` 是应用原始的 `session.id`
 
 ```graphql
 mutation NoteTrace($traceId: String!, $note: String!, $identifier: String!) {
@@ -78,24 +88,28 @@ mutation NoteTrace($traceId: String!, $note: String!, $identifier: String!) {
 }
 ```
 
-The mutation is synchronous: the row exists when the response returns. Batch several entities in one call by passing more inputs.
+变更操作同步执行，响应返回时记录已存在。传入多个输入可在一次调用中批量处理多个实体。
 
-## Writing labels
+<a id="writing-labels"></a>
 
-Labelled annotations carry a `name` (the dimension) and a `label` (the outcome), optionally `score` and `explanation`. Their inputs take **Phoenix node ids only** — read `id` when sampling, not the OTel hex id — and require `metadata` (pass `{}`).
+## 写入标签
 
-- `createSpanAnnotations(input: [CreateSpanAnnotationInput!]!)` — `{ spanId, name, label, score, explanation, annotatorKind, source: API, metadata: {}, identifier }`
-- `createTraceAnnotations(input: [CreateTraceAnnotationInput!]!)` — same shape with `traceId`
-- `createProjectSessionAnnotations(input: CreateProjectSessionAnnotationInput!)` — same shape with `projectSessionId`; takes a single input, not a list
+带标签的标注包含 `name`（维度）和 `label`（结果），以及可选 `score`、`explanation`。输入**仅接受 Phoenix 节点 ID**，因此采样时读取 `id`，而非 OTel 十六进制 ID；并且必须提供 `metadata`，可传 `{}`。
 
-Writes upsert on `(entity, name, identifier)`. `patchSpanAnnotations` / `patchTraceAnnotations` edit an existing annotation by its node id; `deleteSpanAnnotations`, `deleteTraceAnnotations`, and `deleteProjectSessionAnnotations` remove by node id — there is no filter-based sweep, so collect ids first (e.g. `Span.spanAnnotations { id identifier }`).
+- `createSpanAnnotations(input: [CreateSpanAnnotationInput!]!)`：`{ spanId, name, label, score, explanation, annotatorKind, source: API, metadata: {}, identifier }`
+- `createTraceAnnotations(input: [CreateTraceAnnotationInput!]!)`：结构相同，但使用 `traceId`
+- `createProjectSessionAnnotations(input: CreateProjectSessionAnnotationInput!)`：结构相同，但使用 `projectSessionId`；接收单个输入，而非列表
 
-## Annotation configs
+写入按 `(entity, name, identifier)` 更新或插入。`patchSpanAnnotations` / `patchTraceAnnotations` 按节点 ID 编辑现有标注；`deleteSpanAnnotations`、`deleteTraceAnnotations`、`deleteProjectSessionAnnotations` 按节点 ID 删除，没有按筛选条件批量清除的接口，因此需先收集 ID，例如 `Span.spanAnnotations { id identifier }`。
 
-A categorical config makes a label set first-class in the UI (dropdown for annotators, shared vocabulary across runs). The annotation `name` and the config `name` must match.
+<a id="annotation-configs"></a>
 
-- `createAnnotationConfig(input: { annotationConfig: { categorical: { name, description, optimizationDirection: NONE, values: [{ label }, ...] } } })` — `AnnotationConfigInput` is a `@oneOf` of `categorical`, `continuous`, `freeform`
-- `updateAnnotationConfig(input: UpdateAnnotationConfigInput!)` — replace the values when a new category emerges
-- `addAnnotationConfigToProject(input: [{ projectId, annotationConfigId }])` — attach it to the project so it appears there
-- Discover existing configs with `Query.annotationConfigs` before creating a near-duplicate.
+## 标注配置
+
+分类配置让标签集合成为界面中的正式选项，为标注人员提供下拉列表，并在不同运行之间共享词汇。标注 `name` 必须与配置 `name` 相同。
+
+- `createAnnotationConfig(input: { annotationConfig: { categorical: { name, description, optimizationDirection: NONE, values: [{ label }, ...] } } })`：`AnnotationConfigInput` 是 `categorical`、`continuous`、`freeform` 的 `@oneOf`。
+- `updateAnnotationConfig(input: UpdateAnnotationConfigInput!)`：出现新类别时替换值列表。
+- `addAnnotationConfigToProject(input: [{ projectId, annotationConfigId }])`：附加到项目，使其在项目中显示。
+- 创建近似重复配置前，先通过 `Query.annotationConfigs` 查找现有配置。
 

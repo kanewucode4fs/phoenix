@@ -1,27 +1,35 @@
-# Data Generation Scripts
+<a id="data-generation-scripts"></a>
 
-This directory contains scripts for generating synthetic trace data in PostgreSQL.
+# 数据生成脚本
 
-## Getting Started
+此目录包含在 PostgreSQL 中生成合成追踪数据的脚本。
 
-Generate spans:
+<a id="getting-started"></a>
+
+## 开始使用
+
+生成跨度：
 ```bash
 python generate_spans.py --num-batches 10 --traces-per-batch 100
 ```
 
-Add annotations to spans:
+为跨度添加标注：
 ```bash
 python generate_span_annotations.py
 ```
 
-Check table sizes for `spans`, `traces`, and `projects`:
+检查 `spans`、`traces` 和 `projects` 的表大小：
 ```bash
 python report_spans_table_sizes.py
 ```
 
-## Sample Queries to Run after Data is Generated
+<a id="sample-queries-to-run-after-data-is-generated"></a>
 
-### Select Random Conversation ID
+## 数据生成后的示例查询
+
+<a id="select-random-conversation-id"></a>
+
+### 随机选择会话 ID
 ```sql
 SELECT (attributes->'metadata'->>'conversation_id')::uuid as conversation_id
 FROM spans TABLESAMPLE SYSTEM (1)
@@ -29,7 +37,9 @@ WHERE attributes->'metadata'->>'conversation_id' IS NOT NULL
 LIMIT 1;
 ```
 
-### Select Spans by Conversation ID
+<a id="select-spans-by-conversation-id"></a>
+
+### 按会话 ID 选择跨度
 ```sql
 SELECT *
 FROM spans
@@ -37,7 +47,9 @@ WHERE attributes->'metadata'->>'conversation_id' = '123e4567-e89b-12d3-a456-4266
 ORDER BY start_time;
 ```
 
-### Show Spans Table Size Stats
+<a id="show-spans-table-size-stats"></a>
+
+### 查看跨度表大小统计
 ```sql
 SELECT 
     pg_size_pretty(pg_total_relation_size('spans')) as total_size,
@@ -47,11 +59,13 @@ SELECT
     (SELECT last_value FROM spans_id_seq) as current_sequence;
 ```
 
-## Files
+<a id="files"></a>
 
-- `generate_spans.sql` - Generates spans with realistic timing and metadata
-- `generate_spans.py` - Python wrapper to run generate_spans.sql in batches
-- `generate_span_annotations.sql` - Adds annotations to existing spans
-- `generate_span_annotations.py` - Python wrapper for span annotations
-- `report_spans_table_sizes.sql` - Reports table sizes and row counts
-- `report_spans_table_sizes.py` - Python wrapper for table size reporting
+## 文件说明
+
+- `generate_spans.sql`：生成具有真实感时间信息和元数据的跨度
+- `generate_spans.py`：批量运行 generate_spans.sql 的 Python 包装脚本
+- `generate_span_annotations.sql`：为现有跨度添加标注
+- `generate_span_annotations.py`：跨度标注的 Python 包装脚本
+- `report_spans_table_sizes.sql`：报告表大小和行数
+- `report_spans_table_sizes.py`：表大小报告的 Python 包装脚本

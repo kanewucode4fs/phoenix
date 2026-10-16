@@ -1,6 +1,10 @@
-# Frontend Implementation
+<a id="frontend-implementation"></a>
 
-## New Component: LDAPLoginForm.tsx
+# 前端实现
+
+<a id="new-component-ldaploginformtsx"></a>
+
+## 新组件：LDAPLoginForm.tsx
 
 ```typescript
 import { useState, FormEvent } from "react";
@@ -86,7 +90,9 @@ export function LDAPLoginForm() {
 }
 ```
 
-## Update LoginPage.tsx
+<a id="update-loginpagetsx"></a>
+
+## 更新 LoginPage.tsx
 
 ```typescript
 import { LDAPLoginForm } from "./LDAPLoginForm";
@@ -140,7 +146,9 @@ export function LoginPage() {
 }
 ```
 
-## Update UsersTable.tsx
+<a id="update-userstabletsx"></a>
+
+## 更新 UsersTable.tsx
 
 ```typescript
 // js/app/src/pages/settings/UsersTable.tsx
@@ -166,7 +174,9 @@ export function LoginPage() {
 }
 ```
 
-## Update Window Config
+<a id="update-window-config"></a>
+
+## 更新窗口配置
 
 ```typescript
 // js/app/src/globals.d.ts

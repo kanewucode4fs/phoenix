@@ -1,17 +1,23 @@
-# Grafana Source Code Research
+<a id="grafana-source-code-research"></a>
 
-**Complete Grafana Source Code Analysis** - Detailed findings from reviewing Grafana's LDAP implementation to ensure Phoenix compatibility.
+# Grafana 源码研究
 
-## Files Reviewed
+**完整 Grafana 源码分析** — 审阅 Grafana LDAP 实现的详细发现，用于确保 Phoenix 兼容性。
 
-1. [settings.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/settings.go) - Struct definitions, defaults
-2. [ldap.toml](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/conf/ldap.toml) - Example config
-3. [service/ldap.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/service/ldap.go) - Validation, defaults
-4. [ldap.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/ldap.go) - Group matching logic
-5. [helpers.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/helpers.go) - `IsMemberOf()` function
-6. [multildap.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/multildap/multildap.go) - Multi-server failover
+<a id="files-reviewed"></a>
 
-## Grafana's GroupToOrgRole Struct
+## 已审阅文件
+
+1. [settings.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/settings.go) — 结构定义、默认值
+2. [ldap.toml](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/conf/ldap.toml) — 配置示例
+3. [service/ldap.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/service/ldap.go) — 校验、默认值
+4. [ldap.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/ldap.go) — 组匹配逻辑
+5. [helpers.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/helpers.go) — `IsMemberOf()` 函数
+6. [multildap.go](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/multildap/multildap.go) — 多服务器故障转移
+
+<a id="grafanas-grouptoorgrole-struct"></a>
+
+## Grafana 的 GroupToOrgRole 结构
 
 ```go
 type GroupToOrgRole struct {
@@ -22,7 +28,9 @@ type GroupToOrgRole struct {
 }
 ```
 
-## Grafana's Group Matching Logic
+<a id="grafanas-group-matching-logic"></a>
+
+## Grafana 组匹配逻辑
 
 ```go
 func IsMemberOf(memberOf []string, group string) bool {
@@ -38,86 +46,104 @@ func IsMemberOf(memberOf []string, group string) bool {
 }
 ```
 
-## Phoenix Adaptation
+<a id="phoenix-adaptation"></a>
 
-Phoenix adapts Grafana's configuration format while accounting for Phoenix-specific differences:
+## Phoenix 适配
 
-**Similarities**:
-- ✅ Wildcard `"*"` support - MATCHES GRAFANA (checked first, matches all users)
-- ✅ **Case-insensitive DN matching** - MATCHES GRAFANA (`strings.EqualFold`)
-- ✅ First-match-wins priority - MATCHES GRAFANA
-- ✅ Multi-server failover (tries in order) - MATCHES GRAFANA
+Phoenix 适配 Grafana 配置格式，同时考虑 Phoenix 特有差异：
 
-**Phoenix-Specific Differences**:
-- ✅ Field name: `role` (not `org_role`) - Phoenix has no organizations
-- ✅ Values: `"ADMIN"`, `"MEMBER"`, `"VIEWER"` (uppercase) - Matches Phoenix role names
-- ⚠️ Omit `org_id` - Phoenix doesn't have multi-org support
-- ⚠️ Omit `grafana_admin` - Phoenix doesn't have server admin concept
-- ⚠️ Omit team sync (`TeamOrgGroupDTO`) - Phoenix doesn't have teams, only roles
+**相似之处**：
+- ✅ 支持通配符 `"*"`，与 Grafana 一致，最先检查，匹配所有用户
+- ✅ **不区分大小写的 DN 匹配**，与 Grafana 一致（`strings.EqualFold`）
+- ✅ 首次匹配优先，与 Grafana 一致
+- ✅ 多服务器故障转移，按顺序尝试，与 Grafana 一致
 
-## Configuration Field Comparison
+**Phoenix 特有差异**：
+- ✅ 字段名称为 `role`，不是 `org_role`，Phoenix 没有组织概念
+- ✅ 值为 `"ADMIN"`、`"MEMBER"`、`"VIEWER"`，全大写，与 Phoenix 角色名一致
+- ⚠️ 省略 `org_id`，Phoenix 不支持多组织
+- ⚠️ 省略 `grafana_admin`，Phoenix 没有服务器管理员概念
+- ⚠️ 省略团队同步（`TeamOrgGroupDTO`），Phoenix 只有角色，没有团队
 
-Complete field-by-field comparison between Grafana's `ServerConfig` struct and Phoenix's environment variables.
+<a id="configuration-field-comparison"></a>
 
-### Server Connection
+## 配置字段对比
 
-| Grafana (`settings.go`) | Phoenix | Status |
+完整逐字段对比 Grafana `ServerConfig` 结构与 Phoenix 环境变量。
+
+<a id="server-connection"></a>
+
+### 服务器连接
+
+| Grafana (`settings.go`) | Phoenix | 状态 |
 |------------------------|---------|--------|
-| `Host string` | `PHOENIX_LDAP_HOST` | ✅ Match |
-| `Port int` (default 389) | `PHOENIX_LDAP_PORT` (default 389/636 based on mode) | ✅ Match |
+| `Host string` | `PHOENIX_LDAP_HOST` | ✅ 一致 |
+| `Port int` （默认 389） | `PHOENIX_LDAP_PORT` （根据模式默认为 389/636） | ✅ 一致 |
 
-### TLS Configuration
+<a id="tls-configuration"></a>
 
-| Grafana | Phoenix | Status |
+### TLS 配置
+
+| Grafana | Phoenix | 状态 |
 |---------|---------|--------|
-| `UseSSL bool` | Combined: `PHOENIX_LDAP_TLS_MODE=ldaps` | ✅ Equivalent |
-| `StartTLS bool` | Combined: `PHOENIX_LDAP_TLS_MODE=starttls` | ✅ Equivalent |
-| `SkipVerifySSL bool` | `PHOENIX_LDAP_TLS_VERIFY` (inverted logic) | ✅ Equivalent |
-| `MinTLSVersion string` | ❌ Not implemented | ⚠️ Low priority |
-| `TLSCiphers []string` | ❌ Not implemented | ⚠️ Low priority |
-| `RootCACert string` | `PHOENIX_LDAP_TLS_CA_CERT_FILE` | ✅ Match |
-| `ClientCert string` | `PHOENIX_LDAP_TLS_CLIENT_CERT_FILE` | ✅ Match |
-| `ClientKey string` | `PHOENIX_LDAP_TLS_CLIENT_KEY_FILE` | ✅ Match |
+| `UseSSL bool` | 合并配置： `PHOENIX_LDAP_TLS_MODE=ldaps` | ✅ 等效 |
+| `StartTLS bool` | 合并配置： `PHOENIX_LDAP_TLS_MODE=starttls` | ✅ 等效 |
+| `SkipVerifySSL bool` | `PHOENIX_LDAP_TLS_VERIFY` （逻辑取反） | ✅ 等效 |
+| `MinTLSVersion string` | ❌ 未实现 | ⚠️ 低优先级 |
+| `TLSCiphers []string` | ❌ 未实现 | ⚠️ 低优先级 |
+| `RootCACert string` | `PHOENIX_LDAP_TLS_CA_CERT_FILE` | ✅ 一致 |
+| `ClientCert string` | `PHOENIX_LDAP_TLS_CLIENT_CERT_FILE` | ✅ 一致 |
+| `ClientKey string` | `PHOENIX_LDAP_TLS_CLIENT_KEY_FILE` | ✅ 一致 |
 
-### Bind Configuration
+<a id="bind-configuration"></a>
 
-| Grafana | Phoenix | Status |
+### 绑定配置
+
+| Grafana | Phoenix | 状态 |
 |---------|---------|--------|
-| `BindDN string` | `PHOENIX_LDAP_BIND_DN` | ✅ Match |
-| `BindPassword string` | `PHOENIX_LDAP_BIND_PASSWORD` | ✅ Match |
-| `Timeout int` (default 10s) | ❌ Not implemented | ⚠️ Low priority |
+| `BindDN string` | `PHOENIX_LDAP_BIND_DN` | ✅ 一致 |
+| `BindPassword string` | `PHOENIX_LDAP_BIND_PASSWORD` | ✅ 一致 |
+| `Timeout int` （默认 10 秒） | ❌ 未实现 | ⚠️ 低优先级 |
 
-### User Search
+<a id="user-search"></a>
 
-| Grafana | Phoenix | Status |
+### 用户搜索
+
+| Grafana | Phoenix | 状态 |
 |---------|---------|--------|
-| `SearchBaseDNs []string` | `PHOENIX_LDAP_USER_SEARCH_BASE_DNS` (JSON array) | ✅ **Match** |
-| `SearchFilter string` | `PHOENIX_LDAP_USER_SEARCH_FILTER` | ✅ Match |
+| `SearchBaseDNs []string` | `PHOENIX_LDAP_USER_SEARCH_BASE_DNS` （JSON 数组） | ✅ **一致** |
+| `SearchFilter string` | `PHOENIX_LDAP_USER_SEARCH_FILTER` | ✅ 一致 |
 
-### Attribute Mapping
+<a id="attribute-mapping"></a>
 
-| Grafana (`AttributeMap`) | Phoenix | Status |
+### 属性映射
+
+| Grafana (`AttributeMap`) | Phoenix | 状态 |
 |--------------------------|---------|--------|
-| `Email string` | `PHOENIX_LDAP_ATTR_EMAIL` | ✅ Match |
-| `Name string` | `PHOENIX_LDAP_ATTR_DISPLAY_NAME` | ✅ Match |
-| `MemberOf string` | `PHOENIX_LDAP_ATTR_MEMBER_OF` | ✅ Match |
-| `Username string` | ❌ Not needed (from login form) | ✅ N/A |
-| `Surname string` | ❌ Not implemented | ✅ Not needed |
-| ❌ Not in Grafana | `PHOENIX_LDAP_ATTR_UNIQUE_ID` | ✅ Phoenix extra |
+| `Email string` | `PHOENIX_LDAP_ATTR_EMAIL` | ✅ 一致 |
+| `Name string` | `PHOENIX_LDAP_ATTR_DISPLAY_NAME` | ✅ 一致 |
+| `MemberOf string` | `PHOENIX_LDAP_ATTR_MEMBER_OF` | ✅ 一致 |
+| `Username string` | ❌ 无需配置，来自登录表单 | ✅ 不适用 |
+| `Surname string` | ❌ 未实现 | ✅ 不需要 |
+| ❌ Grafana 中不存在 | `PHOENIX_LDAP_ATTR_UNIQUE_ID` | ✅ Phoenix 额外功能 |
 
-### Group Search (POSIX)
+<a id="group-search-posix"></a>
 
-| Grafana | Phoenix | Status |
+### 组搜索（POSIX）
+
+| Grafana | Phoenix | 状态 |
 |---------|---------|--------|
-| `GroupSearchBaseDNs []string` | `PHOENIX_LDAP_GROUP_SEARCH_BASE_DNS` (JSON array) | ✅ **Match** |
-| `GroupSearchFilter string` | `PHOENIX_LDAP_GROUP_SEARCH_FILTER` | ✅ Match |
-| `GroupSearchFilterUserAttribute string` | `PHOENIX_LDAP_GROUP_SEARCH_FILTER_USER_ATTR` | ✅ **Match** |
+| `GroupSearchBaseDNs []string` | `PHOENIX_LDAP_GROUP_SEARCH_BASE_DNS` （JSON 数组） | ✅ **一致** |
+| `GroupSearchFilter string` | `PHOENIX_LDAP_GROUP_SEARCH_FILTER` | ✅ 一致 |
+| `GroupSearchFilterUserAttribute string` | `PHOENIX_LDAP_GROUP_SEARCH_FILTER_USER_ATTR` | ✅ **一致** |
 
-#### Group Search Filter User Attribute Behavior
+<a id="group-search-filter-user-attribute-behavior"></a>
 
-Both Grafana and Phoenix support `group_search_filter_user_attribute` (Grafana) / `GROUP_SEARCH_FILTER_USER_ATTR` (Phoenix) with identical behavior:
+#### 组搜索过滤器用户属性行为
 
-**Grafana** (`ldap.go` line 598-605):
+Grafana 和 Phoenix 均支持 `group_search_filter_user_attribute`（Grafana）/`GROUP_SEARCH_FILTER_USER_ATTR`（Phoenix），行为相同：
+
+**Grafana** (`ldap.go` 第 598—605 行):
 ```go
 if config.GroupSearchFilterUserAttribute == "" {
     filterReplace = getAttribute(config.Attr.Username, entry)
@@ -137,69 +163,85 @@ else:
     filter_value = username  # Uses login username
 ```
 
-**Common values:**
-- `"uid"`: For POSIX groups using `memberUid` (contains uid attribute value)
-- `"dn"` or `"distinguishedName"`: For groups using `member` with full DNs (Active Directory)
-- Not set (default): Uses the login username (works for most POSIX setups)
+**常见值：**
+- `"uid"`：用于采用 `memberUid` 的 POSIX 组，包含 uid 属性值
+- `"dn"` 或 `"distinguishedName"`：用于 `member` 存放完整 DN 的组，例如 Active Directory
+- 未设置（默认）：使用登录用户名，适用于大多数 POSIX 配置
 
-**Grafana documentation reference:**
+**Grafana 文档参考：**
 - https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/ldap/
 
-### Group Role Mappings
+<a id="group-role-mappings"></a>
 
-| Grafana (`GroupToOrgRole`) | Phoenix | Status |
+### 组角色映射
+
+| Grafana (`GroupToOrgRole`) | Phoenix | 状态 |
 |---------------------------|---------|--------|
-| `GroupDN string` | `group_dn` | ✅ Match |
-| `OrgRole RoleType` | `role` (not `org_role`) | ✅ Intentional |
-| `OrgId int64` | ❌ Not applicable | ✅ N/A (no orgs) |
-| `IsGrafanaAdmin *bool` | ❌ Not applicable | ✅ N/A |
+| `GroupDN string` | `group_dn` | ✅ 一致 |
+| `OrgRole RoleType` | `role` （不是 `org_role`） | ✅ 有意设计 |
+| `OrgId int64` | ❌ 不适用 | ✅ 不适用，无组织 |
+| `IsGrafanaAdmin *bool` | ❌ 不适用 | ✅ 不适用 |
 
-### Sign-up Control
+<a id="sign-up-control"></a>
 
-| Grafana | Phoenix | Status |
+### 注册控制
+
+| Grafana | Phoenix | 状态 |
 |---------|---------|--------|
-| `AllowSignUp bool` | `PHOENIX_LDAP_ALLOW_SIGN_UP` | ✅ Match |
+| `AllowSignUp bool` | `PHOENIX_LDAP_ALLOW_SIGN_UP` | ✅ 一致 |
 
 ---
 
-### Missing Features (Low Priority)
+<a id="missing-features-low-priority"></a>
 
-These Grafana features are not implemented in Phoenix. They can be added later if requested:
+### 缺少的功能（低优先级）
 
-| Feature | Grafana | Use Case |
+Phoenix 尚未实现以下 Grafana 功能，可在未来有需求时添加：
+
+| 功能 | Grafana | 使用场景 |
 |---------|---------|----------|
-| `MinTLSVersion` | Force TLS 1.2+ | Enterprise security compliance |
-| `TLSCiphers` | Restrict cipher suites | Enterprise security compliance |
-| `Timeout` | Connection timeout (seconds) | Network reliability |
+| `MinTLSVersion` | 强制 TLS 1.2+ | 企业安全合规 |
+| `TLSCiphers` | 限制密码套件 | 企业安全合规 |
+| `Timeout` | 连接超时，秒 | 网络可靠性 |
 
-### Phoenix Extras (Not in Grafana)
+<a id="phoenix-extras-not-in-grafana"></a>
 
-| Feature | Phoenix | Use Case |
+### Phoenix 额外功能（Grafana 不具备）
+
+| 功能 | Phoenix | 使用场景 |
 |---------|---------|----------|
-| `PHOENIX_LDAP_ATTR_UNIQUE_ID` | Immutable user identifier | Email change resilience (objectGUID, entryUUID) |
+| `PHOENIX_LDAP_ATTR_UNIQUE_ID` | 不可变用户标识符 | 应对邮箱变化，objectGUID、entryUUID |
 
 ---
 
-## Implementation Logic Discrepancies
+<a id="implementation-logic-discrepancies"></a>
 
-Detailed comparison of runtime behavior between Grafana and Phoenix LDAP implementations.
+## 实现逻辑差异
 
-### 1. Multi-Server Failover Behavior
+详细比较 Grafana 和 Phoenix LDAP 实现的运行时行为。
 
-Both Grafana and Phoenix support multiple LDAP servers for high availability, but they handle different error conditions differently.
+<a id="1-multi-server-failover-behavior"></a>
 
-#### Failover Trigger Comparison
+### 1. 多服务器故障转移行为
 
-| Error Condition | Grafana | Phoenix | Match? |
+Grafana 和 Phoenix 均支持多个 LDAP 服务器实现高可用，但处理不同错误条件的方式不同。
+
+<a id="failover-trigger-comparison"></a>
+
+#### 故障转移触发条件对比
+
+| 错误条件 | Grafana | Phoenix | 是否一致？ |
 |----------------|---------|---------|--------|
-| **Connection failed** (Dial error) | ✅ Try next server | ✅ Try next server | ✅ Match |
-| **User not found** | ✅ Try next server | ❌ Return immediately | ⚠️ **Different** |
-| **Invalid password** | ✅ Try next server | ❌ Return immediately | ⚠️ **Different** |
-| **Other LDAP errors** | ❌ Return error | ✅ Try next server | ⚠️ **Different** |
+| **连接失败**，拨号错误 | ✅ 尝试下一台服务器 | ✅ 尝试下一台服务器 | ✅ 一致 |
+| **用户不存在** | ✅ 尝试下一台服务器 | ❌ 立即返回 | ⚠️ **不同** |
+| **密码无效** | ✅ 尝试下一台服务器 | ❌ 立即返回 | ⚠️ **不同** |
+| **其他 LDAP 错误** | ❌ 返回错误 | ✅ 尝试下一台服务器 | ⚠️ **不同** |
 
-#### Grafana's Approach (`multildap.go`)
+<a id="grafanas-approach-multildapgo"></a>
 
-Grafana defines "silent errors" that trigger failover:
+#### Grafana 方案（`multildap.go`）
+
+Grafana 定义会触发故障转移的“静默错误”：
 
 ```go
 // isSilentError - these errors cause failover to next server
@@ -252,14 +294,16 @@ func (multiples *MultiLDAP) Login(query *login.LoginUserQuery) {
 }
 ```
 
-**Grafana's use case**: Supports **heterogeneous LDAP servers** where:
-- Different servers may have different user populations
-- User "alice" might exist only on Server B, not Server A
-- Common in organizations with multiple AD domains or forests
+**Grafana 使用场景**：支持**异构 LDAP 服务器**：
+- 不同服务器可能拥有不同用户群
+- 用户“alice”可能仅存在于服务器 B，而不在服务器 A
+- 常见于具有多个 AD 域或林的组织
 
-#### Phoenix's Approach (`ldap.py`)
+<a id="phoenixs-approach-ldappy"></a>
 
-Phoenix only fails over on connection errors:
+#### Phoenix 方案（`ldap.py`）
+
+Phoenix 仅在连接错误时执行故障转移：
 
 ```python
 for server in self.servers:
@@ -287,68 +331,76 @@ for server in self.servers:
 return None
 ```
 
-**Phoenix's use case**: Assumes **replica servers** where:
-- All servers are replicas of the same directory
-- User sets are identical across all servers
-- "User not found" is a definitive answer, not a reason to try elsewhere
+**Phoenix 使用场景**：假定为**副本服务器**：
+- 所有服务器均是同一目录的副本
+- 所有服务器用户集相同
+- “用户不存在”是确定答案，无需去其他位置尝试
 
-#### Design Rationale
+<a id="design-rationale"></a>
 
-**Why Phoenix chose NOT to failover on "user not found":**
+#### 设计依据
 
-1. **Semantic correctness**: In replica-based HA, servers have identical data. If user doesn't exist on Server A, they won't exist on Server B.
+**Phoenix 为何选择在“用户不存在”时不执行故障转移：**
 
-2. **Avoid masking issues**: Failing over on "user not found" could hide:
-   - Replication lag issues
-   - Misconfigured search bases
-   - AD Global Catalog vs Domain Controller inconsistencies
+1. **语义正确性**：基于副本的高可用场景中，服务器具有相同数据。用户不存在于服务器 A，也不会存在于服务器 B。
 
-3. **Security**: Trying all servers on "invalid password" could:
-   - Increase attack surface (more servers to probe)
-   - Leak information about which server has the user
+2. **避免掩盖问题**：在“用户不存在”时故障转移可能掩盖：
+   - 复制延迟
+   - 搜索基准配置错误
+   - AD 全局编录与域控制器不一致
 
-4. **Simplicity**: One server answers definitively; no need to aggregate errors.
+3. **安全**：在“密码无效”时尝试全部服务器可能：
+   - 扩大攻击面，提供更多可探测服务器
+   - 泄漏用户位于哪台服务器的信息
 
-#### When This Matters
+4. **简单**：单台服务器提供确定答案，无需聚合错误。
 
-| Scenario | Grafana | Phoenix |
+<a id="when-this-matters"></a>
+
+#### 何时产生影响
+
+| 场景 | Grafana | Phoenix |
 |----------|---------|---------|
-| **Replica HA** (identical user sets) | Works (redundant checks) | Works (optimal) |
-| **Multi-domain/forest** (different user sets) | Works | ❌ Won't find users on non-primary servers |
-| **AD GC vs DC** (partial vs full attributes) | Works | May fail if GC is primary |
+| **副本高可用**，相同用户集 | 可用，但检查冗余 | 可用，最优 |
+| **多域/林**，不同用户集 | 可用 | ❌ 无法找到非主服务器上的用户 |
+| **AD GC 与 DC**，部分属性与完整属性 | 可用 | GC 为主服务器时可能失败 |
 
-#### Known Limitation
+<a id="known-limitation"></a>
 
-**Phoenix does not support heterogeneous LDAP servers** (different user populations on different servers).
+#### 已知限制
 
-| Architecture | Supported? |
+**Phoenix 不支持异构 LDAP 服务器**，即不同服务器具有不同用户群。
+
+| 架构 | 是否支持？ |
 |--------------|------------|
-| Replica HA (identical servers) | ✅ Fully supported |
-| Single AD domain with multiple DCs | ✅ Fully supported |
-| Multi-domain AD forest | ❌ Not supported |
-| Multiple separate LDAP directories | ❌ Not supported |
+| 副本高可用，相同服务器 | ✅ 完全支持 |
+| 单 AD 域，多 DC | ✅ 完全支持 |
+| 多域 AD 林 | ❌ 不支持 |
+| 多个独立 LDAP 目录 | ❌ 不支持 |
 
-**Why we chose NOT to match Grafana:**
+**为何不与 Grafana 保持相同：**
 
-1. **Security by default**: Probing all servers on "user not found" or "wrong password" increases attack surface and enables username enumeration.
+1. **默认安全**：在“用户不存在”或“密码错误”时探测全部服务器会扩大攻击面，并允许用户名枚举。
 
-2. **Most deployments are replicas**: The common enterprise pattern is HA with identical server sets, not heterogeneous directories.
+2. **大多数部署是副本**：企业常见模式为相同服务器集构成高可用，而非异构目录。
 
-3. **Don't mask infrastructure issues**: Failing over on "user not found" can hide replication lag, misconfigured search bases, or AD GC/DC inconsistencies that should be addressed at the infrastructure layer.
+3. **不掩盖基础设施问题**：在“用户不存在”时故障转移可能掩盖复制延迟、搜索基准配置错误或 AD GC/DC 不一致，这些问题应在基础设施层解决。
 
-4. **Simpler, faster**: One server answers definitively; no need to aggregate errors or try all servers on failure.
+4. **更简单、更快**：单台服务器给出确定答案，失败时无需聚合错误或遍历全部服务器。
 
-**Future enhancement**: If customer demand requires multi-domain/heterogeneous LDAP support, this could be added as an opt-in configuration flag (e.g., `PHOENIX_LDAP_FAILOVER_MODE=heterogeneous`).
+**未来增强**：若客户需要多域或异构 LDAP 支持，可添加显式启用的配置标志，例如 `PHOENIX_LDAP_FAILOVER_MODE=heterogeneous`。
 
 ---
 
-### 2. DN Comparison for Group Matching
+<a id="2-dn-comparison-for-group-matching"></a>
 
-| Aspect | Grafana | Phoenix | Impact |
+### 2. 组匹配中的 DN 比较
+
+| 方面 | Grafana | Phoenix | 影响 |
 |--------|---------|---------|--------|
-| Method | `strings.EqualFold()` | RFC 4514 canonicalization | ✅ Phoenix MORE robust |
-| Handles whitespace | ❌ No | ✅ Yes | Phoenix better |
-| Handles multi-valued RDN | ❌ No | ✅ Yes | Phoenix better |
+| 方法 | `strings.EqualFold()` | RFC 4514 规范化 | ✅ Phoenix 更健壮 |
+| 处理空白 | ❌ 否 | ✅ 是 | Phoenix 更佳 |
+| 处理多值 RDN | ❌ 否 | ✅ 是 | Phoenix 更佳 |
 
 **Grafana** (`helpers.go`):
 ```go
@@ -372,16 +424,18 @@ def _is_member_of(canonical_user_groups: set[str], target_group: str) -> bool:
     return target_canonical in canonical_user_groups
 ```
 
-**Result**: Phoenix correctly matches DNs that differ only in whitespace or attribute ordering. Grafana may fail to match equivalent DNs.
+**结果**：Phoenix 能正确匹配仅空白或属性顺序不同的 DN。Grafana 可能无法匹配等价 DN。
 
 ---
 
-### 3. No Group Match Behavior
+<a id="3-no-group-match-behavior"></a>
 
-| Aspect | Grafana | Phoenix | Impact |
+### 3. 无组匹配时的行为
+
+| 方面 | Grafana | Phoenix | 影响 |
 |--------|---------|---------|--------|
-| Behavior when no groups match | Deny + disable user | Deny access | ✅ Match |
-| `SkipOrgRoleSync` option | ✅ Yes | ❌ No | ⚠️ Phoenix stricter |
+| 无组匹配时的行为 | 拒绝并禁用用户 | 拒绝访问 | ✅ 一致 |
+| `SkipOrgRoleSync` 选项 | ✅ 是 | ❌ 否 | ⚠️ Phoenix 更严格 |
 
 **Grafana** (`ldap.go`):
 ```go
@@ -405,17 +459,19 @@ if not role:
     return None  # Always deny if no matching groups
 ```
 
-**Rationale**: Phoenix intentionally omits `SkipOrgRoleSync` for security - every LDAP user MUST have an explicit role assignment.
+**依据**：Phoenix 出于安全考虑，有意不提供 `SkipOrgRoleSync`；每个 LDAP 用户都必须有明确角色分配。
 
 ---
 
-### 4. Role Assignment Strategy
+<a id="4-role-assignment-strategy"></a>
 
-| Aspect | Grafana | Phoenix | Impact |
+### 4. 角色分配策略
+
+| 方面 | Grafana | Phoenix | 影响 |
 |--------|---------|---------|--------|
-| Multi-org support | ✅ Yes (per-org roles) | ❌ No (single role) | ✅ N/A |
-| First-match-wins | Per org | Global | ✅ Equivalent |
-| Wildcard `"*"` | ✅ Yes | ✅ Yes | ✅ Match |
+| 多组织支持 | ✅ 支持，每个组织独立角色 | ❌ 不支持，单一角色 | ✅ 不适用 |
+| 首次匹配优先 | 每个组织 | 全局 | ✅ 等效 |
+| 通配符 `"*"` | ✅ 是 | ✅ 是 | ✅ 一致 |
 
 **Grafana** (`ldap.go`):
 ```go
@@ -437,69 +493,85 @@ for mapping in self.config.group_role_mappings:
         return _validate_phoenix_role(role)  # Return immediately
 ```
 
-**Result**: Effectively equivalent for single-org use case. Phoenix has no multi-org concept.
+**结果**：单组织使用场景下实际等效，Phoenix 没有多组织概念。
 
 ---
 
-### Summary Table
+<a id="summary-table"></a>
 
-| Feature | Match | Notes |
+### 汇总表
+
+| 功能 | 一致 | 说明 |
 |---------|-------|-------|
-| Wildcard `"*"` support | ✅ Match | Both check wildcard first |
-| Case-insensitive DN | ✅ Match | Phoenix more robust (RFC 4514) |
-| First-match-wins priority | ✅ Match | Both iterate in config order |
-| Multi-server failover (connection error) | ✅ Match | Both continue to next server |
-| Multi-server failover (user not found) | ⚠️ Different | Grafana continues, Phoenix stops |
-| Multi-server failover (wrong password) | ⚠️ Different | Grafana continues, Phoenix stops |
-| No group match = deny | ✅ Match | Both deny access |
-| SkipOrgRoleSync option | ⚠️ Missing | Intentionally omitted in Phoenix |
-| DN canonicalization | ✅ Phoenix better | RFC 4514 vs simple string compare |
+| 通配符 `"*"` 支持 | ✅ 一致 | 两者均先检查通配符 |
+| 不区分大小写的 DN | ✅ 一致 | Phoenix 更健壮，RFC 4514 |
+| 首次匹配优先 优先级 | ✅ 一致 | 两者均按配置顺序遍历 |
+| 多服务器故障转移，连接错误 | ✅ 一致 | 两者均继续下一台服务器 |
+| 多服务器故障转移，用户不存在 | ⚠️ 不同 | Grafana 继续，Phoenix 停止 |
+| 多服务器故障转移，密码错误 | ⚠️ 不同 | Grafana 继续，Phoenix 停止 |
+| 无组匹配即拒绝 | ✅ 一致 | 两者均拒绝访问 |
+| SkipOrgRoleSync 选项 | ⚠️ 缺失 | Phoenix 有意省略 |
+| DN 规范化 | ✅ Phoenix 更佳 | RFC 4514 与简单字符串比较 |
 
-### Multi-Server Architecture Support
+<a id="multi-server-architecture-support"></a>
 
-| Architecture | Grafana | Phoenix |
+### 多服务器架构支持
+
+| 架构 | Grafana | Phoenix |
 |--------------|---------|---------|
-| **Replica HA** (identical servers) | ✅ Works | ✅ Works (optimal) |
-| **Multi-domain** (different user sets) | ✅ Works | ⚠️ Only finds users on first responding server |
-| **AD Forest** (multiple domains) | ✅ Works | ⚠️ Requires all users in primary domain |
+| **副本高可用**，相同服务器 | ✅ 可用 | ✅ 可用，最优 |
+| **多域**，不同用户集 | ✅ 可用 | ⚠️ 仅在首台响应服务器上查找用户 |
+| **AD 林**，多个域 | ✅ 可用 | ⚠️ 要求所有用户位于主域 |
 
 ---
 
-## Key Compatibility Findings
+<a id="key-compatibility-findings"></a>
 
-### Configuration Format
-- **Grafana**: TOML-based with `[[servers]]` blocks
-- **Phoenix**: Environment variables with JSON for role mappings
-- **Compatibility**: Same logical structure, different serialization format
+## 主要兼容性发现
 
-### User Identification
-- **Grafana**: Uses DN as primary identifier (stored in `user_auth.auth_id`)
-- **Phoenix**: Uses email (simple mode) or immutable unique ID like objectGUID (enterprise mode)
-- **Key difference**: Phoenix doesn't use DN for identity matching (DNs change too frequently)
-- **Both**: Support email synchronization on login
-- See [User Identification Strategy](./user-identification-strategy.md) for details
+<a id="configuration-format"></a>
 
-### TLS Security
-- **Both**: Support STARTTLS and LDAPS
-- **Critical**: Both require explicit TLS upgrade sequencing (see [Protocol Compliance](./protocol-compliance.md#7-starttls-implementation--security))
-- **Finding**: Grafana v11.4 has STARTTLS vulnerability (tested via adversarial MITM proxy)
+### 配置格式
+- **Grafana**：基于 TOML，使用 `[[servers]]` 块
+- **Phoenix**：环境变量，角色映射使用 JSON
+- **兼容性**：逻辑结构相同，序列化格式不同
 
-### DN Handling
-- **Grafana**: Case-insensitive via `strings.EqualFold()`, used for user identification
-- **Phoenix**: RFC 4514-compliant canonicalization for group DN matching only
-- **Key difference**: Phoenix doesn't use DN for user identification (uses email or unique_id instead)
+<a id="user-identification"></a>
 
-## Additional Grafana Implementation Patterns
+### 用户识别
+- **Grafana**：以 DN 为主要标识符，存于 `user_auth.auth_id`
+- **Phoenix**：使用邮箱（简单模式）或 objectGUID 等不可变唯一 ID（企业模式）
+- **主要区别**：Phoenix 不使用 DN 匹配身份，因为 DN 变化过于频繁
+- **两者均**：支持登录时同步邮箱
+- 详情参见[用户识别策略](./user-identification-strategy.md)
 
-For detailed analysis of Grafana-specific patterns that informed Phoenix's implementation, see:
+<a id="tls-security"></a>
 
-- [Configuration Reference](./configuration.md) - Phoenix vs. Grafana environment variable mapping
-- [Security Deep-Dive](./security.md) - LDAP injection prevention (based on Grafana patterns)
-- [Protocol Compliance](./protocol-compliance.md) - TLS security testing (includes Grafana v11.4 vulnerability findings)
-- [User Identification Strategy](./user-identification-strategy.md) - Email/Unique ID identification (not DN)
+### TLS 安全
+- **两者均**：支持 STARTTLS 和 LDAPS
+- **关键要求**：两者均要求显式 TLS 升级顺序，参见[协议合规性](./protocol-compliance.md#7-starttls-implementation--security)
+- **发现**：Grafana v11.4 存在 STARTTLS 漏洞，已通过对抗性中间人代理测试
 
-**Note**: The main specification document contains extensive Grafana compatibility analysis throughout, including:
-- Phase 0: Grafana Compatibility Verification (lines 874-908)
-- Grafana Implementation Details subsections in Appendix A (lines 1531-2416 of original document)
-- Decision Reversibility Analysis comparing Grafana vs Phoenix decisions (lines 3933-4383)
+<a id="dn-handling"></a>
+
+### DN 处理
+- **Grafana**：通过 `strings.EqualFold()` 实现不区分大小写，用于用户识别
+- **Phoenix**：仅为组 DN 匹配执行符合 RFC 4514 的规范化
+- **主要区别**：Phoenix 不使用 DN 识别用户，而是使用邮箱或 unique_id
+
+<a id="additional-grafana-implementation-patterns"></a>
+
+## 更多 Grafana 实现模式
+
+对影响 Phoenix 实现的 Grafana 特有模式的详细分析参见：
+
+- [配置参考](./configuration.md) — Phoenix 与 Grafana 环境变量映射
+- [安全详解](./security.md) — 基于 Grafana 模式的 LDAP 注入防护
+- [协议合规性](./protocol-compliance.md) — TLS 安全测试，包含 Grafana v11.4 漏洞发现
+- [用户识别策略](./user-identification-strategy.md) — 邮箱/唯一 ID 识别，不使用 DN
+
+**说明**：主规范文档多处包含详细 Grafana 兼容性分析：
+- 阶段 0：Grafana 兼容性验证，第 874—908 行
+- 附录 A 中的 Grafana 实现详情小节，原文档第 1531—2416 行
+- 决策可逆性分析，比较 Grafana 与 Phoenix 决策，第 3933—4383 行
 

@@ -1,40 +1,44 @@
-# LDAP Authentication - Appendices
+<a id="ldap-authentication---appendices"></a>
 
-Detailed technical references for the [LDAP Authentication specification](../ldap-authentication.md).
+# LDAP 身份验证附录
 
-## Quick Reference
+[LDAP 身份验证规范](../ldap-authentication.md)的详细技术参考。
 
-**New to LDAP?**
-- [LDAP Primer](./ldap-primer.md) - **LDAP fundamentals for engineers familiar with OIDC** (start here!)
+<a id="quick-reference"></a>
 
-**Most Frequently Used**:
-- [Configuration Reference](./configuration.md) - Environment variables, Phoenix vs. Grafana comparison
-- [Protocol Compliance](./protocol-compliance.md) - STARTTLS security, DN canonicalization, Docker testing
-- [Security Deep-Dive](./security.md) - Threat model, LDAP injection prevention
-- [Authentication Framework](./authentication-framework.md) - Multi-method auth, cross-auth security, admin provisioning
-- [DN + Email Strategy](./dn-email-strategy.md) - User identification, RFC 4514 canonicalization, email fallback
+## 快速参考
 
-**Implementation**:
-- [Code Examples](./code-examples.md)
-- [Frontend Implementation](./frontend-implementation.md)
-- [Phoenix Integration](./phoenix-integration.md)
+**初次接触 LDAP？**
+- [LDAP 入门](./ldap-primer.md) — **面向熟悉 OIDC 的工程师的 LDAP 基础知识**，从这里开始！
 
-**Design & Architecture**:
-- [Database Schema](./database-schema.md)
-- [User Identification Strategy](./user-identification-strategy.md)
-- [Optional Email for LDAP Users](./optional-email.md) - Support for LDAP directories without email attribute
-- [Decision Reversibility](./decision-reversibility.md)
-- [Migration Plan](./migration-plan.md)
+**最常用**：
+- [配置参考](./configuration.md) — 环境变量及 Phoenix 与 Grafana 对比
+- [协议合规性](./protocol-compliance.md) — STARTTLS 安全、DN 规范化、Docker 测试
+- [安全详解](./security.md) — 威胁模型和 LDAP 注入防护
+- [身份验证框架](./authentication-framework.md) — 多方法身份验证、跨验证方式安全和管理员配置
+- [DN 与邮箱策略](./dn-email-strategy.md) — 用户识别、RFC 4514 规范化和邮箱回退
 
-**Security & Compliance**:
-- [Collision Prevention](./collision-prevention.md)
+**实现**：
+- [代码示例](./code-examples.md)
+- [前端实现](./frontend-implementation.md)
+- [Phoenix 集成](./phoenix-integration.md)
 
-**Testing**:
-- [Testing Procedures](./testing.md) - Running and extending LDAP tests (integration, Docker, coverage)
+**设计与架构**：
+- [数据库结构](./database-schema.md)
+- [用户识别策略](./user-identification-strategy.md)
+- [LDAP 用户邮箱可选](./optional-email.md) — 支持没有邮箱属性的 LDAP 目录
+- [决策可逆性](./decision-reversibility.md)
+- [迁移计划](./migration-plan.md)
 
-**Research**:
-- [Grafana Comparison](./grafana-comparison.md)
-- [Background Sync (Future)](./background-sync-future.md)
+**安全与合规**：
+- [冲突预防](./collision-prevention.md)
 
-**Roadmap**:
-- [Future Improvements](./future-improvements.md) - Post-MVP enhancements (password policy, metrics, retry logic, nested groups)
+**测试**：
+- [测试流程](./testing.md) — 运行和扩展 LDAP 测试，包括集成、Docker 和覆盖率
+
+**研究**：
+- [Grafana 对比](./grafana-comparison.md)
+- [后台同步（未来）](./background-sync-future.md)
+
+**路线图**：
+- [未来改进](./future-improvements.md) — MVP 之后的增强：密码策略、指标、重试逻辑和嵌套组

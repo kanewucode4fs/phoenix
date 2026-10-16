@@ -1,71 +1,77 @@
-# Decision Reversibility Analysis
+<a id="decision-reversibility-analysis"></a>
 
-**Framework**: One-Way Door vs. Two-Way Door Decisions (Amazon/Bezos framework)
+# 决策可逆性分析
 
-**One-Way Door Decisions** (Type 1):
-- Difficult or impossible to reverse once committed
-- Require careful analysis and deliberation upfront
-- Examples: Data formats, external API contracts, backward compatibility commitments
+**框架**：单向门与双向门决策，Amazon/Bezos 框架
 
-**Two-Way Door Decisions** (Type 2):
-- Easy to reverse or change with reasonable effort
-- Can move quickly and iterate
-- Examples: Internal code structure, library choices (with abstraction), configuration methods
+**单向门决策**（类型 1）：
+- 承诺后很难或无法逆转
+- 需要事先仔细分析和审议
+- 示例：数据格式、外部 API 契约、向后兼容承诺
 
----
-
-#### Decision-by-Decision Assessment
-
-**1. Marker Format (`\ue000LDAP(stopgap)`)**
-
-**Decision Type**: 🚪 **ONE-WAY DOOR** (Type 1)
-
-**Why One-Way**:
-- Once LDAP users exist in production, changing the marker format requires rewriting all `oauth2_client_id` values
-- Collision with real OAuth2 client IDs would cause data corruption
-- Backward compatibility with existing LDAP users constrains future changes
-
-**Risk Mitigation** (extensive upfront validation):
-- ✅ Unicode PUA (U+E000-U+F8FF) guaranteed never assigned by Unicode Standard (permanent guarantee)
-- ✅ OAuth2 RFC 6749 restricts client_id to ASCII (cannot contain Unicode)
-- ✅ Real-world OAuth2 providers validated (none use Unicode)
-- ✅ Active validation rejects PUA characters in configured OAuth2 client IDs
-
-**Conclusion**: One-way door, but extensively validated to ensure we're choosing the right door to go through.
+**双向门决策**（类型 2）：
+- 可通过合理工作量轻松逆转或更改
+- 可以快速推进和迭代
+- 示例：内部代码结构、通过抽象隔离的库选择、配置方式
 
 ---
 
-**2. Allow Sign-Up Default (`true`)**
+<a id="decision-by-decision-assessment"></a>
 
-**Decision Type**: 🚪 **ONE-WAY DOOR** (Type 1)
+#### 逐项决策评估
 
-**Why One-Way**:
-- Once LDAP is released with `allow_sign_up=true` as default, existing users depend on this behavior
-- Changing the default to `false` in a later release would break existing deployments (auto-sign-up suddenly stops working)
-- Organizations that deployed with the expectation of auto-sign-up would face user complaints
-- Configuration file compatibility: Cannot safely change default without breaking semantic versioning
+**1. 标记格式（`\ue000LDAP(stopgap)`）**
 
-**Risk Mitigation**:
-- ✅ Matches Grafana's default (`allow_sign_up: true` in `conf/defaults.ini`)
-- ✅ Explicit opt-out mechanism available (`PHOENIX_LDAP_ALLOW_SIGN_UP="false"`)
-- ✅ Well-documented in configuration reference
-- ✅ Security-conscious organizations can disable before first deployment
-- ✅ Tested in unit tests (`tests/unit/test_config.py::test_allow_sign_up_parsing`)
+**决策类型**：🚪 **单向门**（类型 1）
 
-**Security Consideration**: While `true` is more permissive, it's the right default because:
-1. **Grafana compatibility**: Users expect this behavior
-2. **Least surprise**: Auto-sign-up is the expected behavior for LDAP (unlike OAuth2)
-3. **Easy to lock down**: Organizations requiring pre-provisioning can set `allow_sign_up=false` from day one
-4. **Generic error messages**: Username enumeration is still prevented regardless of setting
+**不可逆原因**：
+- 生产环境已有 LDAP 用户后，更改标记格式需要重写所有 `oauth2_client_id` 值
+- 与真实 OAuth2 客户端 ID 冲突会导致数据损坏
+- 对已有 LDAP 用户的向后兼容限制未来变更
 
-**Conclusion**: One-way door, but the default matches industry standard (Grafana) and provides explicit opt-out for security-conscious deployments.
+**风险缓解**，充分事先校验：
+- ✅ Unicode PUA（U+E000-U+F8FF）保证永不被 Unicode 标准分配，永久保证
+- ✅ OAuth2 RFC 6749 将 client_id 限制为 ASCII，无法包含 Unicode
+- ✅ 已验证实际 OAuth2 提供方，均不使用 Unicode
+- ✅ 主动校验拒绝已配置 OAuth2 客户端 ID 中的 PUA 字符
 
-#### Allow Sign-Up Behavior: Grafana vs Phoenix
+**结论**：单向门，但已充分校验，确保作出正确选择。
 
-**Grafana's Implementation** ([source](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L280-L327)):
+---
 
-When user logs in via LDAP:
-1. **LDAP authentication** → retrieves DN, email, name, groups from LDAP server ([source](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/ldap.go#L486))
+**2. 允许注册的默认值（`true`）**
+
+**决策类型**：🚪 **单向门**（类型 1）
+
+**不可逆原因**：
+- LDAP 以 `allow_sign_up=true` 为默认值发布后，已有用户会依赖此行为
+- 后续版本将默认值改为 `false` 会破坏现有部署，自动注册突然失效
+- 按自动注册预期部署的组织会遭遇用户投诉
+- 配置文件兼容性：无法不破坏语义化版本约定而安全修改默认值
+
+**风险缓解**：
+- ✅ 与 Grafana 默认值一致，`conf/defaults.ini` 中为 `allow_sign_up: true`
+- ✅ 提供显式停用机制（`PHOENIX_LDAP_ALLOW_SIGN_UP="false"`）
+- ✅ 配置参考有完整文档
+- ✅ 安全要求高的组织可在首次部署前禁用
+- ✅ 单元测试已覆盖（`tests/unit/test_config.py::test_allow_sign_up_parsing`）
+
+**安全考虑**：尽管 `true` 更宽松，仍是正确默认值，因为：
+1. **兼容 Grafana**：符合用户预期
+2. **最小意外**：LDAP 通常预期自动注册，与 OAuth2 不同
+3. **易于收紧**：要求预配置的组织可从第一天设置 `allow_sign_up=false`
+4. **通用错误消息**：无论设置如何，仍可防止用户名枚举
+
+**结论**：单向门，但默认值符合行业标准 Grafana，并为安全要求高的部署提供显式停用。
+
+<a id="allow-sign-up-behavior-grafana-vs-phoenix"></a>
+
+#### 允许注册行为：Grafana 与 Phoenix
+
+**Grafana 实现**（[源码](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L280-L327)）：
+
+用户通过 LDAP 登录时：
+1. **LDAP 身份验证** → 从 LDAP 服务器获取 DN、邮箱、姓名和组（[源码](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/ldap.go#L486)）
    ```go
    extUser := &login.ExternalUserInfo{
        AuthModule: login.LDAPAuthModule,
@@ -74,13 +80,13 @@ When user logs in via LDAP:
    }
    ```
 
-2. **Multi-step user lookup** ([source](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L622-L672)):
-   - **Step 1**: Check `user_auth` table for `auth_id=DN` and `auth_module="ldap"` ([line 627-638](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L627-L638))
-   - **Step 2**: If not found, look up by email in `user` table ([line 682-687](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L682-L687))
-   - **Step 3**: If still not found, look up by login/username ([line 690-695](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L690-L695))
-   - **Step 4**: If still not found → `ErrUserNotFound` ([line 697-699](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L697-L699))
+2. **多步骤用户查找**（[源码](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L622-L672)）：
+   - **步骤 1**：检查 `user_auth` 表中 `auth_id=DN` 和 `auth_module="ldap"`（[第 627—638 行](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L627-L638)）
+   - **步骤 2**：未找到时，按邮箱查询 `user` 表（[第 682—687 行](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L682-L687)）
+   - **步骤 3**：仍未找到，按登录名或用户名查找（[第 690—695 行](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L690-L695)）
+   - **步骤 4**：仍未找到 → `ErrUserNotFound`（[第 697—699 行](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L697-L699)）
 
-3. **If user not found and `allow_sign_up=false`** → reject login ([source](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L296-L298)):
+3. **未找到用户且 `allow_sign_up=false`** → 拒绝登录（[源码](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L296-L298)）：
    ```go
    if errors.Is(err, user.ErrUserNotFound) {
        if !id.ClientParams.AllowSignUp {
@@ -91,47 +97,47 @@ When user logs in via LDAP:
    }
    ```
 
-4. **If user found** → creates/updates `user_auth` table linking user to LDAP, syncs attributes ([source](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L317-L326), [line 467](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L467)):
+4. **找到用户时** → 创建或更新 `user_auth` 表，将用户关联 LDAP，并同步属性（[源码](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L317-L326)、[第 467 行](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L467)）：
    ```go
    needsConnectionCreation := userAuth == nil  // No existing user_auth record
    // ... update user attributes (email, name, role) ...
    s.upsertAuthConnection(ctx, usr.ID, identity, needsConnectionCreation)
    ```
 
-**Key insight**: Grafana allows admins to create users via **any authentication method** (local, OAuth2, etc.), then automatically "converts" them to LDAP on first LDAP login by creating an `auth_info` record.
+**关键发现**：Grafana 允许管理员通过**任意身份验证方法**创建用户，例如本地、OAuth2，然后在首次 LDAP 登录时创建 `auth_info` 记录，自动“转换”为 LDAP。
 
-**Grafana Configuration** ([source](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/docs/sources/setup-grafana/configure-access/configure-authentication/ldap/index.md#L40-L52)):
+**Grafana 配置**（[源码](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/docs/sources/setup-grafana/configure-access/configure-authentication/ldap/index.md#L40-L52)）：
 ```ini
 [auth.ldap]
 enabled = true
 config_file = /etc/grafana/ldap.toml
 allow_sign_up = true  # Default: true
 ```
-> "After enabling LDAP, the default behavior is for Grafana users to be created automatically upon successful LDAP authentication. If you prefer for only existing Grafana users to be able to sign in, you can change `allow_sign_up` to `false`."
+> “启用 LDAP 后，Grafana 默认会在 LDAP 身份验证成功时自动创建用户。若仅希望已有 Grafana 用户能登录，可将 `allow_sign_up` 改为 `false`。”
 
-**Phoenix's Implementation Difference**:
+**Phoenix 实现差异**：
 
-Due to zero-migration constraints, Phoenix **cannot** convert LOCAL users to LDAP:
-- **Schema constraint**: LOCAL users have `NOT NULL` constraints on `password_hash` and `password_salt`
-- **Storage difference**: LDAP users stored as `OAuth2User` with `oauth2_client_id="\ue000LDAP(stopgap)"`
-- **No conversion path**: Cannot change `auth_method` from `LOCAL` to `OAUTH2` without migration
+由于零迁移约束，Phoenix **无法**将 LOCAL 用户转换为 LDAP：
+- **结构约束**：LOCAL 用户的 `password_hash` 和 `password_salt` 具有 `NOT NULL` 约束
+- **存储差异**：LDAP 用户存为 `OAuth2User`，具有 `oauth2_client_id="\ue000LDAP(stopgap)"`
+- **无转换路径**：不迁移便无法将 `auth_method` 从 `LOCAL` 改为 `OAUTH2`
 
-**Phoenix's Approach**:
+**Phoenix 方案**：
 
-| Scenario | Grafana | Phoenix (Zero-Migration) |
+| 场景 | Grafana | Phoenix（零迁移） |
 |----------|---------|--------------------------|
-| **`allow_sign_up=true`** (default) | Auto-creates user on first LDAP login | ✅ Same: Auto-creates user via `/auth/ldap/login` |
-| **`allow_sign_up=false`** | Admin creates user (any auth method), LDAP login converts to LDAP | Admin creates user via GraphQL `createUser(auth_method: LDAP)` |
-| **User lookup strategy** | 1) DN in `user_auth`, 2) email, 3) username | **Email only** (authoritative unique identifier) |
-| **Admin workflow** | Create with email+username → LDAP discovers attributes | ✅ Same: Create with email+displayName → LDAP syncs |
-| **Email collision** | Allows conversion (same user, different auth) | ⚠️ Rejects login (prevents hijacking) |
+| **`allow_sign_up=true`**（默认） | 首次 LDAP 登录自动创建用户 | ✅ 相同，通过 `/auth/ldap/login` 自动创建 |
+| **`allow_sign_up=false`** | 管理员使用任意验证方法创建用户，LDAP 登录时转为 LDAP | 管理员通过 GraphQL `createUser(auth_method: LDAP)` 创建 |
+| **用户查找策略** | 1）`user_auth` 中的 DN，2）邮箱，3）用户名 | **仅邮箱**，权威唯一标识符 |
+| **管理员工作流** | 以邮箱和用户名创建 → LDAP 发现属性 | ✅ 相同，以邮箱和 displayName 创建 → LDAP 同步 |
+| **邮箱冲突** | 允许转换，同一用户使用不同身份验证 | ⚠️ 拒绝登录，防止劫持 |
 
-**Phoenix's Implementation** (`src/phoenix/server/api/routers/auth.py`):
+**Phoenix 实现**（`src/phoenix/server/api/routers/auth.py`）：
 
-When user logs in via LDAP:
-1. **LDAP authentication** → retrieves email, name, groups from LDAP server
+用户通过 LDAP 登录时：
+1. **LDAP 身份验证** → 从 LDAP 服务器获取邮箱、姓名和组
 
-2. **Direct email lookup** (email is unique identifier):
+2. **直接按邮箱查找**，邮箱是唯一标识符：
    ```python
    # Email lookup (returned from LDAP authentication)
    user = await session.scalar(
@@ -141,14 +147,14 @@ When user logs in via LDAP:
    )
    ```
 
-3. **If user not found and `allow_sign_up=false`** → reject login:
+3. **未找到用户且 `allow_sign_up=false`** → 拒绝登录：
    ```python
    if not user:
        if not ldap_config.allow_sign_up:
            raise HTTPException(status_code=401, detail="Invalid username and/or password")
    ```
 
-4. **Security check**: Prevent LDAP from hijacking LOCAL/OAuth2 users:
+4. **安全检查**：防止 LDAP 劫持 LOCAL/OAuth2 用户：
    ```python
    # When creating new user (allow_sign_up=true)
    existing_user = await session.scalar(
@@ -158,9 +164,9 @@ When user logs in via LDAP:
        raise HTTPException(status_code=401, detail="Invalid username and/or password")
    ```
 
-5. **If user found** → update attributes (email, display name, role)
+5. **找到用户时** → 更新邮箱、显示名称、角色等属性
 
-**Phoenix User Creation Mutation** (`src/phoenix/server/api/mutations/user_mutations.py`):
+**Phoenix 用户创建变更**（`src/phoenix/server/api/mutations/user_mutations.py`）：
 ```python
 if input.auth_method is AuthMethod.LDAP:
     # LDAP users are stored with special Unicode marker
@@ -174,107 +180,109 @@ if input.auth_method is AuthMethod.LDAP:
     )
 ```
 
-**Tradeoffs**:
+**取舍**：
 
-| Aspect | Grafana (Flexible) | Phoenix (Zero-Migration) |
+| 方面 | Grafana（灵活） | Phoenix（零迁移） |
 |--------|-------------------|--------------------------|
-| **Admin workflow (`allow_sign_up=false`)** | Create user (any auth method) → auto-converts on LDAP login | Must create as LDAP user explicitly |
-| **Email fallback** | ✅ Yes (looks up by email if DN not found) | ✅ Yes (looks up by email if username not found) |
-| **Cross-auth flexibility** | User can switch from LOCAL to LDAP seamlessly | ❌ Cannot switch (schema constraints) |
-| **Security** | Flexible (potential confusion) | Strict (prevents accidental hijacking) |
-| **Database complexity** | Separate `user` + `user_auth` tables | Single `users` table (reuses OAuth2 columns) |
-| **Migration path** | Already has separation | Can migrate to Approach 2 later ([Appendix H](#appendix-h-approach-1--2-migration-plan)) |
+| **管理员工作流（`allow_sign_up=false`）** | 使用任意验证方法创建用户 → LDAP 登录自动转换 | 必须明确创建为 LDAP 用户 |
+| **邮箱回退** | ✅ 支持，未找到 DN 时按邮箱查找 | ✅ 支持，未找到用户名时按邮箱查找 |
+| **跨验证方式灵活性** | 用户可从 LOCAL 无缝切换至 LDAP | ❌ 受结构约束，无法切换 |
+| **安全** | 灵活，但可能混淆 | 严格，防止意外劫持 |
+| **数据库复杂度** | 独立 `user` 和 `user_auth` 表 | 单一 `users` 表，复用 OAuth2 列 |
+| **迁移路径** | 已分离 | 之后可迁移至方案 2（[附录 H](#appendix-h-approach-1--2-migration-plan)） |
 
-**Why Phoenix's Approach is Acceptable**:
-1. **Zero-migration MVP**: Unblocks corporate users immediately without schema changes
-2. **Clear auth method**: Admins explicitly specify `auth_method: LDAP` (more intentional)
-3. **Security**: Prevents accidental account hijacking (LDAP can't take over LOCAL users)
-4. **Migration path exists**: Can move to Grafana's flexible model in Approach 2 if needed
+**Phoenix 方案可接受的原因**：
+1. **零迁移 MVP**：无需结构变更，立即满足企业用户
+2. **身份验证方法明确**：管理员显式指定 `auth_method: LDAP`，意图更清楚
+3. **安全**：防止意外账户劫持，LDAP 无法接管 LOCAL 用户
+4. **存在迁移路径**：需要时可在方案 2 采用 Grafana 的灵活模型
 
-**Grafana References**:
-- [User sync logic](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L280-L327)
-- [LDAP configuration docs](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/docs/sources/setup-grafana/configure-access/configure-authentication/ldap/index.md#L40-L52)
-- [LDAP service config](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/service/ldap.go#L96)
-- [Settings struct](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/settings.go#L20-L26)
-
----
-
-**3. Library Choice (ldap3)**
-
-**Decision Type**: 🚪🚪 **TWO-WAY DOOR** (Type 2)
-
-**Why Two-Way**:
-- `LDAPAuthenticator` class abstracts library details
-- Swapping libraries only requires changing one module (`src/phoenix/server/ldap.py`)
-- Interface-based design minimizes coupling throughout codebase
-- No external API exposure of library-specific types
-
-**Library Quality** (reduces likelihood of needing to swap):
-- RFC-compliant
-- Actively maintained
-- Pure Python implementation
-
-**Conclusion**: Two-way door. Abstraction layer maintains flexibility to swap libraries if needed.
+**Grafana 参考资料**：
+- [用户同步逻辑](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/authn/authnimpl/sync/user_sync.go#L280-L327)
+- [LDAP 配置文档](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/docs/sources/setup-grafana/configure-access/configure-authentication/ldap/index.md#L40-L52)
+- [LDAP 服务配置](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/service/ldap.go#L96)
+- [设置结构](https://github.com/grafana/grafana/blob/84a07be6e4e1acd8f064c3b390c30188d5703afc/pkg/services/ldap/settings.go#L20-L26)
 
 ---
 
-**4. Environment Variable vs TOML Configuration**
+**3. 库选择（ldap3）**
 
-**Decision Type**: **MIXED**
+**决策类型**：🚪🚪 **双向门**（类型 2）
 
-**Configuration Method** = 🚪🚪 **TWO-WAY DOOR**:
-- Can add TOML file support later without breaking env var users
-- Precedence order: env vars override file config (backward compatible)
-- Both configuration methods can coexist simultaneously
+**可逆原因**：
+- `LDAPAuthenticator` 类抽象库细节
+- 更换库仅需修改一个模块（`src/phoenix/server/ldap.py`）
+- 基于接口的设计尽量减少全库耦合
+- 外部 API 不暴露库专有类型
 
-**Environment Variable Names** = 🚪 **ONE-WAY DOOR**:
-- Once released, changing env var names is a breaking change for users
-- Self-hosted users will configure these in deployment files/scripts
-- Need to choose names carefully upfront
+**库质量**，降低更换可能性：
+- 符合 RFC
+- 活跃维护
+- 纯 Python 实现
 
-**What Would Break if We Changed These Variables?**
+**结论**：双向门。抽象层保留必要时更换库的灵活性。
 
-| Change | User Impact | Mitigation Effort |
+---
+
+**4. 环境变量与 TOML 配置**
+
+**决策类型**：**混合**
+
+**配置方式** = 🚪🚪 **双向门**：
+- 之后可添加 TOML 文件支持，不破坏环境变量用户
+- 优先级顺序：环境变量覆盖文件配置，向后兼容
+- 两种配置方式可以同时共存
+
+**环境变量名称** = 🚪 **单向门**：
+- 发布后更名属于用户不兼容变更
+- 自托管用户会在部署文件和脚本中配置这些名称
+- 需要提前谨慎选择
+
+**更改这些变量会破坏什么？**
+
+| 变更 | 用户影响 | 缓解工作量 |
 |--------|-------------|-------------------|
-| Rename `PHOENIX_LDAP_*` → `PHOENIX_AUTH_LDAP_*` | 🔴 **BREAKING**: All user configs invalid | High (deprecation period, docs, migration guide) |
-| Change `GROUP_ROLE_MAPPINGS` JSON structure | 🔴 **BREAKING**: All role mappings fail | High (version detection, auto-migration) |
-| Change `role` values from uppercase to lowercase | 🔴 **BREAKING**: All role mappings fail | High (unless we add case-insensitive parsing) |
-| Add new optional variable | 🟢 **SAFE**: Backward compatible | None (users adopt gradually) |
-| Change default value (e.g., `PORT` 389→636) | 🟡 **RISKY**: Silent behavior change | Medium (document in release notes, warn on upgrade) |
-| Remove optional variable | 🔴 **BREAKING**: Users relying on it fail | High (deprecation period required) |
+| 重命名 `PHOENIX_LDAP_*` → `PHOENIX_AUTH_LDAP_*` | 🔴 **不兼容**：所有用户配置无效 | 高，需要弃用期、文档和迁移指南 |
+| 更改 `GROUP_ROLE_MAPPINGS` JSON 结构 | 🔴 **不兼容**：全部角色映射失败 | 高，需要版本检测、自动迁移 |
+| 将 `role` 值从大写改为小写 | 🔴 **不兼容**：全部角色映射失败 | 高，除非添加不区分大小写解析 |
+| 添加新可选变量 | 🟢 **安全**：向后兼容 | 无，用户逐步采用 |
+| 修改默认值，例如 `PORT` 从 389 改为 636 | 🟡 **有风险**：静默行为变化 | 中，发布说明记录，升级时警告 |
+| 移除可选变量 | 🔴 **不兼容**：依赖它的用户失败 | 高，需要弃用期 |
 
-#### Contract Guarantees
+<a id="contract-guarantees"></a>
 
-**What we commit to maintaining** (breaking these requires major version bump):
-1. ✅ All `PHOENIX_LDAP_*` variable names will remain unchanged
-2. ✅ `GROUP_ROLE_MAPPINGS` JSON structure matches Grafana's `GroupToOrgRole` (minus `org_id`)
-   - **ONE-WAY DOOR**: Field names `group_dn` and `role` are locked in
-3. ✅ `role` values are **Phoenix roles**: `"ADMIN"`, `"MEMBER"`, `"VIEWER"` (uppercase)
-   - **ONE-WAY DOOR**: Role values are locked in (Phoenix-native, not Grafana's "Admin"/"Editor"/"Viewer")
-4. ✅ Boolean values use strings `"true"`/`"false"` (case-insensitive)
-5. ✅ Multi-server format is comma-separated in `HOST`
-6. ✅ Search filters use `%s` as username/DN placeholder
-7. ✅ Defaults match Grafana's production recommendations (TLS on, verify on, port 389, timeout 10s)
+#### 契约保证
 
-**Naming Validation**:
-- ✅ Follows Phoenix convention: `PHOENIX_*` prefix
-- ✅ Clear, descriptive names: `PHOENIX_LDAP_HOST`, `PHOENIX_LDAP_BIND_DN`
-- ✅ Consistent with existing patterns: Similar to `PHOENIX_OAUTH2_*` vars
-- ✅ Namespaced: `LDAP_` prefix prevents conflicts
-- ✅ **No collision with Grafana**: Grafana doesn't use direct env vars (only TOML file with `${VAR}` interpolation), so Phoenix's naming is independent
+**承诺保持的内容**，破坏这些保证需要提升主版本：
+1. ✅ 所有 `PHOENIX_LDAP_*` 变量名称保持不变
+2. ✅ `GROUP_ROLE_MAPPINGS` JSON 结构与 Grafana `GroupToOrgRole` 一致，去除 `org_id`
+   - **单向门**：字段名 `group_dn` 和 `role` 已固定
+3. ✅ `role` 值为 **Phoenix 角色**：`"ADMIN"`、`"MEMBER"`、`"VIEWER"`，全大写
+   - **单向门**：角色值固定，使用 Phoenix 原生值，而非 Grafana 的“Admin”/“Editor”/“Viewer”
+4. ✅ 布尔值使用字符串 `"true"`/`"false"`，不区分大小写
+5. ✅ 多服务器格式为 `HOST` 中逗号分隔
+6. ✅ 搜索过滤器使用 `%s` 作为用户名或 DN 占位符
+7. ✅ 默认值符合 Grafana 生产建议，TLS 开启、校验开启、端口 389、超时 10 秒
 
-**Grafana vs Phoenix Configuration Comparison**:
+**命名校验**：
+- ✅ 遵循 Phoenix 约定：`PHOENIX_*` 前缀
+- ✅ 名称清晰描述用途：`PHOENIX_LDAP_HOST`、`PHOENIX_LDAP_BIND_DN`
+- ✅ 与现有 `PHOENIX_OAUTH2_*` 变量模式一致
+- ✅ 使用命名空间：`LDAP_` 前缀防止冲突
+- ✅ **与 Grafana 不冲突**：Grafana 不直接使用环境变量，仅在 TOML 文件中通过 `${VAR}` 插值，因此 Phoenix 命名独立
 
-| Aspect | Grafana | Phoenix (MVP Spec) |
+**Grafana 与 Phoenix 配置对比**：
+
+| 方面 | Grafana | Phoenix（MVP 规范） |
 |--------|---------|-------------------|
-| **Primary method** | TOML file ([ldap.toml](https://github.com/grafana/grafana/blob/main/conf/ldap.toml)) | Environment variables |
-| **Config file specification** | `[auth.ldap] config_file = /etc/grafana/ldap.toml` | `PHOENIX_LDAP_*` env vars |
-| **Multi-server support** | Each server has unique config | All servers share same config |
-| **Group mappings** | Natural TOML array | JSON string in env var |
-| **Env var interpolation** | ✅ In TOML: `${ENV_PASSWORD}` | ✅ Direct env vars |
-| **Use case** | Heterogeneous LDAP forests | Replica failover only |
+| **主要方式** | TOML 文件（[ldap.toml](https://github.com/grafana/grafana/blob/main/conf/ldap.toml)） | 环境变量 |
+| **配置文件指定** | `[auth.ldap] config_file = /etc/grafana/ldap.toml` | `PHOENIX_LDAP_*` 环境变量 |
+| **多服务器支持** | 每台服务器独立配置 | 全部服务器共享配置 |
+| **组映射** | 原生 TOML 数组 | 环境变量中的 JSON 字符串 |
+| **环境变量插值** | ✅ TOML 中的 `${ENV_PASSWORD}` | ✅ 直接使用环境变量 |
+| **使用场景** | 异构 LDAP 林 | 仅副本故障转移 |
 
-**Verified from Grafana source** (`pkg/setting/setting.go:1480-1488`, `conf/defaults.ini:987-991`, `pkg/services/ldap/testdata/ldap.toml:10`):
+**已从 Grafana 源码验证**（`pkg/setting/setting.go:1480-1488`、`conf/defaults.ini:987-991`、`pkg/services/ldap/testdata/ldap.toml:10`）：
 ```ini
 # Grafana main config (defaults.ini)
 [auth.ldap]
@@ -291,11 +299,11 @@ bind_dn = "cn=admin,dc=grafana,dc=org"
 bind_password = '${ENV_PASSWORD}'  # Env var interpolation within TOML
 ```
 
-**Key Finding**: Grafana does NOT use direct environment variables like `GRAFANA_LDAP_HOST`. It only uses env var interpolation WITHIN the TOML file.
+**关键发现**：Grafana 不直接使用 `GRAFANA_LDAP_HOST` 之类的环境变量，仅在 TOML 文件内部使用环境变量插值。
 
-**Critical Limitation**:
+**关键限制**：
 
-From [ldap_multiple.toml](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/conf/ldap_multiple.toml), Grafana supports **different configurations per server**:
+根据 [ldap_multiple.toml](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/conf/ldap_multiple.toml)，Grafana 支持**每台服务器不同配置**：
 ```toml
 [[servers]]
 host = "10.0.0.1"
@@ -310,142 +318,146 @@ bind_dn = "cn=admin,dc=forest2,dc=com"
 group_dn = "cn=editors,dc=forest2,dc=com"
 ```
 
-Phoenix's env var approach **cannot** support this - assumes all servers are identical replicas.
+Phoenix 的环境变量方案**无法**支持此情况，假定所有服务器都是相同副本。
 
-**Tradeoffs**:
+**取舍**：
 
-**Option A: Keep Env Vars** (Current Spec)
-- ✅ Consistent with Phoenix patterns (`PHOENIX_OAUTH2_*`, etc.)
-- ✅ Simpler for most users (single LDAP server)
-- ✅ Container-friendly (12-factor app pattern)
-- ⚠️ **Limitation**: Only supports replica failover, not heterogeneous servers
-- ⚠️ Group mappings as JSON string (less readable)
-- ✅ Can add TOML later without breaking changes
+**方案 A：保留环境变量**，当前规范
+- ✅ 与 Phoenix 模式一致，例如 `PHOENIX_OAUTH2_*`
+- ✅ 对大多数单 LDAP 服务器用户更简单
+- ✅ 容器友好，十二要素应用模式
+- ⚠️ **限制**：仅支持副本故障转移，不支持异构服务器
+- ⚠️ 组映射为 JSON 字符串，可读性较差
+- ✅ 之后可添加 TOML，无不兼容变更
 
-**Option B: Use TOML File**
-- ✅ Full Grafana compatibility
-- ✅ Supports heterogeneous servers
-- ✅ More readable for complex configs
-- ⚠️ Diverges from Phoenix patterns
-- ⚠️ Requires file management (mounting in containers)
-- ✅ Can add env var fallback later without breaking changes
+**方案 B：使用 TOML 文件**
+- ✅ 完整兼容 Grafana
+- ✅ 支持异构服务器
+- ✅ 复杂配置更易阅读
+- ⚠️ 偏离 Phoenix 模式
+- ⚠️ 需要文件管理，例如容器挂载
+- ✅ 之后可添加环境变量回退，无不兼容变更
 
-**Option C: Hybrid** (Recommended for Future)
-- Start with env vars (MVP)
-- Add TOML file support in post-MVP
-- Precedence: `PHOENIX_LDAP_CONFIG_FILE` > env vars
-- Maintains backward compatibility
+**方案 C：混合**，未来推荐
+- MVP 先使用环境变量
+- MVP 后添加 TOML 文件支持
+- 优先级：`PHOENIX_LDAP_CONFIG_FILE` > 环境变量
+- 保持向后兼容
 
-**MVP Recommendation**: Use env vars, document the replica-only limitation, plan for TOML in future.
+**MVP 建议**：使用环境变量，记录仅支持副本的限制，未来规划 TOML。
 
-**Conclusion**: 
-- **Configuration method**: Two-way door - start with env vars, add TOML later
-- **Specific env var names**: One-way door - must be correct at release
-- **Documented limitation**: Multi-server assumes replicas (identical config)
-
----
-
-**5. Approach 1 Semantic Debt**
-
-**Decision Type**: 🚪🚪 **TWO-WAY DOOR** (Type 2)
-
-**Why Two-Way**:
-- Migration path is straightforward (Approach 1 → Approach 2)
-- Data migration script is simple (rewrite `oauth2_client_id` to dedicated columns)
-- No backward compatibility trap - we control both schema and code
-- Can execute migration at any time with coordination
-
-**Semantic Debt If We Don't Migrate** (deferred work):
-- `auth_method='OAUTH2'` for LDAP users creates developer confusion
-- Cannot use polymorphic `LDAPUser` class
-- Schema columns don't reflect usage
-- Code quality debt accumulates
-
-**Migration Path**:
-1. Add dedicated LDAP column (`ldap_username`)
-2. Backfill existing LDAP users
-3. Update code to use `LDAPUser` polymorphic class
-4. (Optional) Clean up old code paths
-
-**See**: [Appendix H](#appendix-h-approach-1--2-migration-plan) for single-transaction Alembic migration (recommended) or phased migration for large installations.
-
-**Conclusion**: Two-way door. Choosing Approach 1 doesn't lock us in - we can migrate to Approach 2 whenever code quality becomes a priority.
+**结论**：
+- **配置方式**：双向门，先使用环境变量，后加 TOML
+- **具体环境变量名称**：单向门，发布时必须正确
+- **已记录限制**：多服务器假定为副本，配置相同
 
 ---
 
-**6. No Polymorphic LDAPUser (Approach 1)**
+**5. 方案 1 的语义债务**
 
-**Decision Type**: 🚪🚪 **TWO-WAY DOOR** (Type 2)
+**决策类型**：🚪🚪 **双向门**（类型 2）
 
-**Why Two-Way**:
-- This is the same migration as item #5 (Approach 1 → Approach 2)
-- Once we add `auth_method='LDAP'` and dedicated columns, we can add `LDAPUser` class
-- No backward compatibility trap
+**可逆原因**：
+- 迁移路径直接，方案 1 → 方案 2
+- 数据迁移脚本简单，将 `oauth2_client_id` 重写至独立列
+- 无向后兼容陷阱，数据库结构和代码均由我们控制
+- 协调后可随时执行迁移
 
-**Architectural Debt If We Don't Migrate** (deferred work):
-- Cannot use polymorphic `LDAPUser` class
-- Cannot use `isinstance(user, LDAPUser)` checks
-- Cannot use `session.query(LDAPUser).all()` queries
-- Inconsistent with `LocalUser`/`OAuth2User` patterns
+**不迁移的语义债务**，延期工作：
+- LDAP 用户使用 `auth_method='OAUTH2'`，造成开发者困惑
+- 无法使用多态 `LDAPUser` 类
+- 列名不反映实际用途
+- 代码质量债务累积
 
-**Resolution**:
-- Same migration as item #5 unlocks polymorphism
-- Add `LDAPUser` class with `polymorphic_identity="LDAP"`
+**迁移路径**：
+1. 添加独立 LDAP 列（`ldap_username`）
+2. 回填现有 LDAP 用户
+3. 更新代码以使用 `LDAPUser` 多态类
+4. 可选清理旧代码路径
 
-**Conclusion**: Two-way door. Polymorphism can be added later with the Approach 2 migration.
+**参见**：[附录 H](#appendix-h-approach-1--2-migration-plan)，提供推荐的单事务 Alembic 迁移，以及适用于大型部署的分阶段迁移。
+
+**结论**：双向门。选择方案 1 不会锁定未来选择，代码质量成为优先事项时可随时迁移至方案 2。
 
 ---
 
-#### Overall Decision Analysis
+**6. 无多态 LDAPUser（方案 1）**
 
-**Framework Summary**: One-Way Door (Type 1) vs. Two-Way Door (Type 2) Decisions
+**决策类型**：🚪🚪 **双向门**（类型 2）
 
-| Decision | Door Type | Analysis |
+**可逆原因**：
+- 与第 5 项相同，方案 1 → 方案 2
+- 添加 `auth_method='LDAP'` 和独立列后，即可添加 `LDAPUser` 类
+- 无向后兼容陷阱
+
+**不迁移的架构债务**，延期工作：
+- 无法使用多态 `LDAPUser` 类
+- 无法使用 `isinstance(user, LDAPUser)` 检查
+- 无法使用 `session.query(LDAPUser).all()` 查询
+- 与 `LocalUser`/`OAuth2User` 模式不一致
+
+**解决方案**：
+- 第 5 项的同一迁移可启用多态
+- 添加 `polymorphic_identity="LDAP"` 的 `LDAPUser` 类
+
+**结论**：双向门。之后可随方案 2 迁移添加多态。
+
+---
+
+<a id="overall-decision-analysis"></a>
+
+#### 整体决策分析
+
+**框架汇总**：单向门（类型 1）与双向门（类型 2）决策
+
+| 决策 | 门类型 | 分析 |
 |----------|-----------|----------|
-| **Configuration Structure** | | |
-| Marker format (`\ue000LDAP(stopgap)`) | 🚪 **ONE-WAY** | Once production data exists, changing format requires data migration. **Risk: Very Low** (extensively validated for collision-free operation) |
-| Env var names (PHOENIX_LDAP_*) | 🚪 **ONE-WAY** | Once released, changing names breaks user configs. **Risk: Very Low** (follows established Phoenix conventions) |
-| JSON field names (`group_dn`, `role`) | 🚪 **ONE-WAY** | Public API contract. **Risk: Very Low** (Phoenix uses `role` not `org_role` since no org concept) |
-| Role values (ADMIN/MEMBER/VIEWER) | 🚪 **ONE-WAY** | Configuration contract. **Risk: Very Low** (matches Phoenix's existing roles) |
-| **Behavioral Contracts** | | |
-| Wildcard "*" matches all users | 🚪 **ONE-WAY** | Users configure based on this. **Risk: Very Low** |
-| Case-insensitive DN matching | 🚪 **ONE-WAY** | Configuration parsing behavior. **Risk: Very Low** (Grafana-compatible, LDAP standard) |
-| First-match-wins priority | 🚪 **ONE-WAY** | Determines role assignment. **Risk: Very Low** (Grafana-compatible, well-documented) |
-| Email fallback for display name | 🚪 **ONE-WAY** | Users may depend on this. **Risk: Very Low** (sensible default, tested) |
-| Multi-server comma-separated format | 🚪 **ONE-WAY** | Parsing contract. **Risk: Very Low** (simple, standard pattern) |
-| Filter placeholder `%s` format | 🚪 **ONE-WAY** | Query construction contract. **Risk: Very Low** (standard across LDAP tools) |
-| **Implementation Flexibility** | | |
-| Library choice (ldap3) | 🚪🚪 **TWO-WAY** | Abstraction layer allows swapping libraries without codebase changes. |
-| Env var config method | 🚪🚪 **TWO-WAY** | Can add TOML/file-based config later while maintaining env var support. |
-| Approach 1 semantic debt | 🚪🚪 **TWO-WAY** | Can migrate to Approach 2 anytime with data migration + code updates. |
-| No polymorphism (Approach 1) | 🚪🚪 **TWO-WAY** | Can add polymorphism with same Approach 2 migration. |
+| **配置结构** | | |
+| 标记格式（`\ue000LDAP(stopgap)`） | 🚪 **单向** | 生产数据存在后，更改格式需要数据迁移。**风险：极低**，已充分验证无冲突 |
+| 环境变量名称（PHOENIX_LDAP_*） | 🚪 **单向** | 发布后更名破坏用户配置。**风险：极低**，符合既有 Phoenix 约定 |
+| JSON 字段名（`group_dn`、`role`） | 🚪 **单向** | 公共 API 契约。**风险：极低**，Phoenix 使用 `role` 而非 `org_role`，无组织概念 |
+| 角色值（ADMIN/MEMBER/VIEWER） | 🚪 **单向** | 配置契约。**风险：极低**，符合 Phoenix 现有角色 |
+| **行为契约** | | |
+| 通配符“*”匹配所有用户 | 🚪 **单向** | 用户据此配置。**风险：极低** |
+| 不区分大小写的 DN 匹配 | 🚪 **单向** | 配置解析行为。**风险：极低**，兼容 Grafana 和 LDAP 标准 |
+| 首次匹配优先 | 🚪 **单向** | 决定角色分配。**风险：极低**，兼容 Grafana，文档充分 |
+| 显示名称回退邮箱 | 🚪 **单向** | 用户可能依赖。**风险：极低**，合理默认值，已测试 |
+| 多服务器逗号分隔格式 | 🚪 **单向** | 解析契约。**风险：极低**，简单标准模式 |
+| 过滤器占位符 `%s` 格式 | 🚪 **单向** | 查询构建契约。**风险：极低**，LDAP 工具标准做法 |
+| **实现灵活性** | | |
+| 库选择（ldap3） | 🚪🚪 **双向** | 抽象层允许更换库，无需修改其他代码。 |
+| 环境变量配置方式 | 🚪🚪 **双向** | 之后可增加 TOML/文件配置，同时保留环境变量。 |
+| 方案 1 语义债务 | 🚪🚪 **双向** | 可随时通过数据迁移和代码更新迁移至方案 2。 |
+| 无多态（方案 1） | 🚪🚪 **双向** | 可通过同一方案 2 迁移添加多态。 |
 
-**Key Insights**:
+**关键洞察**：
 
-**One-Way Door Decisions** (requires careful upfront analysis):
-- **Marker format** (`\ue000LDAP(stopgap)`): Changing requires data migration
-  - ✅ Extensively validated (Unicode PUA guarantees, OAuth2 spec analysis, real-world provider validation)
-  - ✅ Active defense (validation rejects PUA in OAuth2 client IDs)
-  - ✅ Low risk: All evidence points to this being the correct choice
-- **Environment variable names** (`PHOENIX_LDAP_*`): Changing breaks user configs
-  - ✅ Follows Phoenix conventions (`PHOENIX_*` prefix)
-  - ✅ Clear, descriptive names match industry standards
-  - ✅ Consistent with existing `PHOENIX_OAUTH2_*` patterns
-  - ✅ Low risk: Names are standard and unlikely to need change
+**单向门决策**，需事先仔细分析：
+- **标记格式**（`\ue000LDAP(stopgap)`）：更改需要数据迁移
+  - ✅ 充分验证，Unicode PUA 保证、OAuth2 规范分析和实际提供方验证
+  - ✅ 主动防御，校验拒绝 OAuth2 客户端 ID 中的 PUA
+  - ✅ 风险低，全部证据支持此选择
+- **环境变量名称**（`PHOENIX_LDAP_*`）：更改破坏用户配置
+  - ✅ 遵循 Phoenix 约定（`PHOENIX_*` 前缀）
+  - ✅ 清晰描述性名称符合行业标准
+  - ✅ 与现有 `PHOENIX_OAUTH2_*` 模式一致
+  - ✅ 风险低，名称标准，未来不太需要改变
 
-**Two-Way Door Decisions** (can iterate and improve):
-- **Everything else**: All other decisions can be changed/extended later
-  - Library: Swap via abstraction layer
-  - Configuration method: Add file-based (TOML) alongside env vars
-  - Schema: Add columns in future migrations (Approach 1 → 2)
-  - Code structure: Add polymorphism with migration
+**双向门决策**，可迭代改进：
+- **其他所有事项**：均可之后更改或扩展
+  - 库：通过抽象层替换
+  - 配置方式：在环境变量之外添加 TOML 文件配置
+  - 数据库结构：未来迁移添加列，方案 1 → 2
+  - 代码结构：通过迁移添加多态
 
-**Approach 1 vs. Approach 2**:
-- **Both are two-way doors** (from Approach 1, we can migrate to Approach 2)
-- **Difference**: Timing of architecture work (now vs. later)
-- **Neither locks us in**: Both maintain flexibility for future changes
-- **Choice**: Release speed (Approach 1) vs. upfront code quality (Approach 2)
+**方案 1 与方案 2**：
+- **均为双向门**，可从方案 1 迁移至方案 2
+- **区别**：架构工作的时间，现在或未来
+- **均不锁定选择**：保留未来变更灵活性
+- **选择**：发布速度，方案 1；或事先保证代码质量，方案 2
 
 ---
 
-### Appendix F: Security Deep-Dive
+<a id="appendix-f-security-deep-dive"></a>
+
+### 附录 F：安全详解

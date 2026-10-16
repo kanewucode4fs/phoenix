@@ -1,59 +1,71 @@
 ---
 name: datasets
 description: >
-  Understand what a Phoenix dataset is and reason well about its examples, outputs, splits, and how it feeds evaluators and experiments. Load this whenever a dataset is in view or the user asks what a dataset is, how splits work, what an output "means", or how datasets relate to experiments and evals. This skill governs the judgment; any tool descriptions govern the mechanics.
-summary: Reason well about Phoenix datasets — examples, outputs, splits, labels — and how they feed evaluators and experiments.
+  理解 Phoenix 数据集的含义，正确判断示例、输出、划分，以及它们如何供评估器和实验使用。只要当前视图涉及数据集，或用户询问什么是数据集、划分如何工作、输出意味着什么、数据集与实验和评估有何关系，就加载本技能。本技能规定判断原则；具体操作机制以工具描述为准。
+summary: 正确理解 Phoenix 数据集的示例、输出、划分、标签，以及它们如何供评估器和实验使用。
 ---
 
-# Datasets
+<a id="datasets"></a>
 
-A dataset is a table of **examples**. Each example (row) has an **input**, an optional **output**, and optional **metadata**. A dataset is the unit you evaluate a prompt or application against: you run something over every example and compare what comes out against what the example says.
+# 数据集
 
-Rows in one dataset should look roughly alike — the same shape of input, the same shape of output, the same metadata keys. The dataset has no enforced schema, so this consistency is a *convention you maintain*, not something the system guarantees. When you add or edit rows, match the shape of the rows already there; a dataset where row 3 has a `question` field and row 4 has a `prompt` field is harder to evaluate and harder to reason about.
+数据集是一张由**示例**组成的表。每个示例（行）包含**输入**、可选**输出**和可选**元数据**。数据集是评估提示词或应用的单位：对每个示例运行待评估对象，再将实际结果与示例记录的内容进行比较。
 
-## What an output actually means
+同一数据集中的各行应大致一致：输入结构相同、输出结构相同、元数据键相同。数据集没有强制模式，因此这种一致性是需要你维护的约定，而非系统保证。添加或编辑行时，应匹配现有行的结构；如果第 3 行使用 `question` 字段、第 4 行却使用 `prompt` 字段，就更难评估和理解。
 
-The most common mistake is to treat a saved output as "the correct answer." It usually is not.
+<a id="what-an-output-actually-means"></a>
 
-An output on a row is a **reference**, not a verdict. Treat it as "an answer that was recorded for this input," and ask *where it came from* before trusting it:
+## 输出实际意味着什么
 
-- A dataset is **golden** only when its outputs are genuinely ideal — hand-written or hand-verified to be the answer you want. Here the output really is the target.
-- Far more often, outputs are **baselines**: captured from whatever produced them when the dataset was built (a model run, a production trace, an import). A baseline output records what the system *did*, which may be mediocre, outdated, or wrong. It is a point of comparison, not a goal.
+最常见的错误是把已保存的输出当作“正确答案”，但通常并非如此。
 
-So: never assume an output is right because it is present. If the user implies the dataset is golden, you can lean on the outputs as targets; if you don't know its provenance, say so and treat outputs as references. A row with no output at all is normal and fine — it just means "we have an input to run, but no recorded answer to compare against."
+行中的输出是**参考**，不是判定结论。应将其视为“为此输入记录过的一个答案”，在信任前先确认其来源：
 
-## How datasets feed evaluators and experiments
+- 只有输出确实理想时，数据集才是**黄金数据集**：答案由人工编写或核验，确实是期望结果。此时输出才是真正的目标。
+- 更常见的是**基线**输出：它们来自构建数据集时的生成源，例如模型运行、生产追踪记录或导入数据。基线记录系统当时做了什么，可能表现平庸、已经过时或存在错误。它是比较点，不是目标。
 
-- **Evaluators** are attached to a dataset to judge outputs along a dimension (correctness, relevance, format, and so on).
-- Running a prompt or application over every example is an **experiment**. Each example produces an experiment output, and the evaluators score those outputs — often against the example's reference output. This is why the reference/golden distinction matters: an experiment compared against weak baselines tells you "did this change behavior," while an experiment compared against golden outputs tells you "is this correct."
-- Every example-level change creates a new dataset **version**, recording who made it. Experiments are run against a specific version, so the dataset's history is part of the evidence.
+因此，不能仅因为存在输出就假定其正确。用户暗示这是黄金数据集时，可以将输出作为目标；来源未知时，应明确说明，并将输出视为参考。行中完全没有输出也很正常，只表示“有输入可运行，但没有记录答案可用于比较”。
 
-## Matching a dataset to the prompt you run over it
+<a id="how-datasets-feed-evaluators-and-experiments"></a>
 
-When you run a prompt over a dataset in the playground, each prompt template variable `{{x}}` is filled from the matching example field `input.x` — **bound by name**. So the dataset's `input` keys have to cover the prompt's template variables, or the run produces nothing useful.
+## 数据集如何供评估器和实验使用
 
-Reconcile the two before you run (or before you build a dataset for a run):
+- **评估器**附加到数据集上，沿某个维度评判输出，例如正确性、相关性或格式。
+- 对全部示例运行提示词或应用，构成一次**实验**。每个示例产生实验输出，由评估器评分，通常会与示例的参考输出比较。这正是区分参考和黄金答案的原因：与较弱基线比较，回答的是“行为是否改变”；与黄金输出比较，回答的才是“是否正确”。
+- 每次示例级改动都会创建新的数据集**版本**，记录修改者。实验针对特定版本运行，因此数据集历史也是证据的一部分。
 
-- List the prompt's template variables and the dataset's `input` keys and make them line up. A `{{customer_message}}` variable needs an `input.customer_message` field — not `input.message` or `input.question`. A field that matches no variable is unused; a variable with no matching field renders empty.
-- Cover **every** variable the prompt uses. A prompt with five variables run over a dataset that only carries one field fills one variable and blanks the other four.
-- A playground run that *finishes with empty output and no error* almost always means this binding did not match — treat that as a misconfiguration to fix (align the field names, or map them), not as success.
+<a id="matching-a-dataset-to-the-prompt-you-run-over-it"></a>
 
-If you are creating a dataset specifically to exercise a prompt, read the prompt's variables first and name the example `input` keys to match them from the start.
+## 匹配数据集与待运行提示词
 
-## Splits
+在 Playground 中对数据集运行提示词时，每个模板变量 `{{x}}` 都从对应示例字段 `input.x` 填充，**按名称绑定**。因此，数据集的 `input` 键必须覆盖提示词变量，否则运行不会产生有用结果。
 
-A **split** is a named slice of the examples. The same mechanism serves three distinct purposes — know which one the user means before acting:
+运行前，或为运行构建数据集前，先对齐二者：
 
-1. **Honest measurement (train / validation / test).** The classic ML division. A held-out test split that you never tune against gives a trustworthy estimate of real performance; tuning until the test numbers look good (overfitting) destroys that. If the user is optimizing a prompt or a model, respect the test split as blind.
-2. **Facets (category / difficulty / type).** Splits like `single-hop` vs. `multi-hop`, `easy` vs. `hard`, or by topic let you break an experiment down and see *where* a task is weak instead of reading one aggregate number. Use these when the user asks "where is it failing," not just "how well does it do."
-3. **Quick iteration (small chunks).** A small split is useful for a fast pass in the playground *before* committing to a full regression run over the whole dataset. Cheaper and faster to learn from while iterating.
+- 列出提示词模板变量和数据集 `input` 键，确保名称一致。`{{customer_message}}` 需要 `input.customer_message` 字段，而非 `input.message` 或 `input.question`。没有对应变量的字段不会被使用；没有对应字段的变量会被渲染为空。
+- 覆盖提示词使用的**每个**变量。包含五个变量的提示词如果在只有一个字段的数据集上运行，只会填充一个变量，其余四个为空。
+- Playground 运行如果**结束后输出为空但没有报错**，几乎总是绑定不匹配。应将其视为需要修复的配置错误，对齐字段名或添加映射，不能当作成功。
 
-A single example can belong to more than one split, and a split is just a label on rows — moving a row between splits doesn't change the row's input or output.
+如果专门创建数据集来测试提示词，应先读取提示词变量，从一开始就让示例 `input` 键与其匹配。
 
-## How to work with datasets well
+<a id="splits"></a>
 
-- **Look before you change.** Read existing rows before adding — to match their shape — and before editing or deleting — to act on the real current content, not an assumption. This is the same habit the prompt tools follow.
-- **Be honest about outputs.** When you add a row, only present its output as the right answer if it genuinely is; otherwise call it a baseline/reference.
-- **Keep rows uniform.** New and edited rows should match the field names and structure of the rest of the dataset.
-- **Respect splits.** Don't blur a held-out test split into training material, and surface per-split breakdowns when the user wants to know where a task is weak.
-- **Treat changes as versioned and attributable.** Edits and deletes are real mutations to a shared artifact others may be using, and each creates a new dataset version. Preview and confirm before applying.
+## 数据划分
+
+**划分（split）**是具有名称的示例子集。同一机制可用于三种不同目的，操作前应明确用户所指：
+
+1. **可信测量（训练 / 验证 / 测试）。** 经典机器学习划分。对保留测试集从不调优，才能可信地估计实际表现；不断调优直到测试数值变好会造成过拟合，破坏测量价值。用户优化提示词或模型时，应保持测试划分的盲测性质。
+2. **分面分析（类别 / 难度 / 类型）。** `single-hop` 与 `multi-hop`、`easy` 与 `hard` 或按主题划分，可以拆解实验，了解任务具体弱在哪里，而非只看汇总值。用户询问“哪里失败”而非仅问“表现如何”时使用。
+3. **快速迭代（小批次）。** 在承诺对整个数据集执行完整回归前，可先用小划分在 Playground 快速运行，降低迭代学习的费用和耗时。
+
+同一示例可以属于多个划分。划分只是行上的标签，在划分间移动行，不会改变该行的输入或输出。
+
+<a id="how-to-work-with-datasets-well"></a>
+
+## 正确使用数据集
+
+- **先看再改。** 添加前读取现有行以匹配结构；编辑或删除前读取当前行，以实际内容而非假设为依据。这与提示词工具遵循的习惯一致。
+- **如实说明输出。** 添加行时，只有输出确实正确，才能将其呈现为正确答案；否则应称为基线或参考。
+- **保持行结构一致。** 新增和编辑后的行应匹配数据集中其他行的字段名和结构。
+- **尊重划分。** 不要将保留测试划分混入训练材料；用户想了解任务薄弱之处时，应展示按划分拆解的结果。
+- **将改动视为带版本且可归属的操作。** 编辑和删除会实际修改共享资料，其他人可能也在使用；每次操作都会创建数据集新版本。应用前先预览并确认。

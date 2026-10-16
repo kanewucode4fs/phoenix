@@ -2,34 +2,40 @@
 
 <p align="center">
     <a href="https://pypi.org/project/arize-phoenix-evals/">
-        <img src="https://img.shields.io/pypi/v/arize-phoenix-evals" alt="PyPI Version">
+        <img src="https://img.shields.io/pypi/v/arize-phoenix-evals" alt="PyPI 版本">
     </a>
     <a href="https://arize-phoenix.readthedocs.io/projects/evals/">
-        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="Documentation">
+        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="文档">
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=packages/phoenix-evals/README.md" />
 </p>
 
-Phoenix Evals provides **lightweight, composable building blocks** for writing and running evaluations on LLM applications, including tools to determine relevance, toxicity, hallucination detection, and much more.
+Phoenix Evals 提供**轻量、可组合的构建模块**，用于编写和运行 LLM 应用评估，包括相关性判断、毒性判断、幻觉检测等工具。
 
-## Features
+<a id="features"></a>
 
-- **Works with your preferred model SDKs** via adapters (OpenAI, LiteLLM, LangChain)
-- **Powerful input mapping and binding** for working with complex data structures
-- **Several pre-built metrics** for common evaluation tasks like hallucination detection
-- **Evaluators are natively instrumented** via OpenTelemetry tracing for observability and dataset curation
-- **Blazing fast performance** - achieve up to 20x speedup with built-in concurrency and batching
-- **Tons of convenience features** to improve the developer experience!
+## 功能
 
-## Installation
+- 通过适配器**兼容你偏好的模型 SDK**（OpenAI、LiteLLM、LangChain）
+- **强大的输入映射与绑定**，支持复杂数据结构
+- 为幻觉检测等常见评估任务提供**多种预置指标**
+- **评估器原生插桩**，通过 OpenTelemetry 追踪实现可观测性和数据集整理
+- **极高性能**：通过内置并发和批处理实现最高 20 倍加速
+- **丰富的便捷功能**，改善开发体验！
 
-Install Phoenix Evals 2.0 using pip:
+<a id="installation"></a>
+
+## 安装
+
+通过 pip 安装 Phoenix Evals 2.0：
 
 ```shell
 pip install 'arize-phoenix-evals>=2.0.0' openai
 ```
 
-## Quick Start
+<a id="quick-start"></a>
+
+## 快速开始
 
 ```python
 from phoenix.evals import create_classifier
@@ -58,26 +64,28 @@ scores = evaluator.evaluate(
 scores[0].pretty_print()
 ```
 
-## Pre-Built Evaluators
+<a id="pre-built-evaluators"></a>
 
-The `phoenix.evals.metrics` module provides ready-to-use evaluators for common tasks:
+## 预置评估器
 
-| Evaluator | Class | Description |
+`phoenix.evals.metrics` 模块为常见任务提供开箱即用的评估器：
+
+| 评估器 | 类 | 说明 |
 | --------- | ----- | ----------- |
-| Faithfulness | `FaithfulnessEvaluator` | Detects hallucinations — checks if output is grounded in context |
-| Completeness | `CompletenessEvaluator` | Checks whether every active user request in a conversation was actually completed |
-| Conciseness | `ConcisenessEvaluator` | Evaluates whether the response is appropriately concise |
-| Correctness | `CorrectnessEvaluator` | Checks if the output is factually correct |
-| Retrieval Relevance | `RetrievalRelevanceEvaluator` | Measures how relevant retrieved information is to a request |
-| Refusal | `RefusalEvaluator` | Detects whether the model refused to answer |
-| Tool Invocation | `ToolInvocationEvaluator` | Checks whether the correct tool was called with the right arguments |
-| Tool Selection | `ToolSelectionEvaluator` | Evaluates whether the right tool was selected for the task |
-| Tool Response Handling | `ToolResponseHandlingEvaluator` | Evaluates how well the model uses a tool's response |
-| User Friction | `UserFrictionEvaluator` | Detects expressed corrections, retries, frustration, and challenges |
-| PII Detection | `PiiDetectionEvaluator` | Screens a conversation record for personally identifiable information |
-| Exact Match | `exact_match` | Checks for exact string equality between output and expected |
-| Regex Match | `MatchesRegex` | Checks whether the output matches a regular expression |
-| Precision/Recall | `PrecisionRecallFScore` | Computes precision, recall, and F-score for classification tasks |
+| 忠实度 | `FaithfulnessEvaluator` | 检测幻觉，检查输出是否基于上下文 |
+| 完整性 | `CompletenessEvaluator` | 检查对话中每个有效用户请求是否确实完成 |
+| 简洁性 | `ConcisenessEvaluator` | 评估响应是否适度简洁 |
+| 正确性 | `CorrectnessEvaluator` | 检查输出是否符合事实 |
+| 检索相关性 | `RetrievalRelevanceEvaluator` | 衡量检索信息与请求的相关程度 |
+| 拒绝回答 | `RefusalEvaluator` | 检测模型是否拒绝回答 |
+| 工具调用 | `ToolInvocationEvaluator` | 检查是否使用正确参数调用正确工具 |
+| 工具选择 | `ToolSelectionEvaluator` | 评估是否为任务选择正确工具 |
+| 工具响应处理 | `ToolResponseHandlingEvaluator` | 评估模型利用工具响应的效果 |
+| 用户不满 | `UserFrictionEvaluator` | 检测表达出的纠正、重试、不满和质疑 |
+| 个人身份信息检测 | `PiiDetectionEvaluator` | 筛查对话记录中的个人身份信息 |
+| 精确匹配 | `exact_match` | 检查输出与预期的字符串是否完全相等 |
+| 正则匹配 | `MatchesRegex` | 检查输出是否匹配正则表达式 |
+| 精确率/召回率 | `PrecisionRecallFScore` | 计算分类任务的精确率、召回率和 F 分数 |
 
 ```python
 from phoenix.evals.llm import LLM
@@ -104,9 +112,11 @@ match_result = exact_match({"output": "Paris", "expected": "Paris"})
 regex_result = MatchesRegex(pattern=r"^\d{4}-\d{2}-\d{2}$").evaluate({"output": "2024-03-15"})
 ```
 
-## LLM Providers
+<a id="llm-providers"></a>
 
-The `LLM` class supports multiple AI providers:
+## LLM 提供商
+
+`LLM` 类支持多种 AI 提供商：
 
 ```python
 from phoenix.evals.llm import LLM
@@ -124,7 +134,9 @@ llm = LLM(provider="google", model="gemini-1.5-pro")
 llm = LLM(provider="litellm", model="gpt-4o")
 ```
 
-## Evaluating Dataframes
+<a id="evaluating-dataframes"></a>
+
+## 评估 DataFrame
 
 ```python
 import pandas as pd
@@ -178,21 +190,25 @@ results_df = asyncio.run(
 )
 ```
 
-## Documentation
+<a id="documentation"></a>
 
-- **[Full Documentation](https://arize-phoenix.readthedocs.io/projects/evals/)** - Complete API reference and guides
-- **[Phoenix Docs](https://arize.com/docs/phoenix)** - Detailed use-cases and examples
-- **[OpenInference](https://github.com/Arize-ai/openinference)** - Auto-instrumentation libraries for frameworks
+## 文档
 
-## Community
+- **[完整文档](https://arize-phoenix.readthedocs.io/projects/evals/)** - 完整 API 参考和指南
+- **[Phoenix 文档](https://arize.com/docs/phoenix)** - 详细用例和示例
+- **[OpenInference](https://github.com/Arize-ai/openinference)** - 面向框架的自动插桩库
 
-Join our community to connect with thousands of AI builders:
+<a id="community"></a>
 
-- 🌍 Join our [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
-- 📚 Read the [Phoenix documentation](https://arize.com/docs/phoenix).
-- 💡 Ask questions and provide feedback in the _#phoenix-support_ channel.
-- 🌟 Leave a star on our [GitHub](https://github.com/Arize-ai/phoenix).
-- 🐞 Report bugs with [GitHub Issues](https://github.com/Arize-ai/phoenix/issues).
-- 𝕏 Follow us on [𝕏](https://twitter.com/ArizePhoenix).
-- 💼 Follow us on [LinkedIn](https://www.linkedin.com/showcase/113218220).
-- 🗺️ Check out our [roadmap](https://github.com/orgs/Arize-ai/projects/45) to see where we're heading next.
+## 社区
+
+加入我们的社区，与数千名 AI 开发者交流：
+
+- 🌍 加入我们的 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
+- 📚 阅读 [Phoenix 文档](https://arize.com/docs/phoenix).
+- 💡 在 _#phoenix-support_ 频道提问并反馈。
+- 🌟 为我们的 [GitHub](https://github.com/Arize-ai/phoenix) 加星。
+- 🐞 通过 [GitHub Issues](https://github.com/Arize-ai/phoenix/issues) 报告问题。
+- 𝕏 在 [𝕏](https://twitter.com/ArizePhoenix) 关注我们。
+- 💼 在 [LinkedIn](https://www.linkedin.com/showcase/113218220) 关注我们。
+- 🗺️ 查看我们的[路线图](https://github.com/orgs/Arize-ai/projects/45)，了解未来方向。

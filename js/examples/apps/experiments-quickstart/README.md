@@ -1,39 +1,51 @@
-# TypeScript Experiments Quickstart
+<a id="typescript-experiments-quickstart"></a>
 
-This tutorial demonstrates how to run experiments with Phoenix using TypeScript. It shows how to create datasets, define task functions, use code-based and LLM-as-a-Judge evaluators, and compare different versions of an AI agent.
+# TypeScript 实验快速开始
 
-## Overview
+本教程展示如何使用 TypeScript 在 Phoenix 中运行实验，包括创建数据集、定义任务函数、使用代码评估器和 LLM 裁判评估器，以及比较 AI Agent 的不同版本。
 
-This tutorial implements a customer support agent that:
+<a id="overview"></a>
 
-- Classifies support tickets into categories (billing, technical, account, other)
-- Retrieves relevant policies based on the classification
-- Generates helpful responses to users
+## 概述
 
-The tutorial runs three experiments:
+本教程实现一个客服 Agent，功能包括：
 
-1. **Tool Call Accuracy**: Evaluates the classification tool using a code-based evaluator
-2. **Initial Support Agent**: Evaluates the full agent using an LLM-as-a-Judge evaluator
-3. **Improved Support Agent**: Compares an improved version of the agent with enhanced instructions and evaluates it with an LLM-as-a-Judge evaluator
+- 将支持工单分类（账单、技术、账户、其他）
+- 根据分类检索相关政策
+- 为用户生成有帮助的回复
 
-## Prerequisites
+本教程运行三个实验：
 
-- Phoenix Cloud account
-- OpenAI API key
+1. **工具调用准确率**：使用代码评估器评估分类工具
+2. **初始客服 Agent**：使用 LLM 裁判评估器评估完整 Agent
+3. **改进客服 Agent**：比较采用增强指令的改进版 Agent，并用 LLM 裁判评估器进行评估
 
-## Setup
+<a id="prerequisites"></a>
 
-### 1. Install All Dependencies
+## 前置条件
 
-From this directory, run:
+- Phoenix Cloud 账户
+- OpenAI API 密钥
+
+<a id="setup"></a>
+
+## 配置
+
+<a id="1-install-all-dependencies"></a>
+
+### 1. 安装全部依赖
+
+在当前目录运行：
 
 ```bash
 npm install
 ```
 
-### 2. Configure Environment Variables
+<a id="2-configure-environment-variables"></a>
 
-Create a `.env` file in this directory:
+### 2. 配置环境变量
+
+在当前目录创建 `.env` 文件：
 
 ```env
 PHOENIX_ENDPOINT=https://app.phoenix.arize.com/s/your-space
@@ -41,19 +53,23 @@ PHOENIX_API_KEY=your-phoenix-api-key
 OPENAI_API_KEY=your-openai-api-key
 ```
 
-### 3. Run the Tutorial
+<a id="3-run-the-tutorial"></a>
+
+### 3. 运行教程
 
 ```bash
 npm start
 ```
 
-From here, you can view experiment results and traces in Phoenix!
+随后即可在 Phoenix 中查看实验结果和追踪！
 
-## Documentation
+<a id="documentation"></a>
 
-For detailed documentation on experiments, see:
+## 文档
 
-- [Defining the Dataset](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/defining-the-dataset)
-- [Run Experiments with Code Evals](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/run-experiments-with-code-evals)
-- [Run Experiments with LLM as a Judge](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/run-experiments-with-llm-judge)
-- [Iterating with Experiments](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/iteration-workflow-experiments)
+实验的详细文档见：
+
+- [定义数据集](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/defining-the-dataset)
+- [使用代码评估运行实验](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/run-experiments-with-code-evals)
+- [使用 LLM 裁判运行实验](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/run-experiments-with-llm-judge)
+- [通过实验迭代](https://docs.phoenix.arize.com/docs/phoenix/datasets-and-experiments/tutorial/iteration-workflow-experiments)

@@ -1,6 +1,8 @@
-# PostgreSQL JSON vs JSONB Demo
+<a id="postgresql-json-vs-jsonb-demo"></a>
 
-This project demonstrates the key differences between PostgreSQL's JSON and JSONB data types. The most striking difference is how they handle key ordering:
+# PostgreSQL JSON 与 JSONB 演示
+
+本项目展示 PostgreSQL JSON 和 JSONB 数据类型的主要区别，最明显的是键顺序处理：
 
 ```
 Original input: { "z": 26, "a": 1, "m": 13 }
@@ -9,7 +11,7 @@ JSON output:    { "z": 26, "a": 1, "m": 13 }     | JSONB output:    { "a": 1, "m
 (preserves original order)                        | (sorts keys alphabetically)
 ```
 
-Here's a real example from our test data:
+以下是测试数据中的真实示例：
 
 ```
 Original input order: ['QVZZCJFR', 'DAUFW', 'DXRMYF', 'SEETRJBUU', ...]
@@ -28,49 +30,59 @@ JSON output: {                | JSONB output: {
 }                             | }
 ```
 
-JSON preserves your exact input format, while JSONB optimizes for querying by reordering keys lexicographically. This project provides practical examples and performance comparisons to help developers understand when to use each type.
+JSON 精确保留输入格式，而 JSONB 按字典序重排键以优化查询。本项目提供实际示例和性能比较，帮助开发者理解两种类型的使用时机。
 
-## Features
+<a id="features"></a>
 
-- **Key Order Comparison**: Demonstrates how JSON preserves key order while JSONB sorts keys lexicographically
-- **Performance Benchmarks**: Compares insert and query performance between JSON and JSONB
-- **Query Capabilities**: Shows various query operations and operators available for both types
-- **Index Impact**: Demonstrates the effect of GIN indexing on JSONB queries
-- **TypeScript Support**: Fully typed codebase with proper type definitions
+## 功能
 
-## Prerequisites
+- **键顺序比较**：展示 JSON 如何保留键顺序，以及 JSONB 如何按字典序排序
+- **性能基准**：比较 JSON 与 JSONB 的插入和查询性能
+- **查询能力**：展示两种类型可用的查询操作和运算符
+- **索引影响**：展示 GIN 索引对 JSONB 查询的影响
+- **TypeScript 支持**：完整类型化代码库，具有适当类型定义
 
-- Node.js (v18 or higher)
-- pnpm (v10.2.0 or higher)
-- PostgreSQL (v12 or higher) - Optional, as the demo can use PGlite by default
+<a id="prerequisites"></a>
 
-## Installation
+## 前置条件
 
-1. Clone the repository
-2. Install dependencies:
+- Node.js，v18 或更高
+- pnpm，v10.2.0 或更高
+- PostgreSQL，v12 或更高，可选，演示默认可使用 PGlite
+
+<a id="installation"></a>
+
+## 安装
+
+1. 克隆仓库
+2. 安装依赖：
    ```bash
    pnpm install
    ```
 
-## Configuration
+<a id="configuration"></a>
 
-The project can use either PGlite (in-memory PostgreSQL) or a real PostgreSQL database. Configure this in `src/config/db-config.ts`:
+## 配置
+
+项目可使用 PGlite（内存 PostgreSQL）或真实 PostgreSQL 数据库。在 `src/config/db-config.ts` 中配置：
 
 ```typescript
 // Set to true to use PGlite, false to use PostgreSQL
 export const USE_PGLITE: boolean = true;
 ```
 
-If using PostgreSQL, set the following environment variables or update the defaults in `src/services/db-service.ts`:
-- `DB_USER` (default: "postgres")
-- `DB_HOST` (default: "localhost")
-- `DB_NAME` (default: "json_demo")
-- `DB_PASSWORD` (default: "postgres")
-- `DB_PORT` (default: "5432")
+使用 PostgreSQL 时，设置以下环境变量，或更新 `src/services/db-service.ts` 中的默认值：
+- `DB_USER`，默认 "postgres"
+- `DB_HOST`，默认 "localhost"
+- `DB_NAME`，默认 "json_demo"
+- `DB_PASSWORD`，默认 "postgres"
+- `DB_PORT`，默认 "5432"
 
-## Usage
+<a id="usage"></a>
 
-Run the following commands to see different aspects of JSON vs JSONB:
+## 使用方法
+
+运行以下命令，了解 JSON 与 JSONB 的不同方面：
 
 ```bash
 # Run the main demo (key order comparison)
@@ -86,47 +98,59 @@ pnpm run query
 pnpm run compare
 ```
 
-## Demo Scripts
+<a id="demo-scripts"></a>
 
-1. **compare.ts**: Demonstrates key order preservation differences
-   - Shows how JSON preserves input key order
-   - Shows how JSONB reorders keys lexicographically
-   - Compares storage sizes
+## 演示脚本
 
-2. **performance.ts**: Benchmarks performance characteristics
-   - Insert performance comparison
-   - Query performance comparison
-   - Index impact on queries
-   - JSONB-specific operator performance
+1. **compare.ts**：展示键顺序保留差异
+   - 展示 JSON 如何保留输入键顺序
+   - 展示 JSONB 如何按字典序重排键
+   - 比较存储大小
 
-3. **query-examples.ts**: Shows query capabilities
-   - Basic key access
-   - Nested key access
-   - Array access
-   - Filtering
-   - JSONB-specific operators
+2. **performance.ts**：对性能特性进行基准测试
+   - 插入性能比较
+   - 查询性能比较
+   - 索引对查询的影响
+   - JSONB 专有运算符性能
 
-## Key Findings
+3. **query-examples.ts**：展示查询能力
+   - 基本键访问
+   - 嵌套键访问
+   - 数组访问
+   - 过滤
+   - JSONB 专有运算符
 
-### When to use JSON
-- When you need to preserve exact document format including whitespace and key order
-- For write-heavy operations with minimal querying
-- When input validation is more important than query performance
+<a id="key-findings"></a>
 
-### When to use JSONB
-- When you need frequent querying of the JSON data
-- When you need indexing capabilities
-- When query performance is critical
-- When storage space is a concern
-- When key order preservation is not required
+## 主要发现
 
-## Development
+<a id="when-to-use-json"></a>
 
-- `pnpm run format`: Format code using Prettier
-- `pnpm run lint`: Run ESLint
-- `pnpm run typecheck`: Run TypeScript type checking
+### 适合使用 JSON 的情况
+- 需要精确保留文档格式，包括空白和键顺序
+- 写入较多、查询较少
+- 输入校验比查询性能更重要
 
-## Project Structure
+<a id="when-to-use-jsonb"></a>
+
+### 适合使用 JSONB 的情况
+- 需要频繁查询 JSON 数据
+- 需要索引能力
+- 查询性能至关重要
+- 关注存储空间
+- 不需要保留键顺序
+
+<a id="development"></a>
+
+## 开发
+
+- `pnpm run format`：使用 Prettier 格式化代码
+- `pnpm run lint`：运行 ESLint
+- `pnpm run typecheck`：运行 TypeScript 类型检查
+
+<a id="project-structure"></a>
+
+## 项目结构
 
 ```
 src/
@@ -142,6 +166,8 @@ src/
 └── index.ts              # Main entry point
 ```
 
-## License
+<a id="license"></a>
+
+## 许可证
 
 MIT

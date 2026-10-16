@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: run_eval_experiment.py}
 weight: 0.5
 ---
-The script runs a task plus an evaluator over a 50-example QA dataset whose examples each have a `question` (input) and an `expected` answer (output).
+该脚本在含 50 个示例的问答数据集上运行任务和评估器，每个示例均包含 `question`（输入）和 `expected` 答案（输出）。
 
-Grade exactly one claim. PASS if the claim below holds, FAIL otherwise. Ignore everything else about the file.
+只评定下面这一条判断条件。文件满足条件则为 PASS，否则为 FAIL；忽略文件中的其他内容。
 
-Claim: The task reads the question from the example input (e.g. `example.input["question"]`), and the evaluator receives the task output and the expected answer through the standard experiment parameter names (`output` and `expected`), consistent with how the dataset's input/output keys were built — so it would run rather than raise a missing-key or missing-parameter error.
+判断条件：任务从示例输入中读取问题（如 `example.input["question"]`），评估器通过标准实验参数名（`output` 和 `expected`）接收任务输出和预期答案，且与数据集输入、输出键的构造方式一致，使其能够运行，而不会因缺失键或参数而报错。

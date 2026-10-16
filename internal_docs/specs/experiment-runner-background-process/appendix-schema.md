@@ -1,64 +1,72 @@
-# Appendix: Schema Design Decisions
+<a id="appendix-schema-design-decisions"></a>
+# 附录：数据库结构设计决策
 
-Design rationale for the `experiment_execution_configs` table. For current schema, see `src/phoenix/db/models.py` and `src/phoenix/db/types/experiment_config.py`.
+本文说明 `experiment_execution_configs` 表的设计理由。当前结构见 `src/phoenix/db/models.py` 和 `src/phoenix/db/types/experiment_config.py`。
 
 ---
 
-## Running State Detection
+<a id="running-state-detection"></a>
+## 运行状态检测
 
-The `status` column is the canonical lifecycle state:
+`status` 列是权威生命周期状态：
 
-| `status` | Meaning | How it's set |
+| `status` | 含义 | 设置方式 |
 |----------|---------|-------------|
-| `RUNNING` | Actively being processed | `start_experiment`, resume mutation, orphan recovery |
-| `COMPLETED` | All work exhausted | `_set_experiment_stopped` (no error) |
-| `STOPPED` | User-initiated stop | Stop mutation |
-| `ERROR` | Circuit breaker tripped | `_set_experiment_stopped` (with error) |
+| `RUNNING` | 正在处理 | `start_experiment`、恢复变更操作、孤立实验恢复 |
+| `COMPLETED` | 全部工作已完成 | `_set_experiment_stopped`（无错误） |
+| `STOPPED` | 用户主动停止 | 停止变更操作 |
+| `ERROR` | 熔断器触发 | `_set_experiment_stopped`（有错误） |
 
-The `claimed_at` / `claimed_by` columns track replica ownership (heartbeat liveness):
+`claimed_at` / `claimed_by` 列跟踪副本所有权（心跳存活状态）：
 
-| `claimed_at` Value | Meaning | Notes |
+| `claimed_at` 值 | 含义 | 说明 |
 |--------------------|---------|-------|
-| `NULL` | No replica owns it | Available for resume |
-| Recent (within heartbeat) | Owned by `claimed_by` | Actively being processed |
-| Stale (older than 10 min) | Orphaned | Crashed replica; will be auto-recovered |
+| `NULL` | 没有副本拥有它 | 可以恢复 |
+| 最近时间（心跳有效期内） | 归 `claimed_by` 所有 | 正在处理 |
+| 过期时间（超过 10 分钟） | 已孤立 | 副本已崩溃，将自动恢复 |
 
 ---
 
-## Design Decisions
+<a id="design-decisions"></a>
+## 设计决策
 
-### Why Pydantic Models for JSON Columns?
+<a id="why-pydantic-models-for-json-columns"></a>
+### 为什么 JSON 列使用 Pydantic 模型？
 
-1. **Type safety** — Models are validated at runtime
-2. **Serialization** — Automatic JSON conversion via SQLAlchemy TypeDecorator
-3. **Documentation** — Schema is self-documenting in code
-4. **Immutability** — `frozen=True` prevents accidental mutation
+1. **类型安全**：运行时验证模型。
+2. **序列化**：通过 SQLAlchemy TypeDecorator 自动转换 JSON。
+3. **文档**：代码中的结构本身即可说明设计。
+4. **不可变性**：`frozen=True` 防止意外修改。
 
-### Why No Version Field in JSON?
+<a id="why-no-version-field-in-json"></a>
+### 为什么 JSON 中没有版本字段？
 
-The original design included a `version` field for schema evolution. Omitted because:
+原设计包含用于结构演进的 `version` 字段，省略原因如下：
 
-1. **Pydantic handles evolution** — Optional fields with defaults enable backward compatibility
-2. **Database migrations** — Schema changes can be handled via Alembic if needed
-3. **Simplicity** — One less field to maintain
+1. **Pydantic 处理演进**：带默认值的可选字段支持向后兼容。
+2. **数据库迁移**：必要时可通过 Alembic 处理结构变更。
+3. **简单性**：减少一个需要维护的字段。
 
-### Why `custom_provider_id` Reference Instead of Credential Snapshot?
+<a id="why-custom_provider_id-reference-instead-of-credential-snapshot"></a>
+### 为什么引用 `custom_provider_id`，而不保存凭证快照？
 
-Custom provider credentials are stored encrypted in `generative_model_custom_providers`. We store only the ID reference:
+自定义提供商凭证加密存储在 `generative_model_custom_providers` 中。这里只保存 ID 引用：
 
-- Credentials are never copied to experiment config (security)
-- If provider is deleted, experiment fails on resume (acceptable trade-off)
-- Credentials are fetched at runtime from the provider table
+- 不会将凭证复制到实验配置中（安全考虑）。
+- 提供商被删除时，实验恢复将失败（可接受的取舍）。
+- 运行时从提供商表获取凭证。
 
-### Why Separate `task_config` and `evaluator_configs`?
+<a id="why-separate-task_config-and-evaluator_configs"></a>
+### 为什么分离 `task_config` 和 `evaluator_configs`？
 
-1. **Different lifecycles** — Task config is fixed; evaluators can be added later
-2. **Different complexity** — Evaluators have their own provider/model config
-3. **Query patterns** — May need to query evaluators independently
+1. **生命周期不同**：任务配置固定，评估器可以稍后添加。
+2. **复杂度不同**：评估器有自己的提供商和模型配置。
+3. **查询模式**：可能需要单独查询评估器。
 
 ---
 
-## Table Relationships
+<a id="table-relationships"></a>
+## 表关系
 
 ```
 experiments
@@ -82,9 +90,9 @@ experiment_runs
     └── output, error, etc.
 ```
 
-**Key points:**
-- `experiment_execution_configs` is 1:1 with `experiments`
-- `status` is the canonical lifecycle state, set atomically alongside `claimed_at` changes
-- `claimed_at` / `claimed_by` track replica ownership for heartbeat and orphan detection
-- `cooldown_until` stores an absolute future timestamp; the next stop/resume is blocked until `cooldown_until <= now`
-- Progress is computed from `experiment_runs`, not stored in config
+**要点：**
+- `experiment_execution_configs` 与 `experiments` 为一对一关系。
+- `status` 是权威生命周期状态，与 `claimed_at` 的变化原子设置。
+- `claimed_at` / `claimed_by` 跟踪副本所有权，用于心跳和孤立检测。
+- `cooldown_until` 保存未来的绝对时间戳；在 `cooldown_until <= now` 之前阻止下一次停止或恢复。
+- 进度根据 `experiment_runs` 计算，不存储在配置中。

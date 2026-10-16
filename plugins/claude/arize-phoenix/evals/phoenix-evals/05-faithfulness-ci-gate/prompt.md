@@ -5,4 +5,4 @@ allowed_tools: [Skill, Read, Write]
 runs: 3
 tags: [phoenix-evals]
 ---
-I want CI to catch regressions in my RAG bot. Its responses must always be non-empty, valid JSON, and I want to know when faithfulness drops. We already use pytest for everything else, and I'd like the results recorded to Phoenix so I can track them over time. Add it as `test_faithfulness.py`.
+我希望 CI 能发现 RAG 机器人的回归问题。机器人的回复必须始终非空且为有效 JSON，我也希望知道忠实性何时下降。我们已对其他功能使用 pytest，并希望将结果记录到 Phoenix，以便持续跟踪。请将测试添加到 `test_faithfulness.py`。

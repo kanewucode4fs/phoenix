@@ -1,8 +1,7 @@
 ---
 name: phoenix-otel-development
 description: >
-  Guide for the phoenix-otel TypeScript package — OTel registration,
-  stack-based global provider management, and provider lifecycle.
+  phoenix-otel TypeScript 包指南：OTel 注册、基于栈的全局提供程序管理以及提供程序生命周期。
 license: Apache-2.0
 metadata:
   author: oss@arize.com
@@ -11,25 +10,31 @@ metadata:
   internal: true
 ---
 
-# Phoenix OTel Development
+<a id="phoenix-otel-development"></a>
 
-OpenTelemetry registration and provider lifecycle layer for Phoenix. Single source of truth for OTel configuration — other Phoenix packages delegate here rather than importing OTel packages directly.
+# Phoenix OTel 开发
 
-Read existing code in the directory you're working in before writing new code.
+Phoenix 的 OpenTelemetry 注册及提供程序生命周期层，是 OTel 配置的唯一事实来源；其他 Phoenix 包委托此处处理，而非直接导入 OTel 包。
 
-## Rule Files
+编写新代码前，先阅读当前工作目录中的现有代码。
 
-| Rule file                            | When to read                                                          |
+<a id="rule-files"></a>
+
+## 规则文件
+
+| 规则文件                            | 阅读时机                                                          |
 | ------------------------------------ | --------------------------------------------------------------------- |
-| `rules/global-provider-lifecycle.md` | Global provider attachment, detachment, snapshot/restore, mount stack |
-| `rules/register-api.md`              | `register()`, span processor setup, public API surface                |
-| `rules/testing.md`                   | Tests for provider lifecycle, registration, span export               |
+| `rules/global-provider-lifecycle.md` | 全局提供程序的挂载、分离、快照/恢复、挂载栈 |
+| `rules/register-api.md`              | `register()`、Span 处理器配置、公共 API 接口                |
+| `rules/testing.md`                   | 提供程序生命周期、注册和 Span 导出测试               |
 
-## Build and Test
+<a id="build-and-test"></a>
+
+## 构建与测试
 
 ```bash
 cd js/
 pnpm --filter phoenix-otel test
 ```
 
-Dual-module output (CJS + ESM). Tests use **vitest**.
+双模块输出（CJS + ESM）。测试使用 **vitest**。

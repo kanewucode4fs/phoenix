@@ -1,264 +1,166 @@
-# Span Filter DSL
+<a id="span-filter-dsl"></a>
 
-> This spec (with its conformance tests) is the authority on what the language accepts. The
-> **user-facing** grammar reference is the public
-> [Filter Expressions](https://arize.com/docs/phoenix/tracing/how-to-tracing/filter-expressions)
-> doc — a curated derivative of this spec, not a second authority. Keep them in sync when the
-> accepted grammar changes.
+# Span 过滤 DSL
 
-Reference for the filter-condition language implemented in
-`src/phoenix/trace/dsl/filter.py`.
+> 本规范及其一致性测试是判断语言接受哪些形式的权威依据。**面向用户**的语法参考是公开的[过滤表达式](https://arize.com/docs/phoenix/tracing/how-to-tracing/filter-expressions)文档，它是本规范经整理的派生文档，并非第二个权威来源。接受的语法变化时，应保持两者同步。
 
-Statements here were verified against the code, and dialect-dependent behavior
-was executed rather than reasoned about. The version matrix that claim rests on:
+`src/phoenix/trace/dsl/filter.py` 中实现的过滤条件语言参考。
 
-| Backend | Verified on | Floor |
+此处陈述均已对照代码验证，依赖方言的行为通过实际执行确认，而非仅凭推理。该结论依赖的版本矩阵如下：
+
+| 后端 | 验证版本 | 最低要求 |
 |---|---|---|
-| SQLite | bundled `sqlean` build | `text_contains` and the JSON functions `sqlean` provides |
-| PostgreSQL | 12.22, **14.19 (full DSL suites)**, 17.6 (full DSL suites), 17.10 | **14**, the product floor — the language itself needs only `jsonb_path_query_first` (PG 12) and `jsonb`→`numeric` casts (PG 11) |
-| CPython (grammar host) | 3.10 in pre-merge CI; 3.10 / 3.13 / 3.14 in the scheduled all-platforms run | 3.10 — the grammar is whatever `ast.parse` accepts on the running interpreter |
+| SQLite | 捆绑的 `sqlean` 构建 | `sqlean` 提供的 `text_contains` 和 JSON 函数 |
+| PostgreSQL | 12.22、**14.19（完整 DSL 套件）**、17.6（完整 DSL 套件）、17.10 | **14**，即产品最低版本；语言本身仅需要 `jsonb_path_query_first`（PG 12）及 `jsonb`→`numeric` 转换（PG 11） |
+| CPython（语法宿主） | 合并前 CI 为 3.10；定时全平台运行覆盖 3.10 / 3.13 / 3.14 | 3.10；语法由运行中解释器的 `ast.parse` 接受范围决定 |
 
-Two floors are in play and only one is a support commitment. The *language's*
-feature floor is PostgreSQL 12, because `SafeJsonFloat` compiles to
-`jsonb_path_query_first`, which does not exist before it. The *product* floor
-is 14 — the oldest version still receiving upstream fixes — decided in
-[#14940](https://github.com/Arize-ai/phoenix/issues/14940), and it is the
-version the guarantees here must hold on. Behavioral checks below were run on
-17; the cast and JSON-path shapes the guarantees depend on were additionally
-confirmed on 12.22, which bounds 14 from below. Anything claimed here for a
-version outside that matrix is unverified.
+这里有两个最低版本，但只有一个构成支持承诺。*语言*功能最低要求是 PostgreSQL 12，因为 `SafeJsonFloat` 编译为此前不存在的 `jsonb_path_query_first`。*产品*最低要求是 14，即仍接收上游修复的最旧版本，由 [#14940](https://github.com/Arize-ai/phoenix/issues/14940) 决定；本规范的保证必须在该版本成立。下述行为检查在 17 上运行；保证依赖的转换和 JSON 路径形式还在 12.22 上额外确认，从更低版本界定 14 的能力。对矩阵之外版本的任何断言均未经验证。
 
-The host interpreter belongs in this matrix because it *defines the grammar*:
-acceptance, AST shape, and error wording are properties of the running
-CPython's `ast.parse`, and they change across releases. Phoenix supports 3.10
-through 3.14. Pre-merge CI runs the unit suites — the conformance corpus
-included — on 3.10 only and against the runner's installed PostgreSQL
-(currently 16). The scheduled all-platforms run adds the newer interpreters
-but **not** the floor database: its unit job installs the runner's PostgreSQL
-the same way, and the `postgres:14` service containers back only the
-integration jobs, which do not run these suites. The unit jobs are therefore
-**pinned to the floor**: they install `postgresql-14` from the PGDG repository
-and pass `--postgresql-exec /usr/lib/postgresql/14/bin/pg_ctl`, so
-`pytest-postgresql` spawns the version the guarantees must hold on rather than
-whatever the runner's Ubuntu ships. (The full suites were first executed on
-14.19 and 17.6 locally, 2026-07-31, all green; the same `--postgresql-exec`
-flag selects a version for local runs, e.g.
-`/opt/homebrew/opt/postgresql@14/bin/pg_ctl`.) Newer-version coverage rides on
-the all-platforms macOS leg and the integration containers; interpreter drift
-on 3.13/3.14 is still caught only by the scheduled run.
+宿主解释器也必须列入矩阵，因为它*定义语法*：接受范围、AST 形态和错误措辞都是运行中 CPython `ast.parse` 的属性，会随版本变化。Phoenix 支持 3.10 到 3.14。合并前 CI 仅在 3.10 上运行单元套件（包括一致性语料），并使用运行器安装的 PostgreSQL（当前为 16）。定时全平台运行增加较新解释器，但**没有**最低版本数据库：单元作业以同样方式安装运行器的 PostgreSQL，`postgres:14` 服务容器只支持不运行这些套件的集成作业。因此，单元作业现在**固定到最低版本**：从 PGDG 仓库安装 `postgresql-14`，并传入 `--postgresql-exec /usr/lib/postgresql/14/bin/pg_ctl`，使 `pytest-postgresql` 启动保证应成立的版本，而不是运行器 Ubuntu 自带版本。（完整套件于 2026-07-31 首次在本地 14.19 和 17.6 执行，全部通过；本地也可用相同 `--postgresql-exec` 标志选版本，例如 `/opt/homebrew/opt/postgresql@14/bin/pg_ctl`。）较新版本覆盖依赖全平台 macOS 作业及集成容器；3.13/3.14 的解释器漂移仍仅由定时运行发现。
 
-## What This Is
+<a id="what-this-is"></a>
 
-A user-facing expression language, written in a subset of Python syntax, that
-compiles to a SQLAlchemy `WHERE` clause over the `spans` table. It reaches the
-server from three directions:
+## 这是什么
 
-- the filter field in the spans/traces UI (`SpanFilterConditionField`)
-- the `spans(filterCondition:)` GraphQL argument and its sibling resolvers
-- `SpanQuery` in the REST/client surface, via `SpanFilter.from_dict`
+一种面向用户的表达式语言，以 Python 语法子集编写，编译为针对 `spans` 表的 SQLAlchemy `WHERE` 子句。它通过三个方向到达服务器：
 
-The public entry points are `SpanFilter(condition)`, the module-level
-`root_span_scope(condition)`, and `SpanFilterError` — the exception type
-callers catch, and part of the API contract: the GraphQL error masker
-(`exceptions.py`) surfaces its message verbatim because it is known to be
-user-safe. All three are exported from `phoenix.trace.dsl`.
+- Span/追踪 UI 中的过滤字段（`SpanFilterConditionField`）
+- `spans(filterCondition:)` GraphQL 参数及同类解析器
+- REST/客户端接口中的 `SpanQuery`，通过 `SpanFilter.from_dict`
 
-### Why the grammar is about to become a contract
+公共入口是 `SpanFilter(condition)`、模块级 `root_span_scope(condition)` 和 `SpanFilterError`；后者是调用方捕获的异常类型，也是 API 契约的一部分：GraphQL 错误屏蔽器（`exceptions.py`）因其消息已知对用户安全，而将其原样展示。三者均从 `phoenix.trace.dsl` 导出。
 
-Filter conditions are currently transient: typed into a field, sent with a
-query, forgotten. They already leak into URLs, which makes them semi-durable.
-**Once conditions are persisted in the database, the grammar becomes a
-compatibility surface** — every stored row is an expression that some future
-version of this parser has to keep accepting, with unchanged meaning.
+<a id="why-the-grammar-is-about-to-become-a-contract"></a>
 
-This document exists to make that surface explicit. [Persistence
-Contract](#persistence-contract) is the section that matters for that work; the
-rest defines what is being persisted.
+### 为什么语法即将成为契约
+
+过滤条件目前是临时的：输入字段、随查询发送，然后丢弃。它们已出现在 URL 中，因此具有半持久性。**一旦条件持久化到数据库，语法就成为兼容性接口**：每条存储记录都是表达式，未来某版本解析器必须继续接受，并保持含义不变。
+
+本文档旨在明确该接口。[持久化契约](#persistence-contract)是与该工作最相关的章节；其他内容定义被持久化的对象。
 
 ---
 
-## Evaluation Model
+<a id="evaluation-model"></a>
 
-Constructing a `SpanFilter` runs three phases, all of them before any query
-exists:
+## 求值模型
 
-| Phase | Where | Catches |
+构造 `SpanFilter` 会经历三个阶段，全部发生在查询存在之前：
+
+| 阶段 | 位置 | 捕获的问题 |
 |---|---|---|
-| 1. Parse | `ast.parse(mode="eval")` | Python syntax errors |
-| 2. Validate | `_validate_expression` → `_validate_operand_types` | Structure, types, boolean position |
-| 3. Translate & compile | `_FilterTranslator` → `compile` | Shapes the validator admits but cannot express |
+| 1. 解析 | `ast.parse(mode="eval")` | Python 语法错误 |
+| 2. 验证 | `_validate_expression` → `_validate_operand_types` | 结构、类型、布尔位置 |
+| 3. 转换与编译 | `_FilterTranslator` → `compile` | 验证器允许但无法表达的形式 |
 
-A fourth step, **evaluation**, happens later: `SpanFilter.__call__` evaluates the
-compiled expression against the SQLAlchemy namespace to produce the `WHERE`
-clause. Failures here — an operator SQLAlchemy cannot apply to the operand it
-was given — surface as arbitrary Python exceptions rather than
-`SpanFilterError`, which is why the validator has to exclude those shapes rather
-than rely on translation to reject them.
+第四步**求值**稍后才发生：`SpanFilter.__call__` 针对 SQLAlchemy 命名空间求值编译后表达式，生成 `WHERE` 子句。此时的失败，例如 SQLAlchemy 无法将运算符应用到给定操作数，会以任意 Python 异常而非 `SpanFilterError` 出现，因此验证器必须排除这些形式，不能依赖转换阶段拒绝。
 
-None of this touches a database. Every phase above is static; the query is only
-then handed to the backend, which is where
-[the remaining failure modes](#validation-is-not-execution) live.
+这些步骤都不访问数据库，以上每个阶段都是静态的。随后查询才交给后端，[其余失败模式](#validation-is-not-execution)存在于那里。
 
-`validateSpanFilterCondition` (GraphQL) runs all three phases, evaluates, and
-additionally compiles the statement to SQL text against **both dialects**,
-whichever backend is live. Compiling both is the enforcement of the
-dialect-independence guarantee in [Dialect Semantics](#dialect-semantics): a
-condition only one backend can compile is rejected everywhere, rather than
-validating on the deployment that happens not to hit the defect. It does
-**not** execute.
+`validateSpanFilterCondition`（GraphQL）执行三个阶段、求值，并且无论当前后端是什么，都会针对**两种方言**将语句编译为 SQL 文本。双方言编译落实[方言语义](#dialect-semantics)中的方言无关保证：只有一个后端能编译的条件会在所有部署中被拒绝，而不是在恰好没触发问题的部署上通过验证。它**不**执行查询。
 
-All three phases raise `SpanFilterError`, a subclass of `SyntaxError`. Stack
-exhaustion at any phase is normalized to
-`SpanFilterError("filter condition is nested too deeply")` rather than escaping
-as `RecursionError`.
+三个阶段均抛出 `SpanFilterError`，它是 `SyntaxError` 的子类。任何阶段的栈耗尽都被规范化为 `SpanFilterError("filter condition is nested too deeply")`，而不会以 `RecursionError` 泄露。
 
 ---
 
-## Grammar
+<a id="grammar"></a>
 
-### Expression forms
+## 语法
 
-The whole condition must be a **condition**, not a value. So must every operand
-of `and`, `or`, and `not`. A condition is one of:
+<a id="expression-forms"></a>
 
-| Form | Example | Whole condition | Operand of `and`/`or`/`not` |
+### 表达式形式
+
+完整条件必须是**条件**，不是值。`and`、`or`、`not` 的每个操作数也必须如此。条件是以下形式之一：
+
+| 形式 | 示例 | 完整条件 | `and`/`or`/`not` 的操作数 |
 |---|---|---|---|
-| Comparison | `latency_ms > 100` | yes | yes |
-| Chained comparison | `0.5 < latency_ms < 1000` | yes | yes |
-| Logical combination | `a == 1 and b == 2` | yes | yes |
-| Bare annotation (existence check) | `annotations['quality']` | yes | yes |
-| Quantifier over a collection | `any(d.cost > 1 for d in cost_details)` | yes | yes |
-| Boolean literal | `True`, `False` | **no** | yes |
+| 比较 | `latency_ms > 100` | 是 | 是 |
+| 链式比较 | `0.5 < latency_ms < 1000` | 是 | 是 |
+| 逻辑组合 | `a == 1 and b == 2` | 是 | 是 |
+| 裸标注（存在性检查） | `annotations['quality']` | 是 | 是 |
+| 集合上的量词 | `any(d.cost > 1 for d in cost_details)` | 是 | 是 |
+| 布尔字面量 | `True`, `False` | **否** | 是 |
 
-Anything else in either position is rejected. See
-[Boolean Position](#boolean-position).
+任一位置上的其他内容都会被拒绝。见[布尔位置](#boolean-position)。
 
-**Comprehensions.** `any` and `all` yield a condition; `len`, `sum`, `max`, and
-`min` yield a number and so must be compared. Each must be the sole argument of
-one of those six, range over a declared collection through a single `for` with a
-simple loop variable, and reference that variable only through the collection's
-declared element fields. `len` takes a list comprehension, the rest take a
-generator — inherited from CPython, where `len` needs a sized argument. The
-grain declares one collection, `cost_details`.
+**推导式。** `any` 和 `all` 产生条件；`len`、`sum`、`max` 和 `min` 产生数字，因此必须进行比较。每个推导式必须是这六个函数之一的唯一参数，通过带简单循环变量的单个 `for` 遍历已声明集合，并且只能通过集合声明的元素字段引用该变量。`len` 接受列表推导式，其余接受生成器；这继承自 CPython，因为 `len` 需要有长度的参数。该粒度声明一个集合：`cost_details`。
 
-The `cost_details` element scope is closed and strictly typed:
+`cost_details` 元素作用域封闭且严格类型化：
 
-- Only the loop variable's declared fields are available. Span names,
-  `attributes[...]`, `metadata[...]`, and compatibility aliases are rejected.
-  Compare span values outside the comprehension, for example
-  `total_cost > 1 and any(d.cost > 0 for d in cost_details)`.
-- Unknown fields and typed mismatches are rejected. For example, `d.cots`
-  reports an unknown field and `d.cost > '100'` reports incompatible types.
-- `int(...)` is unsupported, and casting a value to its existing type is
-  rejected as a no-op.
-- Each `if` clause must be a condition; a bare text field is not valid.
+- 仅允许循环变量已声明的字段。Span 名称、`attributes[...]`、`metadata[...]` 和兼容别名会被拒绝。Span 值应在推导式外比较，例如 `total_cost > 1 and any(d.cost > 0 for d in cost_details)`。
+- 未知字段和类型不匹配会被拒绝。例如，`d.cots` 报未知字段，`d.cost > '100'` 报类型不兼容。
+- 不支持 `int(...)`，将值转换为已有类型会作为无效操作被拒绝。
+- 每个 `if` 子句都必须是条件，裸文本字段无效。
 
-At the top level, unknown names resolve to dynamic attribute paths.
-Therefore `totl_cost > 1` is valid, while the same unknown name inside a
-`cost_details` comprehension is rejected.
+顶层未知名称会解析为动态属性路径。因此 `totl_cost > 1` 有效，而 `cost_details` 推导式内的相同未知名称会被拒绝。
 
-Empty-collection results follow CPython: `all(())` is true, `len(())` and
-`sum(())` are `0`. `max(())`/`min(())` raise in Python and are NULL here, which
-fails every comparison — the language cannot raise per row.
+空集合结果遵循 CPython：`all(())` 为真，`len(())` 和 `sum(())` 为 `0`。`max(())`/`min(())` 在 Python 中抛异常，在这里为 NULL，无法通过任何比较，因为语言不能逐行抛异常。
 
-A bare boolean literal is the one form that differs between the two columns:
-`name == 'x' and True` is accepted, `True` alone is not. A condition that
-selects every row is what an empty condition already expresses, so the literal
-form buys nothing and is rejected as the value it is.
+裸布尔字面量是表中两列唯一不同的形式：接受 `name == 'x' and True`，但不接受单独的 `True`。空条件已能表达选择所有行，因此字面量形式没有额外价值，按其值属性被拒绝。
 
-### Field names
+<a id="field-names"></a>
 
-Names resolve to typed span columns:
+### 字段名称
 
-**String** — `span_id`, `trace_id`, `parent_id`, `span_kind`, `name`,
-`status_code`, `status_message`, `context.span_id`, `context.trace_id`
+名称解析为带类型的 Span 列：
 
-**Number** — `latency_ms`, `cumulative_llm_token_count_prompt`,
-`cumulative_llm_token_count_completion`, `cumulative_llm_token_count_total`
+**字符串**：`span_id`、`trace_id`、`parent_id`、`span_kind`、`name`、`status_code`、`status_message`、`context.span_id`、`context.trace_id`
 
-**Datetime** — `start_time`, `end_time`
+**数字**：`latency_ms`、`cumulative_llm_token_count_prompt`、`cumulative_llm_token_count_completion`、`cumulative_llm_token_count_total`
 
-**Number, via attributes** — `llm.token_count.prompt`,
-`llm.token_count.completion`, `llm.token_count.total`. These live in the JSON
-`attributes` column but are known to be numeric, so they are cast rather than
-compared as text.
+**日期时间**：`start_time`、`end_time`
 
-**Case-folded enums** — `span_kind` and `status_code` hold uppercase enum
-values (`'LLM'`, `'OK'`, …), and any string literal compared against either is
-uppercased during translation — including each element of a membership list and
-the needle of a substring containment. `span_kind == 'llm'`,
-`span_kind == 'LLM'`, and `span_kind in ['llm']` select the same rows. The fold
-applies to these two names only (`name == 'llm'` stays case-sensitive) and to
-literals only; a dynamic operand is compared as-is. This is observable meaning —
-a stored condition's row set depends on it — so the fold is part of the
-compatibility surface, not an implementation detail.
+**通过属性读取的数字**：`llm.token_count.prompt`、`llm.token_count.completion`、`llm.token_count.total`。它们位于 JSON `attributes` 列中，但已知为数值，因此会转换类型，而不作为文本比较。
 
-**Reserved** — `parent_span`. Usable *only* as `parent_span is None` /
-`parent_span is not None` (and the `==`/`!=` spellings). Traversal
-(`parent_span.name`) is rejected with a dedicated message; it is not yet
-supported. A span attribute literally named `parent_span` is still reachable as
-`attributes['parent_span']`.
+**统一大小写的枚举**：`span_kind` 和 `status_code` 存放大写枚举值（`'LLM'`、`'OK'` 等），与两者比较的任何字符串字面量都会在转换时变为大写，包括成员列表中的每个元素及子串包含判断的查找项。`span_kind == 'llm'`、`span_kind == 'LLM'` 和 `span_kind in ['llm']` 选择相同行。此规范化仅适用于这两个名称（`name == 'llm'` 仍区分大小写），且仅适用于字面量；动态操作数按原样比较。这是可观察语义，存储条件的行集依赖它，因此属于兼容性接口，而非实现细节。
 
-**Cost** — bare names reading this span's own cost row (`span_costs`, joined on
-demand — see [Cost names](#cost-names)):
+**保留名称**：`parent_span`。*仅*可用于 `parent_span is None` / `parent_span is not None`（以及 `==`/`!=` 写法）。遍历（`parent_span.name`）尚不支持，会以专用消息拒绝。实际名为 `parent_span` 的 Span 属性仍可通过 `attributes['parent_span']` 访问。
 
-- **Number** — `total_cost`, `prompt_cost`, `completion_cost`
-- **Collection** — `cost_details`, iterable only, with element fields
-  `token_type` (string), `is_prompt` (boolean), `cost`, `tokens`,
-  `cost_per_token` (number)
+**成本**：读取当前 Span 自身成本行的裸名称（`span_costs`，按需连接，见[成本名称](#cost-names)）：
 
-**This list is exhaustive.** Every identifier not named above — including ones
-that look like span columns, such as `events` — resolves to an attribute path,
-not a column. `events == 'x'` compiles to a comparison against
-`attributes['events']` and has nothing to do with the `events` column on the
-table.
+- **数字**：`total_cost`、`prompt_cost`、`completion_cost`
+- **集合**：`cost_details`，仅可迭代，元素字段为 `token_type`（字符串）、`is_prompt`（布尔值）、`cost`、`tokens`、`cost_per_token`（数字）
 
-`_NAMES` is the **evaluation namespace** handed to `eval`, not the set of names
-a user may write. It includes `attributes` and `events` because compiled
-expressions require them. The user-facing vocabulary is
-`_STRING_NAMES ∪ _FLOAT_NAMES ∪ _DATETIME_NAMES ∪ _FLOAT_ATTRIBUTES` plus the
-reserved keyword and the cost names — exactly the list above. The cost names are
-likewise absent from `_NAMES`: they are bound per-instance against an aliased
-join, which is also why `Projector` does not resolve them.
+**此列表完整无遗漏。** 未在上文列出的所有标识符，包括 `events` 等看似 Span 列的名称，都解析为属性路径，而非列。`events == 'x'` 编译为针对 `attributes['events']` 的比较，与表上的 `events` 列无关。
 
-### Cost names
+`_NAMES` 是交给 `eval` 的**求值命名空间**，不是用户可写名称的集合。它包含 `attributes` 和 `events`，因为编译后的表达式需要它们。面向用户的词汇表是 `_STRING_NAMES ∪ _FLOAT_NAMES ∪ _DATETIME_NAMES ∪ _FLOAT_ATTRIBUTES` 加上保留关键字及成本名称，恰好就是上述列表。成本名称也不在 `_NAMES` 中：它们按实例针对别名连接绑定，这也是 `Projector` 不解析它们的原因。
 
-Bare cost names resolve before dynamic attributes:
+<a id="cost-names"></a>
 
-| Spelling | Resolves to |
+### 成本名称
+
+裸成本名称先于动态属性解析：
+
+| 写法 | 解析结果 |
 |---|---|
-| `total_cost` | the current span's cost scalar |
-| `cost_details` | the current span's per-token cost rows |
-| `attributes['total_cost']` | the flat span attribute named `total_cost` |
-| `span.total_cost` | the dynamic attribute path `attributes['span']['total_cost']` |
-| `totl_cost` | the dynamic attribute path `attributes['totl_cost']` |
+| `total_cost` | 当前 Span 的成本标量 |
+| `cost_details` | 当前 Span 的逐 Token 成本行 |
+| `attributes['total_cost']` | 名为 `total_cost` 的平铺 Span 属性 |
+| `span.total_cost` | 动态属性路径 `attributes['span']['total_cost']` |
+| `totl_cost` | 动态属性路径 `attributes['totl_cost']` |
 
-`span` has no reserved meaning and may be used as a loop variable:
-`any(span.cost > 1 for span in cost_details)`.
+`span` 没有保留含义，可以用作循环变量：`any(span.cost > 1 for span in cost_details)`。
 
-Cost scalars coalesce to `0`; a span without a cost row satisfies
-`total_cost == 0`. Cost-detail fields remain nullable and follow the comparison
-rules in [Unknown types](#unknown-types).
+成本标量将空值合并为 `0`，因此无成本行的 Span 满足 `total_cost == 0`。成本明细字段仍可空，遵循[未知类型](#unknown-types)中的比较规则。
 
-The span vocabulary has no cost-row token-count scalar or aggregate
-cost-per-token scalar. Use these expressions instead:
+Span 词汇表没有成本行 Token 数标量，也没有聚合的单位 Token 成本标量。请改用以下表达式：
 
-| Want | Spelling |
+| 需求 | 写法 |
 |---|---|
-| Cost per token, this span | `sum(d.cost for d in cost_details) / sum(d.tokens for d in cost_details)` |
-| Cost per token, one token type | `any(d.cost_per_token > 0.0001 for d in cost_details)` |
-| Tokens, this span alone | `attributes['llm']['token_count']['total']` |
-| Tokens, this span and descendants | `cumulative_llm_token_count_total` |
+| 当前 Span 的单位 Token 成本 | `sum(d.cost for d in cost_details) / sum(d.tokens for d in cost_details)` |
+| 某种 Token 类型的单位 Token 成本 | `any(d.cost_per_token > 0.0001 for d in cost_details)` |
+| 仅当前 Span 的 Token 数 | `attributes['llm']['token_count']['total']` |
+| 当前 Span 及后代的 Token 数 | `cumulative_llm_token_count_total` |
 
-The ratio denominator is wrapped in `nullif`, so missing or zero tokens produce
-NULL instead of a division error or a rate of `0`. The token expressions read
-span attributes; `cumulative_llm_token_count_total` includes descendants.
+比值分母由 `nullif` 包裹，因此 Token 缺失或为零时产生 NULL，而非除法错误或 `0` 比率。Token 表达式读取 Span 属性；`cumulative_llm_token_count_total` 包含后代。
 
-### Backward-compatibility aliases
+<a id="backward-compatibility-aliases"></a>
 
-Rewritten before translation:
+### 向后兼容别名
 
-| Written | Resolves to |
+转换前重写：
+
+| 输入写法 | 解析结果 |
 |---|---|
 | `context.span_id` | `span_id` |
 | `context.trace_id` | `trace_id` |
@@ -266,13 +168,13 @@ Rewritten before translation:
 | `cumulative_token_count.completion` | `cumulative_llm_token_count_completion` |
 | `cumulative_token_count.total` | `cumulative_llm_token_count_total` |
 
-These are load-bearing for stored conditions. Removing one silently breaks every
-persisted expression that uses it.
+这些别名支撑已存储条件。移除任一别名，都会静默破坏使用它的所有持久化表达式。
 
-### Attribute access
+<a id="attribute-access"></a>
 
-Any identifier that is not a known name or reserved keyword becomes a JSON
-attribute path. All of these are equivalent ways to reach the same value:
+### 属性访问
+
+任何不是已知名称或保留关键字的标识符都会成为 JSON 属性路径。以下写法均等价，访问相同值：
 
 ```
 llm.model_name
@@ -281,203 +183,129 @@ attributes[['llm', 'model_name']]
 attributes['llm'][['model_name']]
 ```
 
-`metadata['k']` is sugar for `attributes['metadata']['k']`. Integer subscripts
-index into JSON arrays (`attributes['arr'][0]`). Attribute values are
-**schemaless**: their type is unknown at validation time, which is what
-[Unknown Types](#unknown-types) is about.
+`metadata['k']` 是 `attributes['metadata']['k']` 的语法糖。整数下标访问 JSON 数组（`attributes['arr'][0]`）。属性值**无模式约束**，验证时类型未知，这正是[未知类型](#unknown-types)讨论的内容。
 
-### Annotations
+<a id="annotations"></a>
 
-`annotations['name']` and `evals['name']` are the same accessor; `evals` is a
-legacy alias retained for compatibility. Valid members are `.score` (number),
-`.label` (string), and `.explanation` (string). Any other member is rejected,
-with a "did you mean" suggestion when it is close to a valid one.
+### 标注
 
-A bare `annotations['name']` is an **existence check** and is boolean-valued:
-true when an annotation row with that name exists on the span at all
-(`CASE WHEN <alias>.id IS NOT NULL`), regardless of whether its score, label,
-or explanation are null.
-Each distinct name in a condition produces its own aliased `LEFT JOIN` against
-`span_annotations`, so a condition may join the table several times.
+`annotations['name']` 和 `evals['name']` 是相同访问器；`evals` 是为兼容保留的旧别名。有效成员为 `.score`（数字）、`.label`（字符串）和 `.explanation`（字符串）。其他成员都会被拒绝，与有效名称接近时会给出“你是否想输入”的建议。
 
-Annotation names are spliced by **byte offset** into the source before
-translation (`_AnnotationExpressionAliaser`), which is why multi-byte names and
-multi-line sources are explicitly tested.
+裸 `annotations['name']` 是**存在性检查**，返回布尔值：只要 Span 上存在同名标注行就为真（`CASE WHEN <alias>.id IS NOT NULL`），无论其分数、标签或说明是否为 null。条件中的每个不同名称都会针对 `span_annotations` 生成独立别名 `LEFT JOIN`，因此同一条件可能多次连接该表。
 
-### Literals
+转换前，标注名称通过**字节偏移**拼接到源码中（`_AnnotationExpressionAliaser`），因此会显式测试多字节名称和多行源码。
 
-| Kind | Accepted |
+<a id="literals"></a>
+
+### 字面量
+
+| 种类 | 接受范围 |
 |---|---|
-| String | `'...'`, `"..."` |
-| Number | Python int/float literals |
-| Boolean | `True`, `False` |
-| Null | `None` |
-| Collection | list or tuple of literals, homogeneously typed, no `None` elements |
-| Datetime | ISO 8601 string **with an offset** |
+| 字符串 | `'...'`, `"..."` |
+| 数字 | Python int/float 字面量 |
+| 布尔值 | `True`, `False` |
+| 空值 | `None` |
+| 集合 | 同类型字面量组成的列表或元组，不含 `None` 元素 |
+| 日期时间 | **带偏移量**的 ISO 8601 字符串 |
 
-**Datetime literals must carry a timezone.** `'2024-01-01T00:00:00Z'` and
-`'2024-01-01T00:00:00+02:00'` are accepted; `'2024-01-01T00:00:00'` is rejected.
-A naive literal has no single defensible meaning — `UtcTimeStamp` reads naive
-values as server-local, so binding one would give the same stored condition a
-different boundary in deployments with different timezones. Reading it as UTC
-instead would be deterministic but would silently disagree with that existing
-convention, so the offset is required rather than guessed.
+**日期时间字面量必须携带时区。** 接受 `'2024-01-01T00:00:00Z'` 和 `'2024-01-01T00:00:00+02:00'`，拒绝 `'2024-01-01T00:00:00'`。无时区字面量没有唯一合理含义：`UtcTimeStamp` 将无时区值视为服务器本地时间，因此绑定这种值会使相同存储条件在不同时区部署中具有不同边界。改为视作 UTC 虽有确定性，却会静默违反现有约定，因此要求偏移，不作猜测。
 
-**Numeric strings** are accepted only inside an explicit `float()`/`int()` cast,
-and only when they match:
+**数字字符串**仅在显式 `float()`/`int()` 转换中接受，且必须匹配：
 
 ```
 [+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?
 ```
 
-Python's `float()` is deliberately *not* the test. It also accepts `1_000`,
-`nan`, `inf` and surrounding whitespace, which the two backends do not treat
-alike — SQLite casts `'1_000'` to `1.0` while PostgreSQL rejects it outright.
+这里有意*不*使用 Python 的 `float()` 作为判断。它还接受 `1_000`、`nan`、`inf` 及外围空白，而两个后端处理并不一致：SQLite 将 `'1_000'` 转为 `1.0`，PostgreSQL 直接拒绝。
 
-**Every numeric literal must be finite as a float**, in whatever spelling it
-arrives. The grammar above bounds the spelling, not the magnitude, so
-`float('1e400')` matches it and overflows to `inf` — the exact value the bare
-`1e400` rule rejects. The converted *value* is checked as well as the text, and
-the same rule covers unbounded int literals: Python parses `'9' * 320` digits
-happily, but neither backend has a faithful float for it — asyncpg refuses the
-bind while SQLite quietly stores infinity.
+**每个数值字面量都必须能表示为有限浮点数**，无论使用何种写法。上述语法限制拼写，不限制大小，因此 `float('1e400')` 虽匹配，却溢出为 `inf`，正是裸 `1e400` 规则拒绝的值。除文本外，也检查转换后的*值*；相同规则覆盖无界整数字面量：Python 能轻松解析 `'9' * 320` 位数字，但两个后端都无法忠实表示其浮点值，asyncpg 拒绝绑定，SQLite 则静默存储无穷。
 
-The finiteness rule is a boundary, not a precision guarantee: an int inside the
-float range but past the 53-bit mantissa (`2**53 + 1`) is accepted and compares
-in float precision, silently rounding. That falls under the numeric-precision
-non-guarantee in [Dialect Semantics](#dialect-semantics) rather than under
-validation.
+有限性规则只是边界，不是精度保证：处于浮点范围内但超过 53 位尾数的整数（`2**53 + 1`）会被接受，以浮点精度比较并静默舍入。这属于[方言语义](#dialect-semantics)中不保证数值精度的范围，而非验证问题。
 
-### Operators
+<a id="operators"></a>
 
-| Category | Supported | Rejected |
+### 运算符
+
+| 类别 | 支持 | 拒绝 |
 |---|---|---|
-| Comparison | `==` `!=` `<` `<=` `>` `>=` | — |
-| Identity | `is` `is not` (with `None`, `True`, `False`) | `is` with any other value |
-| Membership | `in` `not in` | — |
-| Logical | `and` `or` `not` | — |
-| Arithmetic | `+` `-` `*` `/` `%` | `**`, `&`, `\|`, `^`, `<<`, `>>` |
-| Unary | `-` `+` | — (see below) |
+| 比较 | `==` `!=` `<` `<=` `>` `>=` | — |
+| 身份判断 | `is` `is not`（配合 `None`, `True`, `False`） | 对其他值使用 `is` |
+| 成员判断 | `in` `not in` | — |
+| 逻辑 | `and` `or` `not` | — |
+| 算术 | `+` `-` `*` `/` `%` | `**`, `&`, `\|`, `^`, `<<`, `>>` |
+| 一元 | `-` `+` | —（见下文） |
 
-Rejected binary operators raise `invalid arithmetic operator`; unary `~` raises
-`unsupported operator`. See [Inherited Python
-Surface](#inherited-python-surface) for why the unary case needed its own rule.
+被拒绝的二元运算符抛出 `invalid arithmetic operator`，一元 `~` 抛出 `unsupported operator`。一元情况需要独立规则的原因见[继承的 Python 表达范围](#inherited-python-surface)。
 
-Unary `+` is the identity on a number and is dropped during translation;
-SQLAlchemy expressions define no `__pos__`.
+一元 `+` 对数字保持值不变，在转换时移除；SQLAlchemy 表达式未定义 `__pos__`。
 
-`in` is **overloaded** and its meaning depends on the right operand:
+`in` 是**重载**运算符，其含义取决于右操作数：
 
-- right side is a text field → **substring containment** (`'x' in output.value`)
-- right side is a list/tuple → **set membership** (`span_kind in ['LLM']`)
+- 右侧为文本字段 → **子串包含判断**（`'x' in output.value`）
+- 右侧为列表/元组 → **集合成员判断**（`span_kind in ['LLM']`）
 
-Membership requires a span field on the left. `1 in [1, 2]` is rejected: it
-would translate to `1.in_([1, 2])` and raise a bare `AttributeError` from inside
-`SpanFilter.__call__`.
+成员判断要求左侧为 Span 字段。`1 in [1, 2]` 被拒绝，因为它会转换为 `1.in_([1, 2])`，并从 `SpanFilter.__call__` 内部抛出未包装的 `AttributeError`。
 
-`None` is rejected inside a membership list. SQL `IN` compares elements with
-`=`, and `= NULL` is never true, so `name in [None]` can never match — and under
-three-valued logic `name not in ['a', None]` is never true for *any* row, which
-silently empties the result set. Missing values are tested with `is None` /
-`is not None`.
+成员列表内不允许 `None`。SQL `IN` 使用 `=` 比较元素，而 `= NULL` 永远不为真，因此 `name in [None]` 永远不匹配；三值逻辑下 `name not in ['a', None]` 对*任何*行都不为真，会静默清空结果集。缺失值应使用 `is None` / `is not None` 检查。
 
-Substring containment is **case-insensitive** on both backends (both operands
-are lower-cased before a `LIKE`-style containment test). This matches the
-session filter grain, so the same-looking query answers the same way in the
-spans and sessions views; the cross-grain reasoning is recorded in
-`session-filter-dsl.md` under *Case*. Equality (`==` / `!=`) and membership in
-a literal list stay exact. Case-folded enum fields need no needle handling
-under this rule — `'llm' in span_kind` and `'LLM' in span_kind` already match
-the same rows — while enum *equality* still uppercases its literal, so
-`span_kind == 'llm'` keeps matching (see [Field names](#field-names)).
+两个后端上的子串包含判断都**不区分大小写**（先将两个操作数转为小写，再执行类似 `LIKE` 的包含测试）。这与会话过滤粒度一致，使相同外观的查询在 Span 和会话视图中得到相同答案；跨粒度理由记录在 `session-filter-dsl.md` 的*大小写*章节。相等（`==` / `!=`）及字面量列表成员判断仍精确匹配。已统一大小写的枚举字段在此规则下无需处理查找项，`'llm' in span_kind` 和 `'LLM' in span_kind` 本来就匹配相同行；枚举*相等*比较仍将字面量转为大写，因此 `span_kind == 'llm'` 继续匹配（见[字段名称](#field-names)）。
 
-> Compatibility note: containment was case-sensitive (`strpos` /
-> `text_contains`) until the session filter DSL shipped. A saved filter using `in` returns the
-> same rows or more, never fewer; one using `not in` returns the same rows or fewer, never more.
+> 兼容性说明：在会话过滤 DSL 发布之前，包含判断区分大小写（`strpos` / `text_contains`）。使用 `in` 的已保存过滤器返回相同行或更多行，绝不更少；使用 `not in` 的返回相同行或更少行，绝不更多。
 
-### Casts
+<a id="casts"></a>
 
-`str(x)`, `float(x)`, `int(x)` are the only calls permitted. Every other call —
-`len()`, lambdas, comprehensions, method calls like `name.upper()` — is
-rejected. `float()` and `int()` are equivalent; both produce a float.
+### 类型转换
 
-A cast is only admitted where its result is the same on both backends, which
-rules out two operands:
+仅允许调用 `str(x)`、`float(x)`、`int(x)`。其他调用，包括 `len()`、lambda、推导式和 `name.upper()` 等方法调用，均被拒绝。`float()` 与 `int()` 等价，均产生浮点数。
 
-| Rejected | Why |
+只有两个后端的结果相同时才允许类型转换，因此排除以下两类操作数情形：
+
+| 拒绝形式 | 原因 |
 |---|---|
-| `float(True)`, `int(<boolean>)` | PostgreSQL rejects `CAST(true AS FLOAT)` |
-| `str(<boolean>)` | `true`/`false` on PostgreSQL, `1`/`0` on SQLite |
-| `str(<number>)` | a float's integral values print as `1` on PostgreSQL and `1.0` on SQLite |
-| `str(<datetime>)` | PostgreSQL renders in the session time zone, SQLite in UTC with microseconds |
-| `str(<non-string literal>)` | binds a Python value into a VARCHAR parameter; PostgreSQL refuses it |
+| `float(True)`, `int(<boolean>)` | PostgreSQL 拒绝 `CAST(true AS FLOAT)` |
+| `str(<boolean>)` | PostgreSQL 为 `true`/`false`，SQLite 为 `1`/`0` |
+| `str(<number>)` | 整数值浮点数在 PostgreSQL 显示为 `1`，SQLite 为 `1.0` |
+| `str(<datetime>)` | PostgreSQL 按会话时区渲染，SQLite 按 UTC 并带微秒渲染 |
+| `str(<non-string literal>)` | 将 Python 值绑定到 VARCHAR 参数，PostgreSQL 拒绝 |
 
-Every rule is by inferred **type**, not by syntax, because the same type reaches
-a cast in more than one shape. `annotations['q']` is an existence check that
-compiles to `CASE WHEN ... THEN <bind> ELSE <bind> END` over Python booleans, so
-`str(annotations['q'])` is the same defect as `str(True)` wearing a column's
-clothes; a rule written against literals catches one and not the other.
+每条规则都针对推断的**类型**，而非语法，因为相同类型可通过多种形态进入转换。`annotations['q']` 是存在性检查，会针对 Python 布尔值编译为 `CASE WHEN ... THEN <bind> ELSE <bind> END`，因此 `str(annotations['q'])` 只是披着列外衣的 `str(True)` 同类缺陷。仅针对字面量的规则会捕获一个而漏掉另一个。
 
-The number rule is the instructive one. It is **per value**: `str(score) ==
-'0.5'` agrees across backends and `str(score) == '1'` does not, because only
-integral floats print differently. It is also per *expression shape* —
-`latency_ms` happens to agree today because it compiles to a numeric expression
-rather than a float column. Neither distinction is one a user could be asked to
-track, and neither is visible in a fixture of conveniently fractional numbers.
-A cast whose portability depends on the data is not portable.
+数字规则最能说明问题。差异是**逐值**的：`str(score) ==
+'0.5'` 在后端间一致，而 `str(score) == '1'` 不一致，因为只有整数值浮点数打印不同。也依赖*表达式形态*：`latency_ms` 目前碰巧一致，因为它编译为数值表达式，而非浮点列。这些区别都不应要求用户追踪，也不会在一组恰好全为小数的测试数据中显露。可移植性依赖数据的类型转换并不可移植。
 
-What survives is `str()` over text, where it is a no-op, and over values whose
-type is unknown until the row is read. The latter is the shape it is actually
-used for — `'x' in str(metadata['k'])` — and substring search agrees on both
-backends. Equality against such a value does not; see
-[Dialect Semantics](#dialect-semantics).
+保留下来的形式是对文本使用 `str()`（无实际操作），以及对读取行前类型未知的值使用。后者才是它实际被使用的形式：`'x' in str(metadata['k'])`，其子串搜索在两个后端一致。针对这类值的相等比较并不一致，见[方言语义](#dialect-semantics)。
 
 ---
 
-## Type System
+<a id="type-system"></a>
 
-Five types plus *unknown*: `boolean`, `datetime`, `number`, `string`, `null`.
+## 类型系统
 
-### Inference
+五种类型，加上*未知*：`boolean`、`datetime`、`number`、`string`、`null`。
 
-`_get_filter_value_type` assigns a type to every node. Comparisons, logical
-expressions, boolean literals, and bare annotations are `boolean`. Known field
-names take their declared type. Annotation `.score` is `number`; `.label` and
-`.explanation` are `string`. `str()` is `string`; `float()`/`int()` are
-`number`. Arithmetic is `number`, except `+` over two strings, which is `string`
-(concatenation). Everything else — notably any JSON attribute — is **unknown**.
+<a id="inference"></a>
 
-### Comparison rule
+### 类型推断
 
-Two operands of *known but different* types cannot be compared. `null` is
-exempt, so `latency_ms == None` is legal.
+`_get_filter_value_type` 为每个节点分配类型。比较、逻辑表达式、布尔字面量和裸标注为 `boolean`。已知字段名采用声明类型。标注 `.score` 为 `number`；`.label` 和 `.explanation` 为 `string`。`str()` 为 `string`；`float()`/`int()` 为 `number`。算术为 `number`，两个字符串上的 `+` 除外，它为 `string`（拼接）。其余所有内容，尤其任何 JSON 属性，均为**未知**。
 
-There is exactly one exception, for datetimes: a string **literal** compared
-against a datetime field is bound as a datetime rather than rejected. That is
-how datetime literals are written at all. The exemption applies per element
-inside a membership list as well — `start_time in ['2024-01-01T00:00:00Z']` is
-legal, and each element must satisfy the datetime-literal rules (ISO 8601, with
-an offset).
+<a id="comparison-rule"></a>
 
-Booleans cannot be ordered: `<` `<=` `>` `>=` with a boolean-typed operand —
-a literal, or a boolean-valued expression like the bare annotation existence
-check — is rejected on both surfaces. On the span side the shape validated and
-then crashed at *evaluation* (SQLAlchemy refuses to order against a raw
-`True`/`False`), outside the error boundary, as a server error; on the
-experiment side it compiled to `numeric > boolean`, an operator PostgreSQL
-does not have. Every such comparison has a clearer spelling with `==`, `!=`,
-or `is`.
+### 比较规则
 
-Datetime fields are also the one place an *unknown*-typed operand is rejected
-rather than left to the cast heuristics: `start_time > attributes['x']` has no
-honest compilation — PostgreSQL has no comparison operator between `timestamp`
-and `varchar` at all (the statement validated and then failed at plan time),
-SQLite quietly compared text, and no total datetime conversion exists to
-define the shape with. The literal is the only portable spelling.
+两个*类型已知但不同*的操作数不能比较。`null` 例外，因此 `latency_ms == None` 合法。
 
-### No implicit numeric coercion
+日期时间只有一个特殊例外：与日期时间字段比较的字符串**字面量**会绑定为日期时间，而非被拒绝，因为日期时间字面量本来就这样书写。该例外也适用于成员列表中的每个元素，因此 `start_time in ['2024-01-01T00:00:00Z']` 合法，每个元素都必须满足日期时间字面量规则（ISO 8601，带偏移）。
 
-A quoted number against a numeric field is an **error**, not a coercion:
+布尔值不能排序：任一操作数为布尔类型（字面量，或裸标注存在性检查等布尔表达式）时，`<` `<=` `>` `>=` 在两个接口都被拒绝。在 Span 侧，这种形式此前通过验证，随后在*求值*时崩溃（SQLAlchemy 拒绝针对原始 `True`/`False` 排序），越过错误边界成为服务器错误；在实验侧则编译为 PostgreSQL 不存在的 `numeric > boolean` 运算符。这些比较都可以用 `==`、`!=` 或 `is` 更清晰表达。
+
+日期时间字段也是唯一直接拒绝*未知*类型操作数，而不交给类型转换启发式的地方：`start_time > attributes['x']` 无法被忠实编译，PostgreSQL 根本没有 `timestamp` 和 `varchar` 间的比较运算符（语句曾通过验证、在规划时失败），SQLite 则静默比较文本，也不存在对所有输入有定义的日期时间转换来为此形式定义语义。字面量是唯一可移植写法。
+
+<a id="no-implicit-numeric-coercion"></a>
+
+### 不隐式进行数值强制转换
+
+引号中的数字与数值字段比较是**错误**，不作强制转换：
 
 ```
 latency_ms > '100'                     ->  rejected
@@ -486,60 +314,43 @@ float('100') < latency_ms              ->  ok
 annotations['q'].score >= '0.5'        ->  rejected
 ```
 
-Both sides are statically typed at that comparison, so there is nothing to
-infer. The coercion this replaces was never correct: it bound the string as a
-float-typed parameter, which asyncpg refuses, so the condition validated and
-then failed when the query ran. It appeared to work only because SQLite is
-loosely typed and the tests asserting it merely constructed a `SpanFilter`
-without running one. Measured on `main`:
+该比较两侧类型都静态已知，无需推断。被替代的强制转换从未正确过：它将字符串绑定为浮点参数，asyncpg 拒绝，因此条件通过验证却在查询运行时失败。它看似有效，只因 SQLite 类型宽松，而对应测试只构造 `SpanFilter`、未执行。在 `main` 上实测：
 
-| Condition | SQLite | PostgreSQL |
+| 条件 | SQLite | PostgreSQL |
 |---|---|---|
-| `latency_ms > 100` | ok | ok |
-| `latency_ms > '100'` | ok | **fails at execution** |
-| `'100' < latency_ms` | ok | **fails at execution** |
-| `annotations['q'].score >= '0.5'` | ok | **fails at execution** |
+| `latency_ms > 100` | 正常 | 正常 |
+| `latency_ms > '100'` | 正常 | **执行时失败** |
+| `'100' < latency_ms` | 正常 | **执行时失败** |
+| `annotations['q'].score >= '0.5'` | 正常 | **执行时失败** |
 
-The error suggests the fix, but only when dropping the quotes would actually be
-valid: ``cannot compare number and string, write 100 instead of '100'``.
+错误会建议修复方式，但仅在去掉引号确实有效时提供：``cannot compare number and string, write 100 instead of '100'``。
 
-### Unknown types
+<a id="unknown-types"></a>
 
-An attribute's type cannot be known before the rows are read, so comparisons
-involving one are admitted and resolved at translation:
+### 未知类型
 
-- compared against a boolean → `SafeJsonBoolean`
-- compared against a number, or wrapped in `float()`/`int()` → `SafeJsonFloat`
-- otherwise → cast to text
+读取行之前无法知道属性类型，因此涉及属性的比较先接受，再于转换时解析：
 
-Both `SafeJson*` functions are **total**: a value that cannot be converted
-yields `NULL` and the row drops out rather than aborting the statement. This is
-the mechanism that makes schemaless attributes safe to filter on, and it is
-verified against deliberately hostile rows (`"abc"`, `"1_000"`, `"nan"`,
-`"inf"`, `" 12 "`, containers, nulls).
+- 与布尔值比较 → `SafeJsonBoolean`
+- 与数字比较，或包裹于 `float()`/`int()` → `SafeJsonFloat`
+- 其他情况 → 转为文本
 
-Every rule above resolves an unknown type against a *known* one. When both
-operands are unknown — one attribute compared to another — there is nothing to
-resolve against, and what happens depends on the operator:
+两个 `SafeJson*` 函数都是**全函数**：无法转换的值产生 `NULL`，该行被排除，而不导致语句中止。这使无模式属性可被安全过滤，并已针对刻意构造的恶意行验证（`"abc"`、`"1_000"`、`"nan"`、`"inf"`、`" 12 "`、容器、null）。
 
-- **Ordered** (`<` `<=` `>` `>=`) → both sides take `SafeJsonFloat`. Text
-  ordering would not merely disagree on near-equivalent encodings — it inverts
-  numeric order (`'9' > '10'` as PostgreSQL text, `9 < 10` as SQLite numbers) —
-  so order is defined numerically, and a row with no number on either side
-  drops out. This matches the experiment-run filter's treatment of the same
-  shape.
-- **Equality and membership** → the comparison falls to text with whatever the
-  extraction produced. This is the one place the type system has no answer, and
-  the backends do not agree on what it means; see
-  [Dialect Semantics](#dialect-semantics).
+上述每条规则都以*已知*类型解析未知类型。两个操作数都未知，即属性之间比较时，没有可参照类型，行为由运算符决定：
 
-Unknown types are *not* admitted in boolean position — see below.
+- **排序比较**（`<` `<=` `>` `>=`）→ 两侧都使用 `SafeJsonFloat`。文本排序不仅会在近似编码上不一致，还会反转数字顺序（PostgreSQL 文本 `'9' > '10'`，SQLite 数字 `9 < 10`），因此排序被定义为数值语义；任一侧无数字的行被排除。这与实验运行过滤器对相同形式的处理一致。
+- **相等及成员判断** → 使用提取产生的内容进行文本比较。这是类型系统唯一无法给出答案的地方，两个后端对此含义不一致，见[方言语义](#dialect-semantics)。
+
+布尔位置*不*允许未知类型，见下文。
 
 ---
 
-## Boolean Position
+<a id="boolean-position"></a>
 
-Every operand of `and`, `or`, `not` must be a condition.
+## 布尔位置
+
+`and`、`or`、`not` 的每个操作数都必须是条件。
 
 ```
 name == 'x' and r                  ->  `r` is not a condition, expected a
@@ -551,357 +362,195 @@ name == 'x' and annotations['q']   ->  ok  (existence check is boolean)
 name == 'x' and True               ->  ok
 ```
 
-Unknown-typed operands are rejected rather than coerced to truthiness. Two
-reasons:
+未知类型操作数会被拒绝，不会强制转换为真值，原因有二：
 
-1. **The overwhelmingly common source of this shape is a half-typed
-   expression** — `name == 'x' and ` plus one more character. Reporting that as
-   an error is more useful than silently filtering on whatever was typed.
-2. **The backends disagree about the consequence.** PostgreSQL aborts the
-   statement (`argument of AND must be type boolean, not type jsonb`); SQLite
-   coerces and silently returns the wrong rows. The second is worse, and it is
-   the one a developer on the default local database sees.
+1. **这类形式绝大多数来自输入到一半的表达式**，例如 `name == 'x' and ` 再加一个字符。报告错误比静默按已输入内容过滤更有用。
+2. **后端对结果处理不一致。** PostgreSQL 中止语句（`argument of AND must be type boolean, not type jsonb`）；SQLite 强制转换并静默返回错误行。后者更糟，而使用默认本地数据库的开发者看到的恰是它。
 
-Truthiness is not offered as an explicit cast either. There is no `bool()`.
+也不提供显式真值转换，不存在 `bool()`。
 
 ---
 
-## Dialect Semantics
+<a id="dialect-semantics"></a>
 
-Phoenix supports SQLite and PostgreSQL. The DSL's goal is that **a condition
-means the same thing on both, or is rejected on both.** The "Not guaranteed"
-list below is the measured distance from that goal: those shapes are accepted
-today and governed by the defined-divergence clause of the
-[compatibility policy](#the-compatibility-policy-additive-only) — semantically
-undefined, enumerated, and eligible to be given one meaning later.
+## 方言语义
 
-Guaranteed:
+Phoenix 支持 SQLite 和 PostgreSQL。DSL 的目标是：**条件在两者含义一致，或者在两者都被拒绝。** 下方“不保证”列表是与该目标之间的实测差距：这些形式目前被接受，并受[兼容性策略](#the-compatibility-policy-additive-only)中已定义差异条款约束，即语义未定义、明确列举，未来可以赋予统一含义。
 
-- Validation is dialect-independent. Accept/reject never varies by backend.
-- Dynamic JSON conversion is total on both (`SafeJsonFloat`,
-  `SafeJsonBoolean`), including the three JSON boolean encodings (`true`,
-  `"true"`, `1`) and their false counterparts, with JSON `null` matching neither.
-- A container never converts to a number. This needs `strict $.double()` on
-  PostgreSQL: a jsonpath in the default **lax** mode auto-unwraps arrays, so
-  `[1, 2]` converts to `1` and matches a comparison against a number the row
-  does not hold.
-- A JSON value is compared as the value it holds, never as its JSON *rendering*.
-  Both backends offer two accessors, and the difference is invisible in the
-  compiled SQL until a row exists: the structure-preserving one (`->` /
-  `json_quote`) renders the string `yes` as `"yes"` and an absent key as the
-  text `'null'`, so `x == 'yes'` and `x is None` are false for every row that
-  should match. Only the extracting accessor (`#>>` / `->>` on PostgreSQL, a
-  bare `json_extract` on SQLite) is correct for comparison. This is the
-  cheapest defect in the language to introduce and the most expensive to
-  notice, because nothing errors — the filter simply returns nothing.
-- `x is None` means **no usable value at that path**: a stored JSON `null` and
-  an absent key both satisfy it, and neither dialect can separate them once the
-  value is extracted. This is a deliberate conflation, not an accident of
-  implementation — it is the only reading both backends can express, and it is
-  what someone typing `is None` into a filter field means. A predicate that
-  appears to distinguish the two is evidence of a structure-preserving accessor,
-  which is wrong for comparison for the reasons above.
+保证：
 
-Not guaranteed:
+- 验证与方言无关。接受或拒绝绝不因后端变化。
+- 两者的动态 JSON 转换都是全函数（`SafeJsonFloat`、`SafeJsonBoolean`），包括三种 JSON 布尔编码（`true`、`"true"`、`1`）及对应假值，JSON `null` 不匹配任一布尔值。
+- 容器绝不会转换为数字。PostgreSQL 需要 `strict $.double()`：默认 **lax** 模式的 jsonpath 会自动展开数组，使 `[1, 2]` 转为 `1`，从而匹配该行实际没有持有的数字比较。
+- JSON 值按持有的值比较，绝不按 JSON *渲染文本*比较。两个后端都提供两类访问器，差异在有数据行之前无法从编译 SQL 中看出：保留结构的访问器（`->` / `json_quote`）将字符串 `yes` 渲染为 `"yes"`，缺失键渲染为文本 `'null'`，因此 `x == 'yes'` 和 `x is None` 对所有本应匹配的行都为假。只有提取访问器（PostgreSQL 的 `#>>` / `->>`，SQLite 的裸 `json_extract`）适合比较。这是此语言中最容易引入、最难察觉的缺陷，因为没有任何报错，过滤器只是返回空结果。
+- `x is None` 表示**该路径没有可用值**：存储 JSON `null` 和键缺失都满足；提取后两个方言都无法区分。这是有意合并，不是实现偶然，因为这是两个后端唯一都能表达的含义，也是用户在过滤字段输入 `is None` 时的意图。看似能区分两者的谓词，说明使用了保留结构的访问器，而根据上述理由，它不适合比较。
 
-- **JSON booleans compared as numbers.** SQLite's `json_extract` collapses JSON
-  `true` to the integer `1`, so `metadata['x'] >= 0` matches a boolean there and
-  not on PostgreSQL. The distinction is destroyed before the conversion sees
-  the value — `json_type` can recover it only when given the original column
-  *and* path — so closing this means passing the path down rather than the
-  extracted value.
-- **JSON booleans rendered as text.** The same collapse with the opposite sign:
-  extracted as text, `true` reads as `true` on PostgreSQL and as `1` on SQLite,
-  so a substring test against a boolean reaches it on one backend only.
-- **A JSON value compared for equality against a string literal.** PostgreSQL
-  extracts to text, so a stored `1` matches `'1'`; SQLite extracts a native
-  number, and its type rules make `1 = '1'` false. A stored JSON *string*
-  matches on both, so this is confined to values whose JSON type differs from
-  the literal's — which is to say, to exactly the rows a schemaless column is
-  likely to hold. Substring search (`in`) agrees on both and is the portable way
-  to ask.
-- **Two JSON values compared for equality.** A literal fixes the type of
-  the comparison; a second JSON value fixes nothing, so `==`/`!=` happen
-  in whatever type extraction produced. PostgreSQL compares jsonb text, where
-  object key order is canonical but `1` and `1.0` are different strings; SQLite
-  compares native values, where `1 == 1.0` holds and `true` has already become
-  `1`. All three cases disagree, in both directions. Note that comparing a key
-  against *itself* is unaffected — both sides render identically whatever the
-  rule — and is only ever an expensive spelling of `is not None`. (*Ordered*
-  comparison between two JSON values does not share this fate: it is defined
-  numerically via `SafeJsonFloat` on both sides — see
-  [Unknown types](#unknown-types) — precisely because text ordering would
-  invert numeric order rather than merely skew edge cases.)
-- **Row-level ordering and collation.** String comparison collation differs.
-- **Numeric precision.** PostgreSQL `NUMERIC` vs SQLite `REAL`.
-- **NULL sort position** in downstream `ORDER BY`.
+不保证：
 
-The last is a general hazard worth naming: **a conversion pipeline can destroy
-the information a later stage needs to decide correctly.** Once the extraction
-step has mapped two distinct JSON types onto one SQL value, no amount of care
-downstream can tell them apart.
+- **将 JSON 布尔值当数字比较。** SQLite 的 `json_extract` 将 JSON `true` 折叠为整数 `1`，因此 `metadata['x'] >= 0` 在 SQLite 匹配布尔值，在 PostgreSQL 不匹配。区别在转换取得值之前就被破坏；`json_type` 只有同时获得原始列*和*路径才能恢复，因此解决需要向下传路径，而非提取值。
+- **将 JSON 布尔值渲染为文本。** 同样折叠带来相反方向的差异：以文本提取时，`true` 在 PostgreSQL 为 `true`，SQLite 为 `1`，因此针对布尔值的子串测试只在一个后端匹配。
+- **JSON 值与字符串字面量比较相等。** PostgreSQL 提取为文本，因此存储的 `1` 匹配 `'1'`；SQLite 提取原生数字，其类型规则使 `1 = '1'` 为假。存储的 JSON *字符串*在两个后端都匹配，因此差异限于 JSON 类型不同于字面量的值，正是无模式列很可能包含的那些行。子串搜索（`in`）在两者一致，是可移植问法。
+- **两个 JSON 值比较相等。** 字面量确定比较类型，第二个 JSON 值则什么也不确定，因此 `==`/`!=` 在提取得到的类型中执行。PostgreSQL 比较 jsonb 文本，对象键顺序规范化，但 `1` 和 `1.0` 是不同字符串；SQLite 比较原生值，`1 == 1.0` 成立，`true` 已变为 `1`。这三类情况在两个方向均有差异。注意键与*自身*比较不受影响，因为无论规则如何两侧渲染相同；它始终只是成本更高的 `is not None` 写法。（两个 JSON 值之间的*排序*比较没有此问题：两侧通过 `SafeJsonFloat` 定义为数值语义，见[未知类型](#unknown-types)，正因为文本排序会反转数字顺序，而非只影响边界。）
+- **行级排序和排序规则。** 字符串比较的排序规则不同。
+- **数值精度。** PostgreSQL `NUMERIC` 与 SQLite `REAL`。
+- 下游 `ORDER BY` 中的 **NULL 排序位置**。
 
-Divergence here is the most expensive kind of defect this language can have: the
-same condition can crash one backend and return silently wrong rows on the
-other. Any new coercion must be **executed** against both before it lands —
-compiling against both is not sufficient, for the reasons in
-[Validation Is Not Execution](#validation-is-not-execution).
+最后还应明确一个普遍风险：**转换流水线可能破坏后续阶段正确判断所需的信息。** 一旦提取将不同 JSON 类型映射为同一个 SQL 值，下游再谨慎也无法区分。
 
-The guarantees above only hold on versions where the JSON facilities they rely
-on exist, so the oldest supported PostgreSQL is part of this contract and should
-be stated rather than inferred from whatever CI happens to pin.
+此处差异是语言代价最高的缺陷：相同条件可能使一个后端崩溃，在另一个后端静默返回错误行。任何新增强制转换在合入前必须在两个后端**执行**；双后端编译不够，原因见[验证不等于执行](#validation-is-not-execution)。
+
+上述保证只在其依赖的 JSON 能力存在的版本成立，因此受支持的最旧 PostgreSQL 是契约的一部分，应明确说明，而非根据 CI 碰巧固定的版本推断。
 
 ---
 
-## Root-Span Scope Analysis
+<a id="root-span-scope-analysis"></a>
 
-`root_span_scope(condition)` reports, from the condition alone, whether every
-matching row is guaranteed to be a root span. It answers one of:
+## 根 Span 范围分析
 
-| Verdict | Meaning |
+`root_span_scope(condition)` 仅根据条件，报告是否保证每个匹配行都是根 Span。返回以下结论之一：
+
+| 结论 | 含义 |
 |---|---|
-| `"strict"` | only spans with no parent pointer (`parent_id is None`) |
-| `"orphan_aware"` | no parent pointer, **or** a pointer to a span absent from the table |
-| `None` | cannot tell |
+| `"strict"` | 仅无父指针的 Span（`parent_id is None`） |
+| `"orphan_aware"` | 无父指针，**或**指向表中不存在 Span 的指针 |
+| `None` | 无法判断 |
 
-`strict` is a subset of `orphan_aware`. The analysis is **sound, not complete**:
-`None` is always a safe answer, and the verdict never over-claims. A disjunction
-that admits non-root spans yields `None`.
+`strict` 是 `orphan_aware` 的子集。分析**可靠但不完备**：`None` 始终是安全答案，结论绝不作过度保证。允许非根 Span 的析取返回 `None`。
 
-Two consumers depend on it: the UI, to choose between cumulative and per-span
-metric columns; and the query builder, to drop a redundant `root_spans_only`
-flag rather than pay for two correlated subqueries.
+两个使用方依赖它：UI 据此在累计及逐 Span 指标列间选择；查询构建器据此移除冗余的 `root_spans_only` 标志，避免两个关联子查询的成本。
 
-Because it is derived from the condition text, **a stored condition's scope
-verdict is part of its observable meaning.** Changing the analysis changes how
-stored conditions render.
+由于分析来自条件文本，**存储条件的范围结论属于其可观察语义。** 改变分析就会改变存储条件的渲染方式。
 
 ---
 
-## Validation Is Not Execution
+<a id="validation-is-not-execution"></a>
 
-`validateSpanFilterCondition` parses, validates, translates, and compiles to SQL
-text. Compiling is not executing, and the gap is real:
+## 验证不等于执行
 
-- PostgreSQL type errors surface at **plan** time, which compilation never
-  reaches. This was the original crash: `AND (attributes #> '{r}')` compiles
-  cleanly and is then rejected as `argument of AND must be type boolean, not
-  type jsonb`.
-- Parameter **binding** errors surface at execution. `cast('100', Float)`
-  compiles on both dialects, then fails because asyncpg will not encode a `str`
-  as a float parameter.
-- Data-dependent failures cannot be caught statically at all. A cast that
-  succeeds on every row in one project may fail in another.
+`validateSpanFilterCondition` 解析、验证、转换并编译为 SQL 文本。编译不是执行，两者确有差距：
 
-Consequences for design and testing:
+- PostgreSQL 类型错误在**规划**时出现，编译永远到不了该阶段。最初崩溃就是如此：`AND (attributes #> '{r}')` 可正常编译，随后以 `argument of AND must be type boolean, not
+  type jsonb` 拒绝。
+- 参数**绑定**错误在执行时出现。`cast('100', Float)` 在两种方言都能编译，但 asyncpg 不把 `str` 编码为浮点参数，随后执行失败。
+- 依赖数据的失败完全无法静态捕获。某项目每行都能成功的转换，在另一项目可能失败。
 
-1. **A test that only constructs a `SpanFilter` proves very little.** It
-   exercises parsing and validation and says nothing about the three layers
-   below. Coercion changes need execution-level tests that assert returned rows.
-2. **The UI cannot rely on validation alone.** The spans and traces tabs wrap
-   their content in an `ErrorBoundary` whose fallback re-renders the filter
-   field, so a condition that passes validation and still fails leaves the user
-   able to edit it rather than staring at a dead page.
+对设计和测试的影响：
 
-`EXPLAIN` was evaluated as a validation strategy and rejected as the primary
-mechanism: it is useless on SQLite (no type checking), speaks in SQL the user
-never wrote, guards only the GraphQL path, and duplicates work at apply time. It
-is genuinely useful as a **differential test oracle** — asserting that our
-validator and PostgreSQL agree on a generated corpus — which is not yet built.
+1. **只构造 `SpanFilter` 的测试几乎证明不了什么。** 它只覆盖解析和验证，不能说明下方三个层次。强制转换变更需要断言返回行的执行级测试。
+2. **UI 不能只依赖验证。** Span 和追踪选项卡将内容包裹在 `ErrorBoundary` 中，其回退界面重新渲染过滤字段，因此通过验证却仍失败的条件，可由用户继续编辑，而非面对失效页面。
+
+曾评估将 `EXPLAIN` 作为验证策略，但未采用为主要机制：它在 SQLite 无用（不检查类型），使用用户从未编写的 SQL 说话，仅保护 GraphQL 路径，而且应用时重复工作。它确实适合作为**差异测试判定依据**，对生成的语料断言验证器与 PostgreSQL 一致，目前尚未实现。
 
 ---
 
-## Persistence Contract
+<a id="persistence-contract"></a>
 
-### What is stored
+## 持久化契约
 
-The **condition string**, canonicalized. `SpanFilter` strips surrounding
-whitespace at construction, so `to_dict()` emits that normalized text and
-`from_dict` round-trips it exactly. Stripping is the only normalization
-performed — see [Stored text must be canonical](#stored-text-must-be-canonical)
-for what remains textually distinct.
+<a id="what-is-stored"></a>
 
-No parsed or compiled form is persisted, and none should be: the AST and
-generated SQL are implementation details that change between releases.
+### 存储什么
 
-### What can break a stored condition
+规范化后的**条件字符串**。`SpanFilter` 构造时去除外围空白，因此 `to_dict()` 输出规范化文本，`from_dict` 可精确往返还原。去除外围空白是唯一规范化；仍存在的文本差异见[存储文本必须规范化](#stored-text-must-be-canonical)。
 
-Ordered by how quietly it fails.
+不持久化任何解析或编译形式，也不应这样做：AST 和生成 SQL 是会随版本变化的实现细节。
 
-**1. Silent — annotation names.** A stored condition referencing
-`annotations['quality']` stays valid forever if that annotation is renamed or
-deleted; it simply matches nothing. This is deliberate — see Known Gaps: a
-validation-time name check would make validity depend on the live annotation
-table, and the dormant hook for one was removed. A stored filter can
-therefore rot into a silently-empty result; the persistence-era mitigation is
-advisory (warn at save or read time), not rejection.
+<a id="what-can-break-a-stored-condition"></a>
 
-**2. Silent — attribute paths.** Schemaless by definition. `attributes['x']` is
-never invalid, only empty. Instrumentation changes do not invalidate conditions;
-they change what they match.
+### 什么会破坏存储条件
 
-**3. Silent — root-scope analysis.** Changing `root_span_scope` changes which
-metric columns a stored condition renders, without changing the condition.
+按失败的隐蔽程度排序。
 
-**4. Loud — grammar tightening.** Any strictness increase invalidates stored
-rows wholesale. This is the one failure mode the additive-only policy exists to
-forbid, which is why the set of accepted forms has to be settled before the
-first condition is written.
+**1. 静默——标注名称。** 引用 `annotations['quality']` 的存储条件，在该标注重命名或删除后仍永久有效，只是不匹配任何内容。这是有意行为，见已知缺口：验证时检查名称会使有效性依赖实时标注表，相关未使用钩子已移除。因此，存储过滤器可能悄然退化为空结果；持久化时代的缓解方式是提示（保存或读取时警告），而非拒绝。
 
-**5. Silent, then loud — new reserved names.** Bare identifiers fall back to the
-attribute namespace, so reserving a name that was previously a valid attribute
-reference changes what existing conditions mean, or begins rejecting them. New
-*operators* are safe; new *vocabulary* is not.
+**2. 静默——属性路径。** 按定义无模式约束。`attributes['x']` 永远不会无效，只会为空。插桩变化不使条件失效，而是改变匹配内容。
 
-**6. Loud — removing a backward-compatibility alias.** The five aliases above
-are the only reason conditions written against the older spellings still parse.
+**3. 静默——根范围分析。** 改变 `root_span_scope` 会在条件不变的情况下，改变存储条件渲染的指标列。
 
-**7. Environment-dependent — dialect migration.** A condition stored while
-running on SQLite may fail on PostgreSQL afterwards, since the looser backend
-accepts constructs the stricter one rejects. Validity is not a property of the
-condition alone until both backends agree on it.
+**4. 显式失败——收紧语法。** 任何严格性增加都会使存储行大范围失效。仅允许增量变化的策略正是为禁止此类失败而存在，因此必须在写入第一个条件前确定接受形式集合。
 
-### The compatibility policy: additive only
+**5. 先静默，后显式失败——新增保留名称。** 裸标识符回退到属性命名空间，因此将此前有效的属性引用保留为名称，会改变现有条件含义，或开始拒绝它们。新*运算符*安全，新*词汇*不安全。
 
-**There is no grammar version, and there will not be one.**
+**6. 显式失败——移除向后兼容别名。** 上文五个别名是旧写法条件仍能解析的唯一原因。
 
-Not because a version could not travel — stored rows can carry a column, URLs
-a parameter, the text an inline envelope. The reason is an invariant worth
-more than the mechanism: **condition text is context-free.** The same string
-means the same thing typed into a filter box, embedded in a URL, stored on a
-row, or sent by a client, and it survives copying between those contexts —
-which is how conditions actually move. A version travels in an envelope, and
-copying separates text from envelope constantly; the first unversioned paste
-re-creates every problem the version was meant to solve, now with two grammars
-in play. Freezing the grammar costs less than versioning every channel a
-string can cross.
+**7. 依赖环境——方言迁移。** SQLite 运行期间保存的条件，随后在 PostgreSQL 上可能失败，因为宽松后端接受严格后端拒绝的构造。两个后端达成一致之前，有效性并非条件自身的属性。
 
-So the grammar evolves **additively**: nothing already accepted may be removed
-or given a different meaning. Internal structure — the translator, the planner,
-the generated SQL — is free to change. Accepted text and its meaning are not.
+<a id="the-compatibility-policy-additive-only"></a>
 
-One qualification, load-bearing enough to state as policy: **the promise
-assumes accepted text *has* a meaning, and some of it does not.** The
-[Known Gaps](#known-gaps) and the "not guaranteed" list in
-[Dialect Semantics](#dialect-semantics) enumerate shapes that are accepted
-while returning different rows per backend. For those there is no single
-meaning to preserve, and this policy takes the position that **defining one
-later is not a breaking change**: divergent-accepted text is semantically
-undefined, later definition is a repair, and the ordered-comparison fix (text
-order on one backend, numeric on the other, later defined as numeric on both)
-is the precedent. The obligation this creates is enumeration — a divergent
-shape not on the list is a shape someone will treat as defined — and each
-repair must be executed on both backends before it lands. Classification is
-the gate, not observation: text merely *seen* to fail is not thereby
-undefined — proving universal failure across data, drivers, and versions is
-harder than it looks, and a shape that executes successfully anywhere has a
-meaning someone may depend on. Only enumerated shapes are eligible.
+### 兼容性策略：仅允许增量变化
 
-What "additive" covers is narrower than it first appears:
+**没有语法版本，也不会有。**
 
-| Change | Safe? |
+不是因为版本无法随文本传递：存储行可加列，URL 可加参数，文本可加内联封装。原因是一个比机制更重要的不变量：**条件文本不依赖上下文。** 相同字符串无论输入过滤框、嵌入 URL、存储在行中，还是由客户端发送，含义都相同，并能在这些上下文间复制后保持有效；条件实际就是这样流动的。版本放在封装中，而复制经常将文本与封装分离；首次未带版本的粘贴就会重新引入版本本应解决的所有问题，此时还有两套语法并存。冻结语法比为字符串可经过的每个通道加版本成本更低。
+
+因此，语法以**增量方式**演进：已接受的内容不得移除或改义。转换器、规划器、生成 SQL 等内部结构可以自由变化，接受的文本及其含义不可以。
+
+有一项重要到必须明确列为策略的限定：**承诺假定接受的文本*有*含义，但部分文本没有。** [已知缺口](#known-gaps)和[方言语义](#dialect-semantics)中的“不保证”列表列举了当前接受、却在不同后端返回不同行的形式。它们没有单一含义可保留，因此本策略认为**未来定义统一含义不构成破坏性变更**：已接受但有差异的文本语义未定义，后续定义属于修复；排序比较修复就是先例（原本一个后端按文本、另一个按数字，后来统一定义为数字）。由此产生列举义务：未列出的差异形式会被当作已有定义；每次修复都必须在合入前对两个后端实际执行。分类才是门槛，而非观测：仅*看到*某文本失败，并不使其成为未定义；证明其对所有数据、驱动和版本都失败远比看起来困难，而在任何地方能成功执行的形式，都可能已有用户依赖其含义。只有被明确列举的形式才有资格。
+
+“增量”覆盖范围比初看更窄：
+
+| 变化 | 是否安全 |
 |---|---|
-| New operator, new literal form, new syntax | **Yes** — previously rejected text becomes accepted |
-| New annotation member, new cast function | **Yes** — same reason |
-| **New field name** | **No** — see below |
-| Removing or restricting anything | **No** |
+| 新运算符、新字面量形式、新语法 | **是**，此前被拒绝的文本变为接受 |
+| 新标注成员、新转换函数 | **是**，原因相同 |
+| **新字段名** | **否**，见下文 |
+| 移除或限制任何内容 | **否** |
 
-**A new field name is a breaking change, not an addition.** Bare identifiers
-fall back to the attribute namespace, so `foo` already means
-`attributes['foo']` for every `foo` that is not currently a field. Promoting any
-name to a field silently changes what existing conditions mean — they do not
-begin failing, they begin selecting different rows.
+**新增字段名是破坏性变更，而非增量变化。** 裸标识符回退到属性命名空间，因此 `foo` 已经表示 `attributes['foo']`，适用于当前不是字段的每个 `foo`。将任何名称提升为字段都会静默改变现有条件含义：它们不会开始失败，而是开始选择不同行。
 
-A new name is therefore only safe if it **cannot collide**: introduced under a
-namespace no attribute path can reach (a prefix, or a required accessor such as
-`span.new_field`), or verified against the fact that no stored condition uses it
-— which stops being verifiable the moment conditions live in a database owned by
-someone else.
+因此，新名称只有**不可能冲突**时才安全：放在属性路径无法到达的命名空间下（前缀，或 `span.new_field` 等必需访问器），或验证没有存储条件使用它；一旦条件存在于他人拥有的数据库，后者就无法再验证。
 
-If the vocabulary is expected to grow, the structural fix is to stop resolving
-bare unknown identifiers at all and require `attributes['foo']` explicitly. That
-is a restriction, so it is available only before persistence.
+若预期词汇会增长，结构性修复是彻底停止解析裸未知标识符，要求显式写为 `attributes['foo']`。这是收紧限制，因此仅在持久化前可做。
 
-### The tightening window closes at persistence
+<a id="the-tightening-window-closes-at-persistence"></a>
 
-The policy has a consequence worth stating plainly, because it is time-boxed.
+### 收紧窗口在持久化时关闭
 
-A restriction is only a breaking change *once conditions are stored*. Before
-that, it invalidates text a user can retype; after, it invalidates data. So the
-set of things this language will accept forever is fixed on the day the first
-condition is written to the database, whether or not anyone decides it that day.
+该策略有一个必须明确说明的后果，因为它有时间窗口。
 
-One honesty about the clock: Phoenix's database is not the only place these
-strings live. They already sit in URLs, browser history, `localStorage`
-suggestion lists, client code calling `SpanQuery`, and whatever external
-systems users have saved them into — the language has been public since it
-shipped, and every tightening in this hardening pass already invalidated some
-text somewhere. The window framing holds because those copies are *retypable*:
-the cost of a pre-persistence restriction is a user editing a string, not a
-migration. What closes the window is Phoenix taking *custody* — storing
-conditions it must keep honoring. That custody moment should be a **declared
-release** ("as of X, accepted defined expressions are additive-only"), not
-silently the timestamp of the first stored row, so that everyone can point at
-the release notes rather than at a database.
+只有*条件已存储之后*，限制才成为破坏性变更。此前使用户可重新输入的文本失效，此后则使数据失效。因此，语言将永远接受的内容集合，在第一个条件写入数据库那天就固定了，无论当天是否有人主动决定。
 
-**Anything that should be rejected has to be rejected before then.** Afterwards
-the only available response to a bad construct is to keep accepting it — which
-makes the final pre-persistence review the last chance to ask, of every accepted
-form, whether it can be evaluated honestly on both backends.
+必须诚实面对时间界线：Phoenix 数据库不是这些字符串唯一存在之处。它们已在 URL、浏览器历史、`localStorage` 建议列表、调用 `SpanQuery` 的客户端代码及用户保存的外部系统中；语言自发布起就是公开的，本轮加固每次收紧都已在某处使一些文本失效。窗口说法仍成立，因为这些副本*可以重新输入*：持久化前限制的代价是用户编辑字符串，而非数据迁移。真正关闭窗口的是 Phoenix 开始*托管*条件，即存储并承担持续接受的责任。这一时刻应是**明确宣布的发布**（“从 X 起，已接受且含义明确的表达式仅允许增量变化”），而非悄然发生于首行存储时间戳，让所有人都能引用发布说明，而非数据库。
 
-### Complexity is unbounded
+**应被拒绝的内容必须在此之前拒绝。** 之后对不良构造唯一可用的回应就是继续接受，因此持久化前最后审查，是最后一次逐项追问：每个已接受形式能否在两个后端忠实求值。
 
-Nothing in the grammar or the persistence path limits how expensive a condition
-may be. The only ceiling today is CPython's parser, which rejects roughly 500
-nested parentheses, and the recursion guard, which converts stack exhaustion
-into a `SpanFilterError`. Both are accidents of the host, not policy.
+<a id="complexity-is-unbounded"></a>
 
-The cost that matters is joins. Each **distinct annotation name** adds one
-aliased `LEFT OUTER JOIN` against `span_annotations`, with no cap:
+### 复杂度没有上限
 
-| Distinct names | Joins | Condition | Generated SQL |
+语法和持久化路径都不限制条件成本。目前唯一上限是 CPython 解析器大约拒绝 500 层嵌套括号，以及将栈耗尽转为 `SpanFilterError` 的递归保护。两者都只是宿主的偶然限制，不是策略。
+
+真正重要的成本是连接。每个**不同的标注名称**都添加一个针对 `span_annotations` 的别名 `LEFT OUTER JOIN`，没有上限：
+
+| 不同名称数 | 连接数 | 条件大小 | 生成 SQL 大小 |
 |---|---|---|---|
 | 1 | 1 | 27 B | 224 B |
 | 5 | 5 | 155 B | 1.0 KB |
 | 25 | 25 | 810 B | 5.0 KB |
 | 100 | 100 | 3.3 KB | 20 KB |
 
-A transient filter that someone typed is self-limiting — they are waiting for
-it. A **persisted** one is not: it can be applied automatically, on page load,
-across every view that inherits the saved object, by users who did not write it
-and cannot see its cost.
+用户键入的临时过滤器会自我限制，因为用户在等它。**持久化**过滤器不会：它可在页面加载时自动应用，遍及继承已保存对象的所有视图，由未编写它、也看不到其成本的用户触发。
 
-Before conditions become durable, bound at least:
+条件变为持久数据前，至少限制：
 
-- **byte length** of the condition text
-- **distinct annotation names**, which is the join count
-- **AST node count**, as a proxy for total work
-- **nesting depth**, explicitly rather than via the parser's limit
+- 条件文本的**字节长度**
+- **不同标注名称数**，即连接数
+- **AST 节点数**，作为总工作量的近似指标
+- 显式限制**嵌套深度**，而非依赖解析器上限
 
-These bounds are a requirement of the storage format, not optional follow-up
-hardening — but their *values* should come from measurement (the join table
-above is the start of one), not be invented in a document. What this spec can
-fix is the obligation and the deadline; the numbers belong to the persistence
-change, with the evidence attached.
+这些边界是存储格式的要求，不是可选的后续加固；但具体*数值*应来自测量（上方连接表就是起点），而不是在文档中凭空设定。本规范能固定的是义务及截止时间；数字应随持久化变更一起给出，并附证据。
 
-Persistence is the deadline, not the beginning of exposure: GraphQL and
-client callers can already submit arbitrarily long source, wide and deep
-ASTs, and unbounded annotation-join fan-out on every request, so the limits
-are an *availability* control that persistence merely makes non-optional.
-Message truncation bounds what comes back, not what parsing, translation,
-compilation, and the join build cost on the way in.
+持久化是截止时间，不是开始暴露的时刻：GraphQL 和客户端调用方现在每次请求就能提交任意长源码、宽而深的 AST，以及无上限的标注连接扩散。因此这些限制是*可用性*控制，持久化只是让它们成为必须。消息截断只限制返回内容，不限制输入侧解析、转换、编译和构建连接的成本。
 
-Limits are a restriction, so they are subject to the same window as everything
-else: a bound introduced after conditions are stored can invalidate saved rows.
+限制属于收紧，因此与其他所有限制适用同一窗口：条件存储后新增边界可能使已保存行失效。
 
-### Stored text must be canonical
+<a id="stored-text-must-be-canonical"></a>
 
-`to_dict()` emits `condition`, and `SpanFilter` normalizes that field at
-construction by stripping surrounding whitespace — so the stored form is the
-canonical one and `"  x == 1  "` and `"x == 1"` serialize identically.
+### 存储文本必须规范化
 
-That is the *only* normalization performed. Everything else that differs
-textually but not semantically remains distinct:
+`to_dict()` 输出 `condition`，`SpanFilter` 构造时通过去除外围空白规范化该字段，因此存储形式是规范形式，`"  x == 1  "` 与 `"x == 1"` 序列化结果相同。
+
+这是*唯一*的规范化。其他语义相同但文本不同的形式仍彼此独立：
 
 ```
 name == 'a'          vs   name=='a'          (spacing)
@@ -910,497 +559,244 @@ a == 1 and b == 2    vs   b == 2 and a == 1  (conjunct order)
 "x"                  vs   'x'                (quote style)
 ```
 
-Persistence has to decide what identity means, and the answer differs by use:
+持久化必须决定相同性的含义，不同用途答案不同：
 
-- **Deduplication and caching** need a canonical form. Textual identity will
-  treat the pairs above as distinct and cache them separately.
-- **Audit history and display** need the raw text. A user who saved `name=='a'`
-  should not find it rewritten.
-- **Migration** needs whichever form the grammar is checked against.
+- **去重和缓存**需要规范形式。文本相同性会将上面的每对形式视为不同，分别缓存。
+- **审计历史和显示**需要原始文本。保存 `name=='a'` 的用户不应发现它被重写。
+- **迁移**需要语法实际检查的形式。
 
-The cheapest defensible answer is to store raw text as written and derive a
-canonical key for dedup and caching — `ast.unparse` of the validated tree is
-already available and normalizes spacing and quoting, though not operand or
-conjunct order. Choosing "raw text is identity" is also defensible, but it
-should be chosen rather than inherited.
+成本最低且合理的方案是保存原始输入文本，并派生用于去重和缓存的规范键。对已验证树调用 `ast.unparse` 已可规范空白和引号，但不规范操作数或合取项顺序。选择“原始文本即身份”也合理，但应主动选择，而非无意继承。
 
-Note that a half-choice has already been made: construction strips surrounding
-whitespace, so one dimension of textual identity is normalized while the
-others are not. That is defensible on its own terms (it fixes a poor
-`IndentationError` and keeps `to_dict` output canonical), but it means "raw
-text as written" is already not quite what is stored, and the persistence
-decision should be made knowing it.
+注意，已经作出一部分选择：构造时去除外围空白，因此文本相同性的一维已规范化，其他维度没有。这本身合理（修复不友好的 `IndentationError`，并使 `to_dict` 输出规范），但意味着存储内容已经不完全是“原样文本”，持久化决策应知晓这一点。
 
-### Recommendations for the persistence work
+<a id="recommendations-for-the-persistence-work"></a>
 
-- **Validate on read, and degrade visibly.** A stored condition that no longer
-  parses should surface as a repairable error attached to the saved object — not
-  as a crash, and not as a silently absent filter.
-- **Decide the policy for vanished annotation names** before shipping. Options:
-  leave silent (status quo), validate on read against the project's current
-  names, or warn at save time only.
-- **Never persist generated SQL or a parsed form.** Only the source text is
-  stable across releases; the AST and SQL are implementation details.
-- **Pin or test the dialect.** A condition stored while running on SQLite may
-  fail after a migration to PostgreSQL, because SQLite accepts constructs the
-  stricter backend rejects.
-- **Choose the vocabulary-extension strategy before shipping.** Bare unknown
-  identifiers resolve to attributes, so a first-class field can never again be
-  added under the current resolution rule without changing stored meanings
-  (see principle 6). If the field vocabulary is expected to grow — and
-  observability schemas do — the strategy (a reserved namespace such as
-  `span.<field>`, or freezing the vocabulary outright) has to be picked while
-  choosing is still possible.
+### 对持久化工作的建议
+
+- **读取时验证，并显式降级。** 不再能解析的存储条件，应表现为附着于已保存对象的可修复错误，而非崩溃，也非静默消失的过滤器。
+- 发布前**确定消失标注名称的策略**。可选：保持静默（现状）、读取时对照项目当前名称验证，或仅在保存时警告。
+- **绝不持久化生成 SQL 或解析形式。** 只有源码文本跨版本稳定，AST 和 SQL 都是实现细节。
+- **固定或测试方言。** SQLite 中存储的条件，迁移到 PostgreSQL 后可能失败，因为 SQLite 接受严格后端拒绝的构造。
+- **发布前选择词汇扩展策略。** 裸未知标识符解析为属性，因此在当前解析规则下，无法再添加一等字段而不改变存储含义（见原则 6）。若预期字段词汇会增长，可观测性模式确实会增长，就必须在仍能选择时确定策略（如保留 `span.<field>` 命名空间，或彻底冻结词汇）。
 
 ---
 
-## Design Principles
+<a id="design-principles"></a>
 
-These follow from what this language is: a user-facing surface, borrowed from a
-host grammar, compiled to two SQL dialects, over partly schemaless data, whose
-accepted text becomes durable — and whose compiled form is executed by the host
-language's `eval`. Each constraint below is a consequence of one of those six
-facts.
+## 设计原则
 
-### Decomposing the problem: the failure-time ladder
+这些原则来自语言本质：它是面向用户的接口，借用宿主语法，编译为两种 SQL 方言，处理部分无模式数据，接受的文本会持久化，而编译形式由宿主语言的 `eval` 执行。下方每条约束都源于这六个事实之一。
 
-A condition can fail at five distinct moments, and *which* moment decides how
-cheap the failure is, how precisely it can be explained, and who sees it.
+<a id="decomposing-the-problem-the-failure-time-ladder"></a>
 
-| # | Moment | Knows about | Failure looks like |
+### 分解问题：失败时机阶梯
+
+条件可在五个不同时间点失败，*何时*失败决定成本多低、解释多精确，以及由谁看到。
+
+| # | 时机 | 已知内容 | 失败表现 |
 |---|---|---|---|
-| 1 | **Parse** | text | `SyntaxError`, points at a character |
-| 2 | **Validate** | shapes, static types | our message, names the fragment |
-| 3 | **Plan** | column types, per dialect | DB type error, references SQL the user never wrote |
-| 4 | **Bind** | driver encoding | driver error, references a parameter index |
-| 5 | **Execute** | actual row values | data-dependent; fails for some projects and not others |
-| — | **Result** | — | *nothing fails.* The query succeeds and the answer is wrong |
+| 1 | **解析** | 文本 | `SyntaxError`，指向字符 |
+| 2 | **验证** | 形态、静态类型 | 自定义消息，指出片段 |
+| 3 | **规划** | 各方言的列类型 | 数据库类型错误，引用用户未写过的 SQL |
+| 4 | **绑定** | 驱动编码 | 驱动错误，引用参数索引 |
+| 5 | **执行** | 实际行值 | 依赖数据，某些项目失败，其他不失败 |
+| — | **结果** | — | *没有失败*，查询成功但答案错误 |
 
-The ladder is the decomposition. Almost every bug in this module was a
-condition that *should* have failed at 1–2 and instead failed at 3–5.
+阶梯就是问题分解。本模块几乎每个错误，都是条件*本应*在第 1～2 层失败，却在第 3～5 层失败。
 
-- `X and r` — should fail at 2 (not a boolean), failed at 3.
-- `latency_ms > '100'` — should fail at 2 (type mismatch), failed at 4.
-- `label == 100` — should fail at 2 (type mismatch), failed at 5, and only when
-  a non-numeric label happened to be in range.
+- `X and r`：应在第 2 层失败（不是布尔值），实际在第 3 层失败。
+- `latency_ms > '100'`：应在第 2 层失败（类型不匹配），实际在第 4 层失败。
+- `label == 100`：应在第 2 层失败（类型不匹配），实际在第 5 层失败，且只有范围内碰巧存在非数字标签时才失败。
 
-**The last row is not a sixth layer; it is the absence of one.** A translation
-can be well-formed at every layer and still mean something other than what was
-written — comparing a value against its own JSON rendering, extracting through
-the wrong accessor, applying a predicate to a container. Nothing raises,
-because nothing is malformed. The condition is valid, the SQL is valid, the
-query plans and runs, and it returns the wrong rows.
+**最后一行不是第六层，而是没有失败层。** 转换在每层都可格式正确，却仍表达与原文不同的含义，例如将值与自身 JSON 渲染比较、通过错误访问器提取、将谓词作用于容器。没有异常，因为没有格式错误。条件有效、SQL 有效、查询可规划和执行，却返回错误行。
 
-This defeats the rule that organizes the rest of this document. "Fail at the
-earliest layer that can know" offers nothing when there is no failure to move
-earlier, and a wrong translation is *more* dangerous than a broken one: a
-statement that cannot execute announces itself the first time anyone runs it,
-while one that executes cleanly can be wrong in production indefinitely. It is
-also symmetric in a way that hides it — a comparison that never matches gives an
-empty table, which reads as "no such spans," and its negation over-matches,
-which reads as a working filter.
+这超出了组织本文其他内容的规则。“在最早能够知道问题的层失败”无法处理没有失败可提前的情况，而错误转换比不可执行转换*更危险*：无法执行的语句在首次运行时就暴露，正常执行的语句却可在生产中无限期出错。对称性还会隐藏问题：永远不匹配的比较给出空表，看起来像“没有这种 Span”；其否定则过度匹配，看起来像正常过滤器。
 
-The primary detector is a returned row set compared against an expected one;
-validation, totality, static analysis, snapshots, and compiling against both
-dialects are all blind to it by construction. It is not quite the *only*
-detector: algebraic laws the language must satisfy — a predicate and its
-negation partition the non-NULL rows, adding a conjunct never grows the set —
-catch wrong translations without an authored expectation, which matters because
-an authored expectation shares its author's misunderstanding (see principle
-11). One such law is already enforced
-(`test_equality_and_inequality_still_partition`); the family deserves to grow.
+主要检测手段是将返回行集与预期行集比较；验证、全函数性、静态分析、快照及双方言编译在结构上都看不到这类错误。这并非*唯一*手段：语言应满足的代数定律，例如谓词及其否定划分非 NULL 行、添加合取项绝不扩大集合，无需人工编写预期也能发现错误转换。这很重要，因为人工预期也共享作者的误解（见原则 11）。其中一条已实施（`test_equality_and_inequality_still_partition`），值得扩展整个定律集合。
 
-### 1. Fail at the earliest layer that can know
+<a id="1-fail-at-the-earliest-layer-that-can-know"></a>
 
-Every layer must be a filter for the next: reject anything the layer below
-cannot handle honestly. A failure that escapes to layer 3 or beyond is not just
-uglier — it is *categorically* worse:
+### 1. 在最早能知道问题的层失败
 
-- it arrives after the UI has committed to a query
-- it speaks in generated SQL, which the user cannot map back to what they typed
-- at layer 5 it is data-dependent, so it reproduces in one project and not
-  another, and no test fixture reliably catches it
+每层都必须为下一层过滤，拒绝下层无法忠实处理的内容。逃到第 3 层或更后的失败，不仅更难看，而是*本质上*更糟：
 
-This is also why `EXPLAIN`-at-validation was rejected as a strategy: it moves
-detection to layer 3 instead of doing the work at layer 2, and it is a no-op on
-SQLite, so it cannot be the *only* mechanism.
+- UI 已提交查询之后才到达
+- 使用用户无法映射回输入内容的生成 SQL 描述
+- 第 5 层依赖数据，因此在某项目复现、另一项目不复现，没有测试数据能可靠捕获
 
-This principle is time-boxed by the compatibility policy. Moving a failure
-earlier is a restriction, and restrictions end when conditions persist — so
-"fail at the earliest layer" is a *pre-persistence* discipline. Afterwards, a
-newly discovered defect in an accepted shape cannot be rejected into an earlier
-layer; the remaining tools are the next principle's totality and the
-defined-divergence clause of the [compatibility
-policy](#the-compatibility-policy-additive-only).
+这也是拒绝验证时使用 `EXPLAIN` 策略的原因：它把检测移到第 3 层，而不是在第 2 层完成工作，且在 SQLite 无效果，因此不能成为*唯一*机制。
 
-### 2. What cannot be known statically must be made total
+此原则受兼容性策略的时间窗口约束。将失败提前属于收紧，条件持久化时收紧窗口结束，因此“在最早层失败”是*持久化前*的纪律。之后，新发现的已接受形式缺陷不能再被提前拒绝；剩余工具是下一原则的全函数性，以及[兼容性策略](#the-compatibility-policy-additive-only)中的已定义差异条款。
 
-Some things genuinely cannot be decided before the rows are read. Attribute
-values are schemaless; `attributes['x']` has no type until you look.
+<a id="2-what-cannot-be-known-statically-must-be-made-total"></a>
 
-For those, there are exactly two acceptable designs — **reject statically**, or
-**make the operation total** so it can never abort. `SafeJsonFloat` and
-`SafeJsonBoolean` take the second: an unconvertible value yields `NULL` and its
-row drops out.
+### 2. 无法静态确定的操作必须成为全函数
 
-The unacceptable middle is a partial operation that aborts at layer 5. That is
-the worst of both: it passes every static check, works in development, and fails
-on a customer's data.
+某些内容确实只有读取行后才能确定。属性值无模式约束，查看之前，`attributes['x']` 没有类型。
 
-Totality is harder to hold onto than to introduce, in two ways that have both
-bitten:
+对此，只有两种可接受设计：**静态拒绝**，或**使操作成为全函数**，保证永不使语句中止。`SafeJsonFloat` 和 `SafeJsonBoolean` 采用后者：无法转换的值产生 `NULL`，对应行被排除。
 
-**It must be gated by type, and the gate must survive derivation.** A safe
-conversion belongs only where the unsafe case exists. Applying `SafeJsonFloat`
-to something already numeric produces
-`jsonb_path_query_first(numeric, …) does not exist` — the wrapper meant to
-prevent failure becomes the failure. The gate is the operand's type, so every
-*derived* node has to report one: a node that says "unknown" when its operand
-was numeric silently re-enables the wrapper.
+不可接受的中间状态，是会在第 5 层中止的偏函数操作。它集两种缺点于一身：通过所有静态检查，在开发中正常，却在客户数据上失败。
 
-**It is a property of the composition, not of the leaf.** `-attributes['x']`
-was converted after negation, and no backend defines unary minus on a JSON
-value. The conversion has to happen at the innermost point where the value
-stops being JSON, not wherever the cast happens to be applied. A total leaf
-inside a partial expression is still partial.
+保持全函数性比引入它更难，两个方面都曾造成问题：
 
-Totality also has a requirement the first two do not imply: **it must be
-observable, or it converts type errors into silent filter narrowing.** A row
-dropped because its value would not convert is indistinguishable from a row
-that did not match, and the NULL a failed conversion produces then flows into
-three-valued logic — `not (attributes['x'] > 5)` excludes every row where `x`
-holds text, compounding the two mechanisms into exactly the wrong-rows failure
-the ladder's Result row describes. Nothing in the language today can tell the
-user this happened. The normative requirement this creates sits on the
-*contract*, not the UI: the NULL truth table — what a failed conversion
-contributes under `not`, `and`, `or` — must be defined and tested rather than
-inherited from whatever SQLAlchemy emits. Surfacing conversion drops to users
-(counts, warnings) is a separate product decision with real costs, worth
-weighing but not presumed. Either way, totality should be understood as
-trading a loud per-row failure for a quiet semantic one, and chosen with that
-trade in view.
+**必须按类型限制应用范围，而且限制必须在派生后保留。** 安全转换只应出现在存在不安全情况的位置。对已是数字的值应用 `SafeJsonFloat` 会产生 `jsonb_path_query_first(numeric, …) does not exist`，用于防止失败的封装自身变成失败。门槛是操作数类型，因此每个*派生*节点都必须报告类型：操作数为数值却报告“未知”的节点，会悄然重新启用封装。
 
-### 3. Reject rather than coerce, when the types are known
+**全函数性属于组合，不属于叶节点。** `-attributes['x']` 曾在取负之后才转换，而两个后端都未定义对 JSON 值的一元负号。转换必须发生在值停止作为 JSON 的最内层，而非类型转换碰巧应用的位置。偏函数表达式中的全函数叶节点，整体仍是偏函数。
 
-Coercion hides intent; rejection reveals it. When both sides are statically
-typed there is nothing to infer, so a coercion is a guess about what the user
-meant — and it is usually wrong, because the dominant input to a filter field is
-not a considered expression but a **half-typed one**.
+全函数性还有一项前两点未隐含的要求：**必须可观察，否则只是将类型错误变为静默缩小过滤范围。** 因无法转换而丢弃的行，与不匹配行无法区分；转换失败产生的 NULL 随后进入三值逻辑，`not (attributes['x'] > 5)` 会排除所有 `x` 为文本的行，两种机制叠加恰好造成阶梯“结果”行描述的错行失败。目前语言无法告知用户此事。由此产生的规范要求在于*契约*而非 UI：必须定义并测试 NULL 真值表，即转换失败在 `not`、`and`、`or` 下如何参与，而非继承 SQLAlchemy 碰巧生成的行为。向用户展示转换丢弃情况（计数、警告）是另一项有真实成本的产品决策，值得权衡，但不作默认要求。无论如何，应理解全函数性是用静默语义失败换取不再显式逐行失败，并据此作出选择。
 
-`name == 'x' and r` is overwhelmingly "user is mid-keystroke", not "user wants
-rows where attribute `r` is truthy". Coercing that to truthiness produces
-plausible-looking wrong rows. Rejecting produces a message.
+<a id="3-reject-rather-than-coerce-when-the-types-are-known"></a>
 
-Corollary: **never implicitly coerce to boolean.** The host language has
-two-valued truthiness, SQL has three-valued logic, and JSON adds a fourth state
-(absent). Any implicit bridge between them is a bug generator. This DSL offers
-no `bool()` for the same reason.
+### 3. 类型已知时拒绝，不作强制转换
 
-Stated absolutely, the rule overreaches, and grading the apparent exceptions
-sharpens it. A numeric string inside `float()` is not a coercion at all — the
-user *requested* the conversion. The datetime literal rule is contextual
-typing, part of the documented grammar: a string beside a datetime field has
-exactly one sensible reading. `int()` behaving as `float()` is a documented
-misnomer, not a conversion decision. The one genuinely implicit coercion is
-the case-folding of literals against `span_kind` / `status_code`, which
-rewrites what the user typed with no syntactic signal — and it is the one
-that went undocumented for a while, which is the failure mode: an implicit
-coercion nobody wrote down is a meaning change waiting to be "fixed." The
-rule, made precise: **reject when intent is ambiguous; convert on request or
-on unambiguous context; and the moment a conversion is implicit, document it
-as semantics**, because it changes what accepted text means and is therefore
-under the compatibility policy, not an implementation detail.
+强制转换隐藏意图，拒绝揭示意图。两侧静态类型已知时无需推断，强制转换就是猜测用户意图，而且通常猜错，因为过滤字段最常见的输入不是深思熟虑的表达式，而是**输入到一半的表达式**。
 
-### 4. The permissive backend is the dangerous one
+`name == 'x' and r` 绝大多数时候表示“用户正在敲下一个键”，而非“用户要属性 `r` 为真的行”。强制转为真值会产生看似合理的错误行，拒绝则会给出消息。
 
-When a condition is malformed in a way neither the parser nor the validator
-catches, the two backends do not fail alike:
+推论：**绝不隐式转为布尔值。** 宿主语言有二值真值，SQL 有三值逻辑，JSON 又增加第四种状态（缺失）。它们之间任何隐式桥接都会制造错误。因此 DSL 也不提供 `bool()`。
+
+绝对化表述会让该规则过度延伸，分析看似例外的情况可使其精确。`float()` 内的数字字符串根本不是隐式转换，因为用户*请求了*转换。日期时间字面量规则是上下文类型化，属于已记录语法：日期时间字段旁的字符串只有一个合理含义。`int()` 行为如 `float()` 是有文档的命名不当，不是转换决策。真正隐式的只有针对 `span_kind` / `status_code` 的字面量大小写规范化，它在没有语法信号时重写用户输入；也正是这项曾长期未被记录，说明了失败模式：无人记录的隐式转换，是等待被“修复”的语义变更。精确规则是：**意图有歧义时拒绝，按明确请求或无歧义上下文转换；一旦转换是隐式的，就必须记录为语义**，因为它改变已接受文本的含义，受兼容性策略约束，不是实现细节。
+
+<a id="4-the-permissive-backend-is-the-dangerous-one"></a>
+
+### 4. 宽松后端才是危险的后端
+
+条件包含解析器和验证器都未捕获的错误形式时，两个后端不会以相同方式失败：
 
 | `name == 'n' and r` | |
 |---|---|
-| PostgreSQL | aborts the statement |
-| SQLite | returns **zero rows**, no error |
+| PostgreSQL | 中止语句 |
+| SQLite | 返回**零行**，无错误 |
 
-SQLite is the default for local development, so this class of defect is written
-against the backend that hides it and observed only against the one that does
-not. An empty table reads as "the filter matched nothing", which is a plausible
-enough answer to stop investigating. The strict backend is where such a bug is
-*visible*; the permissive backend is where it gets *written*.
+SQLite 是本地开发默认后端，因此这类缺陷在隐藏它的后端上被写出，只在不隐藏它的后端上被观察到。空表看起来像“过滤器没有匹配结果”，足够合理，调查可能就此停止。严格后端让错误*可见*，宽松后端则是错误*产生*的地方。
 
-Three practical consequences:
+三个实际后果：
 
-- **Any coercion or cast change must be executed on both backends before it
-  lands.** Compiling on both is not enough (see 1).
-- **Silently-wrong is worse than loudly-broken.** When the two dialects
-  disagree, prefer the behavior that fails, and make the validator reject the
-  input on *both* so they agree again.
-- **The environment must enforce what the principle preaches.** Local
-  development defaults to the permissive backend and local runs routinely skip
-  the strict one, so the discipline lives or dies in CI: the PostgreSQL jobs
-  are not an extra check but the only place this entire defect class is
-  visible at all.
+- **任何强制转换或类型转换变更，合入前都必须在两个后端执行。** 双后端编译不够（见原则 1）。
+- **静默错误比显式故障更糟。** 两种方言不一致时，优先采用会失败的行为，并使验证器在*两者*拒绝输入，从而恢复一致。
+- **环境必须落实原则。** 本地开发默认宽松后端，运行时经常跳过严格后端，因此纪律成败取决于 CI：PostgreSQL 作业不是额外检查，而是整个缺陷类别唯一可见的地方。
 
-### 5. A host-language parser is a liability, not a grammar
+<a id="5-a-host-language-parser-is-a-liability-not-a-grammar"></a>
 
-Using `ast.parse` is enormously convenient and quietly hands your users
-everything Python accepts: bytes literals, complex numbers, `Ellipsis`,
-`~`, `**`, walrus, comprehensions, NFKC identifier normalization. None of it was
-designed for; all of it was admitted.
+### 5. 宿主语言解析器是负担，不是语法定义
 
-If the surface is borrowed, the grammar must be an **allowlist**, never a
-denylist. Every node type, every operator, every literal type is opt-in. A
-denylist is a permanent backlog of things you have not thought of yet — and
-under an additive-only policy, each one you miss becomes permanent.
+使用 `ast.parse` 极其方便，也悄然把 Python 接受的所有内容交给用户：字节字面量、复数、`Ellipsis`、`~`、`**`、海象运算符、推导式、NFKC 标识符规范化。这些都未被专门设计，却全被接受。
 
-The rule applies to the *surface validator itself*, and this codebase has
-violated it there: rejecting Python constructs via an enumerated `isinstance`
-chain is a denylist wearing validation's clothes, and it missed the walrus
-operator in the experiment filter for exactly the predicted reason — nobody
-had thought of it yet. The catch-all boundary made the miss survivable, not
-invisible: the condition was reported as a server fault and logged in full. A
-structural walk that rejects every node type not in an approved set makes the
-next unconsidered construct unreachable by construction. Both validators now
-end in that default-deny floor (`_ALLOWED_PYTHON_SURFACE` on the experiment
-side), with the named rejections kept above it for message quality — the
-enumeration now buys better errors, not correctness.
+借用语法时，必须采用**允许列表**，绝不能用拒绝列表。每个节点类型、运算符和字面量类型都应显式加入。拒绝列表是尚未想到事项的永久积压；在仅允许增量变化的策略下，每个遗漏都会永久保留。
 
-### 6. Every new *name* is a breaking change; new *operators* are not
+规则也适用于*语法表面验证器本身*，本代码库曾在这里违反：通过枚举 `isinstance` 链拒绝 Python 构造，是披着验证外衣的拒绝列表，并正因预期的理由漏掉实验过滤器海象运算符——此前没人想到它。兜底边界让遗漏可承受，却没有让它消失：条件被报告为服务器故障并完整记录。结构遍历若拒绝所有未获批准的节点类型，就能在构造上使下一个未考虑构造不可达。两个验证器现在最终都落到默认拒绝底线（实验侧为 `_ALLOWED_PYTHON_SURFACE`），其上保留具名拒绝以改善消息；枚举现在提供更好错误，而非保证正确性。
 
-This one is easy to miss and expensive.
+<a id="6-every-new-name-is-a-breaking-change-new-operators-are-not"></a>
 
-Bare identifiers fall back to the dynamic namespace: `foo` means
-`attributes['foo']`. So **adding a reserved name silently changes the meaning of
-every stored condition that used it as an attribute.** When `parent_span` became
-reserved, any condition filtering on an attribute of that name changed meaning —
-it did not error, it started meaning something else.
+### 6. 每个新*名称*都是破坏性变更，新*运算符*不是
 
-Under additive-only, adding syntax is safe and adding *vocabulary* is not. The
-structural fix, if the namespace is ever expected to grow, is to require explicit
-syntax for dynamic access (`attributes['foo']`) and stop resolving bare unknowns
-— which is itself a restriction, so it has to happen before persistence or not
-at all.
+这一点容易忽略，代价却高。
 
-### 7. Error messages are the product surface, not diagnostics
+裸标识符回退到动态命名空间：`foo` 表示 `attributes['foo']`。因此，**新增保留名称会静默改变所有将其作为属性使用的存储条件含义。** 当 `parent_span` 成为保留名称时，过滤该同名属性的条件就改义了；没有报错，而是开始表达别的意思。
 
-The users in the original reports pasted walls of PostgreSQL error text as the
-*symptom*. The message is what the filter field renders; it is the entire
-experience of getting it wrong.
+仅允许增量变化时，新增语法安全，新增*词汇*不安全。若命名空间预期增长，结构性修复是要求显式动态访问语法（`attributes['foo']`），停止解析裸未知名称；但这本身是限制，因此必须在持久化前做，否则不能做。
 
-Practical rules learned here:
+<a id="7-error-messages-are-the-product-surface-not-diagnostics"></a>
 
-- **Name the offending fragment**, not the category:
-  `` `r` is not a condition `` beats `logical operands must be boolean`.
-- **Suggest the repair, but only when it is actually valid.** The hint "write
-  100 instead of '100'" is only emitted when the string is numeric — an earlier
-  version rendered `write  instead of ''`.
-- **Never surface generated SQL.** The user did not write it and cannot act on
-  it.
-- If the UI renders them, messages are **part of the product** — but the
-  stability contract belongs on error *categories*, not prose. Freezing
-  wording "as much as the grammar" would forbid exactly the improvements this
-  principle demands; a stable category or code lets the words get better
-  without breaking anything that matches on them. No category field exists
-  yet, so today every wording change is de facto breaking for whatever
-  string-matches — an argument for adding one, not for freezing the prose.
-- **Echoed fragments need bounds — at two layers.** Naming the offending
-  fragment means reflecting user-controlled text into the UI, logs, and
-  GraphQL responses. A single whole-message truncation at the boundary is not
-  enough: many messages put the fragment *before* the advice
-  (`` `<expr>` is not a condition, expected … ``), and tail truncation there
-  eats the guidance — a 1000-character literal in boolean position once
-  yielded 300 characters of echo and no "expected a comparison" at all. So
-  fragment-first sites bound the fragment itself (80 chars), and the error
-  boundary bounds the whole message (300 chars) as the backstop for any site
-  that forgets — a forgotten site now ships a worse message, never an
-  unbounded echo. The log path is bounded too: the catch-all's condition echo
-  goes through the same helper. CPython's own 4300-digit parse guard is
-  reworded at the boundary: its message advises
-  `sys.set_int_max_str_digits()`, which is Python's remedy, not the
-  condition's.
+### 7. 错误消息是产品界面，不是诊断信息
 
-### 8. Static analysis of the condition is part of its meaning
+最初报告中的用户将大段 PostgreSQL 错误文本作为*症状*贴出。消息就是过滤字段渲染的内容，是输入出错时的全部体验。
 
-`root_span_scope` looks like an optimization — it decides whether the UI shows
-cumulative or per-span metric columns. But it is derived from the condition
-text, so **changing the analysis changes what a stored condition renders**,
-without changing the condition.
+此处总结的实际规则：
 
-Anything that reads the expression and alters observable behavior is semantics,
-and belongs under the same compatibility policy as the grammar.
+- **指出出错片段**，不只指出类别：`` `r` is not a condition `` 优于 `logical operands must be boolean`。
+- **建议修复，但仅在确实有效时建议。** 仅字符串为数字时才给出“write 100 instead of '100'”提示；早期版本曾渲染出 `write  instead of ''`。
+- **绝不显示生成 SQL。** 用户没有写它，也无法据此操作。
+- 若 UI 展示消息，它就是**产品的一部分**；但稳定性契约应落在错误*类别*，而非措辞。将措辞冻结到“与语法同样稳定”会禁止本原则要求的改进；稳定类别或错误码允许优化文字，而不破坏依赖它们的逻辑。目前尚无类别字段，因此每次措辞变化对依赖字符串匹配的使用方事实构成破坏；这说明应添加类别，而非冻结措辞。
+- **回显片段需要两层边界。** 指出片段意味着把用户控制文本反射到 UI、日志及 GraphQL 响应。仅在边界对整条消息截断不够：很多消息先放片段、后给建议（`` `<expr>` is not a condition, expected … ``），尾部截断会吃掉指引；布尔位置的一个 1000 字符字面量曾得到 300 字符回显，却完全没有“expected a comparison”。因此先回显片段的位置限制片段本身（80 字符），错误边界限制整条消息（300 字符），兜底遗漏位置；遗漏最多造成消息变差，不再造成无限回显。日志路径也有限制，兜底处理的条件回显通过同一辅助函数。CPython 自身的 4300 位解析保护也在边界改写消息，因为它建议的 `sys.set_int_max_str_digits()` 是 Python 的补救措施，不是条件的修复方法。
 
-Keeping the analysis **sound but incomplete** — `None`/"cannot tell" always a
-safe answer — is what makes it *improvable at all*, but it does not make
-improvements free. A `None` → `strict` verdict changes which metric columns the
-UI renders for a condition someone already saved. The row set is unaffected;
-what the user sees is not.
+<a id="8-static-analysis-of-the-condition-is-part-of-its-meaning"></a>
 
-So the honest classification is: **scope verdicts are row-stable but not
-presentation-stable, and are therefore not compatibility-stable.** Three
-positions are available, and one has to be chosen deliberately rather than
-assumed:
+### 8. 条件的静态分析属于其含义
 
-1. **Freeze non-`None` verdicts.** An expression that reports `strict` or
-   `orphan_aware` keeps that verdict forever; only `None` may be refined. Costs
-   the least, still changes presentation for refined conditions.
-2. **Version the analysis** alongside the stored condition, so a saved view can
-   pin the verdict it was created under. The only option that is fully stable,
-   and the only one that needs a schema column.
-3. **Accept the instability explicitly** and document that metric-column
-   selection may change as the analyzer improves.
+`root_span_scope` 看似优化，用于决定 UI 展示累计还是逐 Span 指标列。但它由条件文本派生，因此**改变分析会改变存储条件的渲染**，即使条件不变。
 
-What is *not* available is treating refinement as silently additive. Soundness
-guarantees the rows are right; it says nothing about the columns.
+任何读取表达式并改变可观察行为的逻辑都属于语义，受与语法相同的兼容性策略约束。
 
-Until the persistence work chooses, position 3 is the *de facto* state and
-should be treated as chosen: verdicts may change as the analyzer improves, and
-saved views inherit the change. The principle also reaches further than
-`root_span_scope`: anything that reads condition text and alters observable
-behavior is under it, including the client's mount-time seed classification
-(`spanFilterSeed.ts`) — an analyzer that lives outside this module, is written
-in another language, and is currently under no compatibility policy at all.
+使分析**可靠但不完备**，即 `None`/“无法判断”始终是安全答案，才让它*能够改进*，但改进并非没有成本。`None` → `strict` 的结论变化，会改变某人已保存条件对应的 UI 指标列。行集不变，用户看到的内容却变了。
 
-### 9. Test at the layer where the failure lives
+诚实的分类是：**范围结论保证行稳定，不保证展示稳定，因此不保证兼容稳定。** 有三种立场，必须主动选择，不能默认假定：
 
-A test that only constructs a `SpanFilter` exercises layers 1–2 and proves
-nothing about 3–5. A construction test asserting that some condition "is valid"
-can therefore pass indefinitely while that condition is broken on one backend —
-it encodes a belief about the language, not an observation of it.
+1. **冻结非 `None` 结论。** 返回 `strict` 或 `orphan_aware` 的表达式永远保持该结论，只有 `None` 可细化。成本最低，但细化条件的展示仍变化。
+2. 将**分析版本**与条件一起存储，让已保存视图固定创建时的结论。这是唯一完全稳定的方案，也是唯一需要模式列的方案。
+3. **显式接受不稳定性**，记录指标列选择可随分析器改进而变化。
 
-- Grammar rules → construct and assert the message.
-- Coercion, casts, translation → **execute** and assert returned rows, on both
-  backends.
-- Anything data-dependent → execute against deliberately hostile rows.
+不可采用的做法，是将细化当作静默增量变化。可靠性保证行正确，不能说明列。
 
-The fixture matters as much as the assertion. A clean fixture never exercises a
-cast, and an *empty* one exercises nothing at all: a per-row failure cannot occur
-where there are no rows, so a data-dependent bug passes every check against an
-empty project. Fixtures for this module should contain values chosen to break
-things — unconvertible text where numbers are expected, all three JSON boolean
-encodings, nulls, containers where scalars are expected, multi-byte names.
+持久化工作作出选择前，立场 3 是*事实状态*，应视为已选择：结论可随分析器改进变化，保存视图继承变化。此原则还不限于 `root_span_scope`：任何读取条件文本并改变可观察行为的逻辑都受其约束，包括客户端挂载时的初始值分类（`spanFilterSeed.ts`）。这个分析器位于本模块之外、用另一种语言编写，目前完全不受兼容性策略约束。
 
-The highest-yield shape is **one key whose JSON type differs on every row** —
-number, numeric string, non-numeric string, boolean, null, array, object,
-absent. Ten spans with varied attributes found nothing; a single key with nine
-shapes found a cross-dialect divergence immediately, because every conversion
-path meets every input in one query.
+<a id="9-test-at-the-layer-where-the-failure-lives"></a>
 
-The anecdote generalizes to a rule the suite should enforce rather than
-remember: **every conversion path must meet every JSON shape — operator ×
-operand-type-pair × dialect, executed.** The nine-shape key found the equality
-divergence because it happened to complete that product for `==`; ordered
-comparison between two JSON operands escaped until much later because nothing
-demanded the product be complete. A coverage matrix is checkable; an
-instructive story is not.
+### 9. 在失败所在层测试
 
-**Snapshot tests are the seductive case.** They look like verification and are
-not: a snapshot records the SQL we *generate*, never whether that SQL *runs*.
-Three separate snapshots — all in the sibling experiment-filter suite, which
-leans on snapshots more heavily than this one — recorded PostgreSQL that
-cannot execute: `X IS Y` between two expressions, a raw `CAST(jsonb AS
-FLOAT)`, and `-'hello'`, each passing for as long as it existed. A snapshot is a
-change-detector for the compiler, and it is worth having as that; it is not
-evidence that anything works.
+只构造 `SpanFilter` 的测试覆盖第 1～2 层，对第 3～5 层没有证明。断言某条件“有效”的构造测试可能永久通过，即使条件在某后端已损坏；它编码的是对语言的信念，不是观察。
 
-Worse than SQL that cannot execute is SQL that executes and answers wrongly —
-the **Result** row of the ladder. A snapshot pinning a string comparison against
-a JSON value was reviewed, approved, and correct as a record of the compiler,
-while the comparison it pinned matched no row on either backend. Nothing in a
-snapshot can catch this, because the snapshot's subject is the artifact and the
-defect is in what the artifact *means*. A suite can be large, green, and
-entirely silent about whether a single filter returns the right rows; the
-absence of an executing test is invisible in a pass count.
+- 语法规则 → 构造并断言消息。
+- 强制转换、类型转换、转换逻辑 → 在两个后端**执行**并断言返回行。
+- 任何依赖数据的行为 → 针对刻意构造的恶意行执行。
 
-### 10. Reason about databases by running them
+测试数据与断言同等重要。干净数据不会触发转换，*空*数据则什么也不触发：没有行就不可能逐行失败，因此数据相关错误针对空项目可通过所有检查。本模块数据应刻意选择会破坏行为的值：预期数字处放不可转换文本、三种 JSON 布尔编码、null、预期标量处放容器，以及多字节名称。
 
-Database behavior is unusually resistant to reasoning from the outside. Casts,
-JSON functions, and type coercion are version-dependent, dialect-dependent, and
-full of rules that are individually sensible and jointly unguessable — whether a
-cast exists at all, whether it folds at plan time or evaluates per row, whether
-an error is raised or a `NULL` returned.
+最有效的形态是**同一个键在每行使用不同 JSON 类型**：数字、数字字符串、非数字字符串、布尔值、null、数组、对象、缺失。十个属性各异的 Span 未发现问题；一个键的九种形态立即发现跨方言差异，因为一次查询中每条转换路径都会遇到每种输入。
 
-A plausible chain of reasoning about any of these is worth roughly nothing
-against thirty seconds of running the query. Where this document asserts backend
-behavior, it is because someone executed it — and on the **oldest supported
-version**, since that is where a guarantee actually has to hold and where the
-function you are relying on may simply not exist yet.
+这个案例可概括为套件应强制而非仅靠记忆的规则：**每条转换路径必须遇到每种 JSON 形态，即实际执行运算符 × 操作数类型对 × 方言的组合。** 九形态键发现相等差异，是因为它碰巧补全了 `==` 的组合；两个 JSON 操作数排序比较直到更晚才暴露，因为没有要求组合完整。覆盖矩阵可检查，有启发性的故事不可检查。
 
-The same applies to reviews and bug reports about this module, from any source:
-a claim about what a database does is a hypothesis until it has been run on both
-backends.
+**快照测试最具迷惑性。** 它们看起来像验证，却不是：快照记录*生成*的 SQL，从不确认 SQL 是否*运行*。三个独立快照都来自更依赖快照的同类实验过滤器套件，它们记录了无法在 PostgreSQL 执行的内容：两个表达式之间的 `X IS Y`、原始 `CAST(jsonb AS
+FLOAT)`，以及 `-'hello'`，只要快照存在就一直通过。快照是编译器变化检测器，作为这一用途值得保留，但不能证明功能有效。
 
-The claim decays without enforcement. "Verified on 12" is true the day someone
-runs it and unverifiable thereafter unless the floor version is a permanent CI
-job — and the SQLite side needs its own pin, since "the bundled `sqlean`
-build" is a version claim too. A guarantee that lives in a document ages; one
-that lives in CI does not.
+比无法执行的 SQL 更糟，是可执行却给出错误答案的 SQL，即阶梯中的**结果**行。一个固定字符串与 JSON 值比较的快照曾被审查、批准，而且作为编译器记录确实正确，但该比较在两个后端都不匹配任何行。快照无法捕获，因为其对象是产物，而缺陷在产物*含义*中。测试套件可以规模很大、全部通过，却完全不能说明任一过滤器是否返回正确行；缺少执行测试不会出现在通过数中。
 
-### 11. Agreement is a stronger property than success
+<a id="10-reason-about-databases-by-running-them"></a>
 
-"Runs without error on both backends" and "returns the same rows on both
-backends" are different claims, and only the second is what this language
-promises. The gap between them is where the subtlest defects live: a query that
-succeeds everywhere while quietly meaning something different per backend
-raises nothing to notice.
+### 10. 通过运行数据库理解行为
 
-A probe over hostile rows reported no errors on either backend and was taken as
-confirmation. Asserting the *row sets* over the same data then showed
-`metadata['x'] == 1` matching a JSON `true` on SQLite and a JSON `[1, 2]` on
-PostgreSQL — two independent defects pointing opposite ways, both invisible to
-the error check.
+数据库行为特别难靠外部推理确定。类型转换、JSON 函数和强制类型转换依赖版本、依赖方言，规则各自合理，组合后却无法猜测：转换是否存在、在规划时折叠还是逐行求值、抛错还是返回 `NULL`。
 
-This also decides how to assert it. Comparing the two backends *to each other*
-is weaker than it looks: it passes whenever both are wrong in the same way. A
-**fixed expected result, checked on each backend**, catches divergence and
-shared defects alike — so the cross-dialect guarantee is best enforced by
-ordinary parametrized tests run under both dialects, not by a comparison
-harness.
+对这些问题的一串合理推理，几乎抵不过花三十秒运行查询。本文断言后端行为，是因为有人实际执行过，而且在**受支持的最旧版本**上执行，因为保证真正必须在那里成立，依赖的函数也可能在那里根本尚不存在。
 
-A fixed expectation has its own blind spot: it is authored by the same person
-who wrote the translation, so a shared misunderstanding pins wrong behavior
-green — which is how a reviewed, approved snapshot came to certify a
-comparison that matched no rows. The complement is the algebraic-law family
-from the ladder's Result discussion: laws are authored against the *language*,
-not against any particular translation, so they fail when author and
-translator are wrong together.
+本模块任何来源的审查或错误报告也适用：关于数据库行为的断言，在两个后端运行前都只是一个假设。
 
-### 12. Two encodings of one rule will drift; pin them to each other
+没有强制执行，断言会过时。“在 12 验证过”只在有人运行的当天为真，此后无法验证，除非最低版本成为永久 CI 作业；SQLite 侧也需要固定版本，因为“捆绑的 `sqlean` 构建”同样是版本断言。只存在于文档的保证会老化，存在于 CI 的不会。
 
-Failing at the earliest layer (principle 1) has a structural cost: the
-validator must know what the translator will do, so every rule ends up encoded
-twice — once as a check, once as behavior. The two drift. The validator
-accepted `float('1e400')` by checking the *spelling* of a numeric string while
-the literal rule rejected the *value* `1e400`; a comment in the translator
-claimed a shape reached the float path that actually compiled as text. Each
-was two encodings of one rule disagreeing.
+<a id="11-agreement-is-a-stronger-property-than-success"></a>
 
-The remedies, in order of strength: derive both encodings from one source (a
-shared predicate, a shared table); where that is not practical, pin them
-against each other with a conformance test that exercises the rule through
-both; at minimum, colocate them so a change to one is a diff next to the
-other. What is not acceptable is the default that produced the drift —
-trusting the two to be maintained in sympathy by whoever edits either.
+### 11. 一致比成功更强
 
-### 13. The evaluation namespace is an attack surface
+“两个后端运行都不报错”与“两个后端返回相同行”是不同断言，此语言只承诺后者。二者差距隐藏最微妙的缺陷：查询处处成功，却在各后端悄然含义不同，没有任何异常可引起注意。
 
-The compiled expression is executed by the host language's `eval`, with
-`__builtins__` pinned to an empty dict and a namespace containing exactly the
-names the translation needs. That sandbox closed a real hole — builtins
-reachable from a filter string — and nothing about its current shape
-advertises how load-bearing it is: the pinning is one dict literal, the
-namespace allowlist is one mapping, and either can be "simplified" away in a
-refactor that passes every grammar test. Any change to how the compiled
-expression is evaluated is a security change, whatever it looks like. If the
-evaluation strategy is ever revisited, the sandbox properties — no builtins,
-nothing user-controlled resolving to a callable, nothing reachable outside the
-namespace — are the requirements; `eval` is merely the current implementation.
+针对恶意行的探测曾报告两个后端都无错误，并被当作确认。随后对同一数据断言*行集*，却发现 `metadata['x'] == 1` 在 SQLite 匹配 JSON `true`，在 PostgreSQL 匹配 JSON `[1, 2]`，两个独立缺陷方向相反，错误检查都看不到。
 
-### Subtly overlooked
+这也决定断言方式。将两个后端*相互比较*比看起来弱：两者以相同方式出错时也通过。**固定预期结果，并在每个后端检查**，能同时发现差异和共享缺陷。因此跨方言保证最好通过在两种方言运行的普通参数化测试落实，而非比较框架。
 
-Things that are easy to leave unspecified until they bite:
+固定预期也有盲点：它由编写转换的人撰写，共享误解会将错误行为固定为通过；一个审查批准的快照就是这样为完全不匹配行的比较背书。补充手段是阶梯“结果”讨论中的代数定律族：定律针对*语言*而非某个具体转换编写，因此作者和转换器一起错时仍会失败。
 
-- **Three-valued logic.** `NULL` is neither true nor false, so a predicate and
-  its negation do not partition the table. Measured against 10 spans, 4 of which
-  have a NULL or absent annotation score:
+<a id="12-two-encodings-of-one-rule-will-drift-pin-them-to-each-other"></a>
+
+### 12. 同一规则的两种编码会漂移，必须相互约束
+
+在最早层失败（原则 1）有结构性成本：验证器必须知道转换器会做什么，因此每条规则最终编码两次，一次检查，一次行为，两者会漂移。验证器通过检查数字字符串的*拼写*接受 `float('1e400')`，字面量规则却拒绝*值* `1e400`；转换器中的注释声称某形态进入浮点路径，实际却编译为文本。它们都是同一规则的两种编码不一致。
+
+补救措施按强度排序：从同一来源派生两种编码（共享谓词、共享表）；不切实际时，用一致性测试通过两条路径执行规则，使其相互约束；至少将两者放在一起，让一处变化紧邻另一处 diff。不能接受的，是制造漂移的默认方式：信任任一编辑者会同步维护两者。
+
+<a id="13-the-evaluation-namespace-is-an-attack-surface"></a>
+
+### 13. 求值命名空间是攻击面
+
+编译表达式通过宿主语言 `eval` 执行，`__builtins__` 固定为空字典，命名空间仅包含转换所需名称。这个沙箱封住了真实漏洞，即过滤字符串可访问内置对象；但当前形式没有显露其重要性：固定内置对象只是一个字典字面量，命名空间允许列表只是一个映射，任一个都可能在所有语法测试通过的重构中被“简化”掉。改变编译表达式求值方式的任何变更，无论外表如何，都是安全变更。未来重新评估求值策略时，要求是沙箱属性：无内置对象、无用户控制内容可解析为可调用对象、无法访问命名空间之外的内容；`eval` 只是当前实现。
+
+<a id="subtly-overlooked"></a>
+
+### 容易忽视的细节
+
+以下事项容易一直不定义，直到引发问题：
+
+- **三值逻辑。** `NULL` 既非真也非假，因此谓词及其否定不能划分整表。在 10 个 Span 上实测，其中 4 个的标注分数为 NULL 或缺失：
 
   ```
   annotations['quality'].score == 0.1         ->  1 row
@@ -1408,226 +804,149 @@ Things that are easy to leave unspecified until they bite:
   not (annotations['quality'].score == 0.1)   ->  5 rows      (4 rows in neither)
   ```
 
-  A user reading `not (score == 0.1)` as "everything else" is wrong by the
-  number of NULLs. Decide and *test* the null truth table rather than inheriting
-  whatever SQLAlchemy happens to emit, and consider whether the UI should say
-  so.
-- **Collation and numeric precision.** String ordering and float precision
-  differ between backends. Currently unspecified here, which means
-  `name < 'x'` is not guaranteed portable.
-- **Identity vs equality.** Host languages have `is`; SQL has no identity
-  comparison. Only the singletons bridge.
-- **Time zones.** A naive datetime is not a time. Requiring an offset is the
-  only reading that cannot silently mean different instants in different
-  deployments.
-- **Text splicing must agree with the tokenizer.** Anything that edits source by
-  offset needs the same line and byte model the parser used — `str.splitlines`
-  breaks on characters the tokenizer does not treat as newlines.
-- **Sibling languages share defects.** The experiment-run filter is a separate
-  implementation of the same idea — a Python grammar borrowed from `ast`,
-  compiled to the same two dialects — and independently had the non-boolean
-  operand hole, comparisons between incompatible types, JSON compared against
-  its own rendering, and the whole inherited literal and operator surface. None
-  of these transferred when they were fixed here, because nothing connects the
-  two. A fix to shared machinery needs regression coverage on every grain that
-  uses it, and a fix to *duplicated* machinery needs porting by hand. The
-  codebase already trends toward the stronger fix — the dialect-sensitive
-  constructs (`SafeJsonFloat`, `SafeJsonBoolean`, `TextContains`) are shared
-  compiled elements serving both DSLs — but nothing demands it. The rule worth
-  stating: new dialect-sensitive behavior belongs in a shared element both
-  languages compile to, so the next divergence is a missing call site rather
-  than a missing reimplementation.
+  用户将 `not (score == 0.1)` 理解为“其他全部”，会恰好错过 NULL 数量的行。应确定并*测试*空值真值表，而非继承 SQLAlchemy 碰巧输出的行为，并考虑 UI 是否需要说明。
+- **排序规则和数值精度。** 字符串排序和浮点精度在后端间不同。目前未定义，意味着 `name < 'x'` 不保证可移植。
+- **身份与相等。** 宿主语言有 `is`，SQL 没有身份比较，只有单例值能桥接。
+- **时区。** 无时区日期时间不代表一个确定时刻。要求偏移是唯一不会在不同部署中静默表示不同时刻的解释。
+- **文本拼接必须与分词器一致。** 按偏移编辑源码时，需要与解析器相同的行和字节模型；`str.splitlines` 会在分词器不视作换行的字符处分割。
+- **同类语言共享缺陷。** 实验运行过滤器独立实现同一思路：借用 `ast` 的 Python 语法，编译为同两种方言，也独立出现非布尔操作数漏洞、不兼容类型比较、JSON 与自身渲染比较，以及全部继承的字面量和运算符问题。这里修复时没有同步过去，因为两者没有连接。修复共享机制，需要在每个使用粒度增加回归覆盖；修复*重复*机制，则需手动移植。代码库已朝更强修复发展，方言敏感构造（`SafeJsonFloat`、`SafeJsonBoolean`、`TextContains`）是两种 DSL 共用的编译元素，但没有强制要求。应明确的规则是：新增方言敏感行为应放入两种语言共同编译到的共享元素，使下次差异来自缺少调用位置，而非缺少一套重新实现。
 
-### A checklist for changing this language
+<a id="a-checklist-for-changing-this-language"></a>
 
-1. Which layer of the ladder rejects it? Can an earlier one?
-2. Do both backends return the **same rows** — executed, not compiled, and
-   compared by result rather than by absence of error?
-3. If it cannot be decided statically, is it total — and is the conversion
-   gated by type, and applied at the innermost point where the value stops
-   being JSON?
-4. Is it a new *name*? Then it changes the meaning of existing conditions.
-5. Is it a restriction? Then it is only possible before persistence ships.
-6. What does the error say, and is the suggestion always valid?
-7. Does it change what `root_span_scope` reports?
-8. Does the experiment-run filter have the same defect? It is a separate
-   implementation, so a fix here does not reach it.
-9. If a snapshot changed, has the new SQL been *run* on both backends?
-10. Does the rule now exist in two encodings — a check and a behavior? What
-    pins them together?
-11. What does it cost at scale, and is the cost bounded by policy rather than
-    by the host's accidents?
-12. Does it touch how the compiled expression is evaluated? Then it is a
-    security change, whatever it looks like.
-13. If it defines meaning for a previously divergent shape, is the shape in
-    the divergence enumeration, and is the new meaning executed on both
-    backends?
+### 修改此语言的检查清单
 
-## Error Messages
+1. 阶梯哪层拒绝它？能否更早？
+2. 两个后端返回**相同行**吗？应实际执行而非仅编译，按结果比较而非仅看无错误。
+3. 若无法静态确定，操作是否为全函数？转换是否按类型限制，并应用于值不再是 JSON 的最内层？
+4. 是新*名称*吗？那么它会改变现有条件含义。
+5. 是限制吗？那么只能在持久化发布前做。
+6. 错误怎么说，建议是否始终有效？
+7. 是否改变 `root_span_scope` 的报告？
+8. 实验运行过滤器是否有相同缺陷？它是独立实现，此处修复不会传递过去。
+9. 快照变化后，新 SQL 是否已在两个后端*运行*？
+10. 规则现在是否存在两种编码，即检查与行为？什么使两者相互约束？
+11. 大规模运行成本多少，由策略限制，还是依赖宿主偶然限制？
+12. 是否涉及编译表达式的求值方式？那么无论看起来如何，都是安全变更。
+13. 若为先前有差异的形式定义含义，该形式是否已列入差异枚举，新含义是否在两个后端实际执行？
 
-Messages are user-facing: the frontend renders `errorMessage` verbatim in the
-filter field's error badge and tooltip. They should name the offending fragment
-and, where possible, suggest the repair.
+<a id="error-messages"></a>
 
-| Situation | Message |
+## 错误消息
+
+消息面向用户：前端在过滤字段错误徽标和提示浮层中原样渲染 `errorMessage`。应指出出错片段，尽可能建议修复。
+
+| 情况 | 消息 |
 |---|---|
-| Value in boolean position | ``​`r` is not a condition, expected a comparison such as `r == ...`​`` |
-| Mismatched comparison | `cannot compare number and string` (+ unquote hint when applicable) |
-| Naive datetime | ``datetime literal '...' has no timezone, add an offset (e.g. 'Z' for UTC)`` |
-| Datetime against an attribute | `cannot compare a datetime field and an attribute, use an ISO 8601 string literal …` |
-| Ordered boolean | ``​`...` orders a boolean, use `==`, `!=`, or `is` instead of `<` / `>`​`` |
-| Malformed datetime | ``invalid datetime literal: '...'`` |
-| Uncastable string | `cannot cast string to number` |
-| Non-finite or overflowing numeric | `invalid numeric literal: 1e400` (bare, via cast, or an int past float range) |
-| Cast to text of a typed operand | `cannot cast boolean to text` (also `number`, `datetime`, and non-string literals) |
-| Two literals in membership | ``​`1 in [1, 2]` compares two literals, expected a span field on the left`` |
-| `None` in a membership list | ``​`name in [None]` includes None, which never matches in SQL; test for missing values with `is None` / `is not None`​`` |
-| Non-collection, non-text right of `in` | ``​`in` expects a collection or a text field on the right, got `...`​`` |
-| Collection outside membership | ``​`name == ('a', 'b')` compares against a collection, which is only supported with `in` / `not in`​`` |
-| Nested collection | ``​`['a']` is not a value, collections cannot be nested`` |
-| `is` with a non-singleton | ``​`name is 'abc'` uses `is` with a value, which SQL cannot express; use `==`, or `is` with None/True/False`` |
-| Confusable identifier | ``​`ｎａｍｅ` is interpreted as `name`, use unaccented ASCII for field names`` |
-| NUL in source / in a literal | `condition cannot contain a NUL character` / `string literals cannot contain a NUL character` |
-| Unsupported unary operator | `unsupported operator: ~latency_ms` |
-| Unsupported literal | `unsupported literal: b'abc'` |
-| `parent_span` traversal | ``​`parent_span.name` is not supported: ... only `parent_span is None` and `parent_span is not None` are supported`` |
-| Collection in value position | ``​`cost_details` is a collection and can only be iterated, e.g. `any(x.<field> == "..." for x in cost_details)`​`` |
-| Reduction without a comprehension | ``​`len(...)` takes a comprehension over cost_details, e.g. `len([x for x in cost_details])`​`` (the example is per kind) |
-| Unknown iterable | ``invalid iterable `cost_detals`, did you mean "cost_details"?`` |
-| Unknown element field | ``invalid field `d.nope`, expected one of cost, cost_per_token, is_prompt, token_type, or tokens`` |
-| Element field where a top-level name was written | ``​`latency_ms` is a top-level term, not a cost_details element field; …`` |
-| Element operand type | ``cannot compare `x.cost` (a number) with `'abc'` (text)`` |
-| Reduction over a non-number | ``​`sum(...)` reduces numbers, and `x.token_type` is text; …`` |
-| Unknown annotation member | ``invalid eval attribute `.x` in `...`, expected `.score` or …`` |
-| Empty annotation name | ``missing eval name in `evals['']`​`` |
-| Unsupported construct | `invalid expression: <source>` |
-| Depth limit | `filter condition is nested too deeply` |
+| 布尔位置上的值 | ``​`r` is not a condition, expected a comparison such as `r == ...`​`` |
+| 类型不匹配的比较 | `cannot compare number and string` （适用时附去引号提示） |
+| 无时区日期时间 | ``datetime literal '...' has no timezone, add an offset (e.g. 'Z' for UTC)`` |
+| 日期时间与属性比较 | `cannot compare a datetime field and an attribute, use an ISO 8601 string literal …` |
+| 布尔值排序 | ``​`...` orders a boolean, use `==`, `!=`, or `is` instead of `<` / `>`​`` |
+| 日期时间格式错误 | ``invalid datetime literal: '...'`` |
+| 无法转换的字符串 | `cannot cast string to number` |
+| 非有限或溢出的数字 | `invalid numeric literal: 1e400` （裸值、经转换的值，或超过浮点范围的整数） |
+| 将已知类型操作数转为文本 | `cannot cast boolean to text` （也适用于 `number`、`datetime` 及非字符串字面量） |
+| 成员判断的两侧均为字面量 | ``​`1 in [1, 2]` compares two literals, expected a span field on the left`` |
+| 成员列表含 `None` | ``​`name in [None]` includes None, which never matches in SQL; test for missing values with `is None` / `is not None`​`` |
+| `in` 右侧既非集合也非文本 | ``​`in` expects a collection or a text field on the right, got `...`​`` |
+| 非成员判断位置上的集合 | ``​`name == ('a', 'b')` compares against a collection, which is only supported with `in` / `not in`​`` |
+| 嵌套集合 | ``​`['a']` is not a value, collections cannot be nested`` |
+| `is` 比较非单例值 | ``​`name is 'abc'` uses `is` with a value, which SQL cannot express; use `==`, or `is` with None/True/False`` |
+| 易混淆标识符 | ``​`ｎａｍｅ` is interpreted as `name`, use unaccented ASCII for field names`` |
+| 源码 / 字面量中的 NUL | `condition cannot contain a NUL character` / `string literals cannot contain a NUL character` |
+| 不支持的一元运算符 | `unsupported operator: ~latency_ms` |
+| 不支持的字面量 | `unsupported literal: b'abc'` |
+| `parent_span` 遍历 | ``​`parent_span.name` is not supported: ... only `parent_span is None` and `parent_span is not None` are supported`` |
+| 值位置上的集合 | ``​`cost_details` is a collection and can only be iterated, e.g. `any(x.<field> == "..." for x in cost_details)`​`` |
+| 不含推导式的归约 | ``​`len(...)` takes a comprehension over cost_details, e.g. `len([x for x in cost_details])`​`` （示例按种类提供） |
+| 未知可迭代对象 | ``invalid iterable `cost_detals`, did you mean "cost_details"?`` |
+| 未知元素字段 | ``invalid field `d.nope`, expected one of cost, cost_per_token, is_prompt, token_type, or tokens`` |
+| 元素字段位置使用了顶层名称 | ``​`latency_ms` is a top-level term, not a cost_details element field; …`` |
+| 元素操作数类型 | ``cannot compare `x.cost` (a number) with `'abc'` (text)`` |
+| 对非数字归约 | ``​`sum(...)` reduces numbers, and `x.token_type` is text; …`` |
+| 未知标注成员 | ``invalid eval attribute `.x` in `...`, expected `.score` or …`` |
+| 空标注名称 | ``missing eval name in `evals['']`​`` |
+| 不支持的构造 | `invalid expression: <source>` |
+| 深度限制 | `filter condition is nested too deeply` |
 
-Raw SQL is deliberately never surfaced. The original bug reports pasted walls of
-PostgreSQL error text as the *symptom*.
+有意绝不展示原始 SQL。最初错误报告将大段 PostgreSQL 错误文本作为*症状*贴出。
 
 ---
 
-## Known Gaps
+<a id="known-gaps"></a>
 
-### Structural
+## 已知缺口
 
-- **`parent_span` traversal** (`parent_span.name`) is reserved but unimplemented.
-- **Annotation name existence** is not checked — anywhere, by design. An
-  unknown or deleted name stays valid and matches nothing, exactly as an
-  unknown attribute path does; that is the schemaless contract. A dormant
-  `valid_eval_names` hook that could have enforced it at validation time was
-  removed: it had no production caller or test, and as a hard gate it would
-  have made a stored condition's validity depend on the live annotation table
-  rather than on the text. Advisory checking (a save-time warning, editor
-  suggestions) is the persistence-era option and belongs outside accept/reject.
-- **Annotation aliasing is a byte-offset splice**, not an AST transform. The
-  offset table agrees with the tokenizer and multi-byte/multi-line cases are
-  tested, but rewriting the tree instead of the text would close a whole class
-  at once: escape decoding, literal corruption, and diagnostics that leak
-  generated alias names. Worth doing before conditions become durable.
-- **No `EXPLAIN`-based differential test** against PostgreSQL; agreement between
-  the validator and the database is asserted by hand-written cases only.
-- **`Projector`** validates structure and the inherited Python surface — the
-  allowlist walk, the NFKC and literal rules shared with `SpanFilter`, and
-  the sandboxed `eval` — but none of the type or operand rules, by design: a
-  projection is a value, not a predicate, so boolean-position and
-  comparability have nothing to check. Its historical defects (no validation,
-  an unsandboxed namespace, silently normalized confusable names) are fixed
-  and pinned by `TestProjectorValidationGap`.
-- **Membership between two JSON operands** (`attributes['p'] in
-  attributes['q']`) is accepted and compiles to string containment over the two
-  text renderings. The same class of divergence as two-JSON equality — boolean
-  spellings, key order, quoting differ per backend — and pinned the same way
-  (`test_membership_between_two_json_values_is_a_known_divergence`), with
-  per-backend expected sets rather than a fix.
-- **Collation and numeric precision** differ between backends and are not
-  specified.
+<a id="structural"></a>
 
-## Inherited Python Surface
+### 结构性问题
 
-Because the grammar is borrowed from Python's parser, everything Python accepts
-arrives here by default — including constructs that have no SQL meaning at all.
-Admitting them is never a decision; rejecting them is. The rules below are those
-decisions, and each names a Python behavior that cannot be expressed honestly
-against a SQL backend:
+- **`parent_span` 遍历**（`parent_span.name`）已保留，但未实现。
+- **不检查标注名称存在性**，这是所有位置的有意设计。未知或已删除名称仍有效，只是不匹配任何内容，与未知属性路径相同；这就是无模式契约。曾可在验证时强制检查的未使用 `valid_eval_names` 钩子已移除，因为没有生产调用方或测试，且作为硬门槛会使存储条件有效性依赖实时标注表，而非文本。提示性检查（保存时警告、编辑器建议）是持久化时代的选项，应独立于接受/拒绝。
+- **标注别名替换按字节偏移拼接**，不是 AST 转换。偏移表与分词器一致，多字节/多行情况已有测试；但重写树而非文本能一次消除整类问题：转义解码、字面量破坏、诊断泄露生成别名。值得在条件持久化前完成。
+- **没有针对 PostgreSQL 的 `EXPLAIN` 差异测试**，验证器与数据库一致性仅靠手写用例断言。
+- **`Projector`** 验证结构和继承的 Python 表达范围，包括允许列表遍历、与 `SpanFilter` 共享的 NFKC 和字面量规则，以及沙箱 `eval`，但有意不检查类型和操作数规则：投影是值而非谓词，布尔位置和可比较性无从检查。历史缺陷（无验证、非沙箱命名空间、静默规范化易混淆名称）已修复，并由 `TestProjectorValidationGap` 固定。
+- **两个 JSON 操作数间的成员判断**（`attributes['p'] in
+  attributes['q']`）被接受，编译为两份文本渲染上的字符串包含判断。它与双 JSON 相等比较属于同类差异：布尔拼写、键顺序、引号因后端而异；也以同样方式固定（`test_membership_between_two_json_values_is_a_known_divergence`），通过各后端预期集合记录，而非修复。
+- **排序规则和数值精度**在后端间不同，未作定义。
 
-| Rejected | Was | Why it cannot stand |
+<a id="inherited-python-surface"></a>
+
+## 继承的 Python 表达范围
+
+语法借自 Python 解析器，因此 Python 接受的所有内容默认都会进入这里，包括完全没有 SQL 含义的构造。接受从来不是主动决定，拒绝才是。以下规则就是这些决定，每条指出一种无法针对 SQL 后端忠实表达的 Python 行为：
+
+| 拒绝形式 | 原有行为 | 不可保留的原因 |
 |---|---|---|
-| `~latency_ms == 1` | `cast(~latency_ms, Float) == 1` | `~` on a column is SQL `NOT`, so the expression compiles to something unrelated to what was written. Binary bitwise ops were already rejected; unary `~` slipped past because the type pass only inspected `USub`/`UAdd`/`Not`. |
-| `name is 'abc'` | `name == 'abc'` | SQL has no identity comparison. Silently degrading `is` to `==` teaches a model the language does not implement. |
-| `name == b'abc'` | bound as bytes | No column type to compare against. |
-| `latency_ms == 1j` | bound as complex | Same. |
-| `name == ...` | bound as `Ellipsis` | Same. |
-| `latency_ms < 1e400` | bound as IEEE `inf` | Non-finite floats behave differently per dialect — and `'inf'` as a *string* was already rejected, so admitting the float form was inconsistent. |
-| `latency_ms == float('1e400')` | `Constant(inf)` baked into the tree | The numeric-string grammar bounds the spelling, not the magnitude, so an in-grammar spelling could still overflow to the value the literal rule rejects. |
-| `latency_ms == 9…9` (320 digits) | unbounded int bound as a parameter | Python ints have no size limit; asyncpg refuses the bind, SQLite stores infinity. |
-| `name not in ['a', None]` | `NOT IN ('a', NULL)` | Never true for any row under three-valued logic; the filter validated and silently returned nothing. |
-| `name == ('a','b')` | tuple bound as a scalar | A collection is only meaningful on the right of `in`/`not in`. |
-| `name in [['a']]` | nested container | No scalar value for a column to match. |
-| `name == 'a\x00b'` | NUL in a bind | SQLite accepts, PostgreSQL rejects at execution — validity would depend on the backend. |
-| `ｎａｍｅ == 'a'` | `name == 'a'` | Python NFKC-normalizes identifiers, so a full-width spelling silently resolves to a real column the user never typed. |
+| `~latency_ms == 1` | `cast(~latency_ms, Float) == 1` | 列上的 `~` 是 SQL `NOT`，因此表达式编译结果与原文无关。二元位运算已拒绝；一元 `~` 曾漏过，因为类型检查只查看 `USub`/`UAdd`/`Not`。 |
+| `name is 'abc'` | `name == 'abc'` | SQL 没有身份比较。将 `is` 静默降级为 `==`，会教给用户一种语言并未实现的模型。 |
+| `name == b'abc'` | 作为 bytes 绑定 | 没有可比较的列类型。 |
+| `latency_ms == 1j` | 作为 complex 绑定 | 同上。 |
+| `name == ...` | 作为 `Ellipsis` 绑定 | 同上。 |
+| `latency_ms < 1e400` | 作为 IEEE `inf` 绑定 | 非有限浮点数行为因方言而异；作为*字符串*的 `'inf'` 已被拒绝，因此允许浮点形式不一致。 |
+| `latency_ms == float('1e400')` | 将 `Constant(inf)` 固化进树 | 数字字符串语法限制拼写，不限制大小，因此语法内写法仍可溢出为字面量规则拒绝的值。 |
+| `latency_ms == 9…9` （320 位） | 将无界整数绑定为参数 | Python 整数无大小限制；asyncpg 拒绝绑定，SQLite 存储无穷。 |
+| `name not in ['a', None]` | `NOT IN ('a', NULL)` | 三值逻辑下对任何行都不为真；过滤器通过验证后静默返回空结果。 |
+| `name == ('a','b')` | 将元组作为标量绑定 | 集合仅在 `in`/`not in` 右侧有意义。 |
+| `name in [['a']]` | 嵌套容器 | 没有可供列匹配的标量值。 |
+| `name == 'a\x00b'` | 绑定值含 NUL | SQLite 接受，PostgreSQL 执行时拒绝，使有效性依赖后端。 |
+| `ｎａｍｅ == 'a'` | `name == 'a'` | Python 对标识符作 NFKC 规范化，使全角写法静默解析为用户未输入的实际列。 |
 
-Two Python behaviors were **kept** after examination:
+审查后**保留**了两种 Python 行为：
 
-- **`is` against `None` / `True` / `False`.** Those are the only values Python's
-  `is` is meaningful against, and the only ones SQL can express (`IS NULL`,
-  `IS TRUE`, `IS FALSE`). `metadata['flag'] is True` is a supported, tested form.
-- **`int()` as an alias for `float()`.** It does not truncate, so `int(1.9)`
-  compares against `1.9`. This is a misleading name rather than unsound SQL, and
-  it cannot be corrected portably: `CAST(x AS INTEGER)` **rounds** on PostgreSQL
-  (`1.9` → `2`, `-1.9` → `-2`) and **truncates** on SQLite (`1`, `-1`). An honest
-  `int()` would mean different things per backend, which is worse than a
-  documented alias. The name is also load-bearing in the `SpanQuery` surface.
+- **针对 `None` / `True` / `False` 的 `is`。** 它们是 Python `is` 唯一有意义的比较对象，也是 SQL 唯一能表达的值（`IS NULL`、`IS TRUE`、`IS FALSE`）。`metadata['flag'] is True` 是受支持且经过测试的形式。
+- **`int()` 作为 `float()` 别名。** 不执行截断，因此 `int(1.9)` 与 `1.9` 比较。这是误导名称，而非不可靠 SQL，且无法可移植地纠正：`CAST(x AS INTEGER)` 在 PostgreSQL **舍入**（`1.9` → `2`、`-1.9` → `-2`），在 SQLite **截断**（`1`、`-1`）。忠实 `int()` 会在后端间含义不同，比有文档的别名更糟。这个名称也是 `SpanQuery` 接口的重要依赖。
 
-One widening landed alongside these: surrounding whitespace is now stripped.
-Python reads a leading space as indentation and fails with `IndentationError`,
-which is a poor answer for a condition pasted with a stray space. Widening is
-always safe under the additive-only policy.
+同时落地一项放宽：现在去除外围空白。Python 将前导空格视为缩进并报 `IndentationError`，不适合只是粘贴时多了空格的条件。仅允许增量变化策略下，放宽始终安全。
 
-## Related filters
+<a id="related-filters"></a>
 
-Two other things are called filters in this codebase. Only one of them is a
-language, and confusing the two misdirects exactly the review effort this
-document is meant to focus.
+## 相关过滤器
 
-**The experiment-run filter** (`src/phoenix/server/api/helpers/experiment_run_filters.py`)
-is the real sibling: an independent implementation of the same idea, over
-experiment runs and dataset examples, with its own parser, its own validation,
-and its own translation to the same two dialects. The *principles* in this
-document apply to it wholesale; the grammar does not — it has no datetime type,
-rejects list membership outright, and resolves a different vocabulary (`input`,
-`output`, `evals[...]`, `experiments[n]`). Because the two share intent but not
-code, a defect fixed here stays open there until it is ported by hand — which
-is how each of them was found. The inherited-surface rejections, the NFKC fold,
-the membership type rule, the non-finite literal rule, and the requirement to
-key into whole-document JSON columns have each made that trip.
+本代码库还有两类内容被称为过滤器，只有一个是语言。混淆二者会使本文原本希望聚焦的审查精力用错方向。
 
-**The session filter** (`src/phoenix/server/session_filters.py`) is not a
-language at all. It is one function that takes a plain string and matches it
-case-insensitively against the input and output values of root spans. There is
-no grammar, no parser, no type system, and so none of the failure modes
-catalogued here: the string is data, never source. It uses `as_string()`
-already, so it does not have the JSON-rendering defect either. It is listed here
-so that the next person auditing "the filters" can stop at this line rather than
-go looking for a grammar that does not exist.
+**实验运行过滤器**（`src/phoenix/server/api/helpers/experiment_run_filters.py`）才是真正的同类语言：同一思路的独立实现，针对实验运行和数据集示例，拥有自己的解析器、验证及到同两种方言的转换。本文*原则*完整适用，但语法不适用：它没有日期时间类型，直接拒绝列表成员判断，解析的词汇不同（`input`、`output`、`evals[...]`、`experiments[n]`）。两者意图共享、代码不共享，因此此处修复的缺陷，在手动移植前仍存在于另一处；每个问题正是这样被发现的。继承范围拒绝规则、NFKC 规范化、成员类型规则、非有限字面量规则，以及访问整文档 JSON 列必须带键的要求，都已分别移植过。
+
+**会话过滤器**（`src/phoenix/server/session_filters.py`）根本不是语言，而是接收普通字符串、对根 Span 输入和输出值进行不区分大小写匹配的单个函数。没有语法、解析器或类型系统，因此没有本文列举的失败模式：字符串是数据，绝不是源码。它已使用 `as_string()`，也没有 JSON 渲染缺陷。这里列出它，是为了让下一个审查“过滤器”的人可以到此停止，不必寻找不存在的语法。
 
 ---
 
-## Files
+<a id="files"></a>
 
-| Path | Role |
+## 文件
+
+| 路径 | 职责 |
 |---|---|
-| `src/phoenix/trace/dsl/filter.py` | Parser, validator, translator, scope analysis |
-| `src/phoenix/db/models.py` | `SafeJsonFloat`, `SafeJsonBoolean`, `TextContains` — the dialect-specific SQL the guarantees compile to |
+| `src/phoenix/trace/dsl/filter.py` | 解析器、验证器、转换器、范围分析 |
+| `src/phoenix/db/models.py` | `SafeJsonFloat`, `SafeJsonBoolean`, `TextContains`，保证所编译到的方言专用 SQL |
 | `src/phoenix/server/api/types/Project.py` | `validateSpanFilterCondition`, `analyzeSpanFilterCondition` |
-| `src/phoenix/server/api/exceptions.py` | Filter errors (`SpanFilterError`, `ExperimentRunFilterConditionSyntaxError`) → GraphQL error mapping |
-| `js/app/src/components/filter/DSLFilterConditionField.tsx` | Debounced field, error badge |
-| `js/app/src/pages/project/spanFilterValidation.ts` | Client validation + cache |
-| `js/app/src/pages/project/spanFilterSeed.ts` | Mount-time seed classification |
-| `js/app/src/pages/project/SpanFilterErrorFallback.tsx` | Error-boundary fallback |
-| `tests/unit/trace/dsl/test_filter.py` | Grammar, type, dialect, and execution tests |
-| `tests/unit/trace/dsl/test_filter_spec_conformance.py` | Executable form of this document's accept/reject tables |
-| `tests/unit/trace/dsl/test_filter_error_messages.py` | Pins the user-facing messages above |
-| `tests/unit/trace/dsl/test_filter_hostile_data.py` | Execution against hostile rows, both dialects |
-| `tests/unit/trace/dsl/test_filter_json_operand_comparison.py` | Pins JSON-operand comparison semantics and known divergences |
+| `src/phoenix/server/api/exceptions.py` | 过滤错误（`SpanFilterError`, `ExperimentRunFilterConditionSyntaxError`）→ GraphQL 错误映射 |
+| `js/app/src/components/filter/DSLFilterConditionField.tsx` | 防抖字段、错误徽标 |
+| `js/app/src/pages/project/spanFilterValidation.ts` | 客户端验证及缓存 |
+| `js/app/src/pages/project/spanFilterSeed.ts` | 挂载时初始值分类 |
+| `js/app/src/pages/project/SpanFilterErrorFallback.tsx` | 错误边界回退 |
+| `tests/unit/trace/dsl/test_filter.py` | 语法、类型、方言及执行测试 |
+| `tests/unit/trace/dsl/test_filter_spec_conformance.py` | 本文接受/拒绝表的可执行形式 |
+| `tests/unit/trace/dsl/test_filter_error_messages.py` | 固定上述面向用户的消息 |
+| `tests/unit/trace/dsl/test_filter_hostile_data.py` | 在两种方言上针对恶意行执行 |
+| `tests/unit/trace/dsl/test_filter_json_operand_comparison.py` | 固定 JSON 操作数比较语义及已知差异 |

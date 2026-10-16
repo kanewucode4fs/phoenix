@@ -1,19 +1,25 @@
-# React + TypeScript + Vite
+<a id="react--typescript--vite"></a>
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+# React + TypeScript + Vite 仪表盘模板
 
-Currently, two official plugins are available:
+此模板提供在 Vite 中运行 React 的最小配置，支持热模块替换（HMR）并包含部分 ESLint 规则。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+目前有两个官方插件：
 
-## React Compiler
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) 使用 [Babel](https://babeljs.io/) 实现快速刷新，也可使用 [oxc](https://oxc.rs)（在 [rolldown-vite](https://vite.dev/guide/rolldown) 中使用时）。
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) 使用 [SWC](https://swc.rs/) 实现快速刷新。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+<a id="react-compiler"></a>
 
-## Expanding the ESLint configuration
+## React 编译器
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+考虑到对开发和构建性能的影响，此模板没有启用 React Compiler。添加方法见[此文档](https://react.dev/learn/react-compiler/installation)。
+
+<a id="expanding-the-eslint-configuration"></a>
+
+## 扩展 ESLint 配置
+
+开发生产应用时，建议更新配置并启用类型感知的检查规则：
 
 ```js
 export default defineConfig([
@@ -43,7 +49,7 @@ export default defineConfig([
 ]);
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+还可以安装 [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) 和 [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom)，使用 React 专属检查规则：
 
 ```js
 // eslint.config.js

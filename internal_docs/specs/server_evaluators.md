@@ -1,111 +1,125 @@
-# Server Evaluators
+<a id="server-evaluators"></a>
+# 服务端评估器
 
-Author: @mikeldking
+作者：@mikeldking
 
-Server-side evaluators, sometimes called "online" evals, are the idea of having evaluation or judgment performed on live traces and synthesis. Server-side evaluation aims to create a level of automation that makes it possible to analyze the performance and quality of LLM-powered tasks and workflows.
+服务端评估器有时也称为“在线”评估，其思路是对实时追踪和生成结果执行评估或判断。服务端评估旨在通过自动化，分析由 LLM 驱动的任务和工作流的性能与质量。
 
-## Terminology
+<a id="terminology"></a>
+## 术语
 
-### Evaluator
+<a id="evaluator"></a>
+### 评估器
 
-We will define an Evaluator as a function that grades a particular task. The `evaluator` can be powered by an LLM, be based on code, or be a very simple heuristic. Some evaluators are well understood (e.g., JSON distance, cosine similarity), while others are user-defined to try to catch failure modes of a particular task.
+评估器定义为对特定任务评分的函数。`evaluator` 可以由 LLM 驱动、基于代码，或采用非常简单的启发式方法。有些评估器已有成熟定义，例如 JSON 距离和余弦相似度；另一些由用户定义，用于捕捉特定任务的失败模式。
 
-### LLM Evaluators
+<a id="llm-evaluators"></a>
+### LLM 评估器
 
-LLM Evaluators are functions that use an LLM to perform an evaluation. For simplicity, we will think of LLM evaluators as single-shot prompts, where a set of inputs is passed into a well-formed prompt template to produce a score.
+LLM 评估器是使用 LLM 执行评估的函数。为简单起见，可以将其视为单次提示词调用：将一组输入传入结构完整的提示词模板，产出一个分数。
 
-### Task
+<a id="task"></a>
+### 任务
 
-We will use the word `task` to denote a function that is under test. These tasks are LLM-powered and thus have a level of non-determinism that requires `evaluation`.
+本文使用 `task` 表示被测函数。这些任务由 LLM 驱动，因此具有一定非确定性，需要进行 `evaluation`。
 
-### Evaluation Target
+<a id="evaluation-target"></a>
+### 评估目标
 
-The `tasks` performed will be recorded as artifacts in the form of `spans`, `traces`, `sessions`, and `experiment runs`. These artifacts will be able to serve as the target of evaluation. Each one of these artifacts captures the task's `input`, `output`, and other relevant context and metadata that can be used for evaluation.
+执行的 `tasks` 会以 `spans`、`traces`、`sessions` 和 `experiment runs` 等产物形式记录，并可作为评估目标。每个产物都记录任务的 `input`、`output`，以及可用于评估的其他相关上下文和元数据。
 
-### Score
+<a id="score"></a>
+### 分数
 
-Score is the output of an evaluator (evaluators are also referred to as scorers). A score may not necessarily be numeric. It's meant to capture judgment and thus can be made up of:
+分数是评估器的输出，评估器也称为评分器。分数不一定是数值，其目的是记录判断，因此可以包含：
 
-- label - typically a classification of discrete values
-- score - a floating point or integer grade
-- explanation - the reasoning for why the grade was given or purely a textual assessment
+- label：通常是离散值分类。
+- score：浮点数或整数评分。
+- explanation：给出该评分的理由，或纯文本评价。
 
-In addition to the above, a score can have meta information or a definition. Notably:
+除此之外，分数还可以包含元信息或定义，主要包括：
 
-- direction - also known as optimization direction, to refer to the desired goal (e.g., 'maximize' denotes we want the metric to be higher)
-- metadata - any key-value pairs to describe the judgment (e.g., performed by `gpt`)
+- direction：也称优化方向，表示期望目标，例如 maximize 表示希望指标越高越好。
+- metadata：描述判断的任意键值对，例如由 `gpt` 执行。
 
-### Annotation
+<a id="annotation"></a>
+### 标注
 
-Annotations capture the scores that are the result of evaluation. They are named `annotations` because they `annotate` artifacts of the `task` described above. For example, you can have `span` annotations, `trace` annotations, `session` annotations, and `experiment run` annotations. In this context `span`, `trace`, and `session` refer to larger and larger tasks of increasing complexity and interdependency. Below are some examples of `annotations` or evals that could be necessary at each level of complexity.
+标注记录评估产生的分数。它们称为 `annotations`，是因为它们对上述 `task` 产物进行 `annotate`。例如，可以有 `span`、`trace`、`session` 和 `experiment run` 标注。此处 `span`、`trace` 和 `session` 所代表的任务依次增大，复杂度和相互依赖也逐渐增加。以下是各复杂度层级可能需要的 `annotations` 或评估示例。
 
 - Span
-  - Did an LLM call the right tool
-  - Did the LLM leak internal private information
+  - LLM 是否调用了正确工具？
+  - LLM 是否泄露了内部私人信息？
 - Trace
-  - Did the server respond with an answer to a user's question
-  - Does the user sound frustrated
+  - 服务端是否回答了用户的问题？
+  - 用户是否显得沮丧？
 - Session
-  - Did the agent stay coherent
-  - Did the agent maintain a steady trajectory to resolution
+  - Agent 是否保持连贯？
+  - Agent 是否持续朝解决问题的方向推进？
 
-## Product Requirements
+<a id="product-requirements"></a>
+## 产品需求
 
-### Evaluator Definitions
+<a id="evaluator-definitions"></a>
+### 评估器定义
 
-As a user of Phoenix, I want to define different evaluation metrics to be reused across the platform. These metric definitions will have various types:
+作为 Phoenix 用户，我希望定义不同的评估指标，在整个平台复用。这些指标定义包括多种类型：
 
-- LLM-as-a-judge
-- Heuristic / Code (e.g., JSON distance, exact match, similarity, contains regex)
-- Custom Code
-- Remote (webhook-based)
+- LLM 裁判。
+- 启发式或代码，例如 JSON 距离、精确匹配、相似度和正则包含匹配。
+- 自定义代码。
+- 远程评估（基于 webhook）。
 
-To make the eval definitions reusable across various targets, the evaluators will be described as having:
+为使评估定义可用于不同目标，评估器将包含以下描述：
 
-- `input schema` - what data is required to perform the evaluation at a record level
-- `annotation config` - the definition of the score it produces
-- `source` - how the evaluation is performed (e.g., 'LLM')
+- `input schema`：对单条记录执行评估所需的数据。
+- `annotation config`：所产出分数的定义。
+- `source`：评估执行方式，例如 LLM。
 
-### LLM Evaluator Prompts
+<a id="llm-evaluator-prompts"></a>
+### LLM 评估器提示词
 
-As a user of Phoenix, the prompts used for LLM judgment need to be tracked carefully as they could have a drastic impact on the quality (e.g., true-positive rate) of the evaluator. For this reason, prompts used for LLM judgment must be tracked via Phoenix's built-in prompt management system.
+作为 Phoenix 用户，我需要仔细跟踪 LLM 判断所用的提示词，因为它们可能显著影响评估器质量，例如真正率。因此，用于 LLM 判断的提示词必须通过 Phoenix 内置提示词管理系统跟踪。
 
-For a prompt to be deemed sufficiently good for an evaluator, it should be testable via Phoenix's built-in prompt playground. Once the evaluator prompt is sufficiently benchmarked (e.g., has a sufficiently good experiment backing its performance), the prompt will be promoted via a prompt version tag and will be picked up by the evaluator.
+要判断提示词是否足以用于评估器，应能通过 Phoenix 内置提示词 Playground 对其测试。评估器提示词经过充分基准验证后，例如有表现足够好的实验支撑，就可通过提示词版本标签晋升，并由评估器采用。
 
-An example user flow:
+用户流程示例：
 
-1. Create an LLM Evaluator (Dataset or otherwise)
-2. A prompt is scaffolded and saved with the initial version. The evaluator is tracking "heads/latest" implicitly or a specific tag
-3. The user then iterates on the prompt and when sufficiently confident marks the prompt via a tag as ready to be used for the evaluator
+1. 创建 LLM 评估器，用于数据集或其他目标。
+2. 搭建提示词并保存初始版本。评估器隐式跟踪 heads/latest 或指定标签。
+3. 用户迭代提示词，足够有信心后，通过标签标记其已可用于评估器。
 
-### Dataset Evaluators
+<a id="dataset-evaluators"></a>
+### 数据集评估器
 
-As a user of Phoenix, datasets contain examples for a particular task. In the case of prompt engineering, the dataset contains examples of inputs to the prompt. Evaluators will serve as "test cases" that automatically score the prompt output. Examples are:
+对于 Phoenix 用户，数据集包含特定任务的示例。在提示词工程中，数据集包含提示词输入示例。评估器作为测试用例，自动对提示词输出评分。例如：
 
-- Does the output call the right tool
-- Is the output similar to the desired reference output
-- Does the output match the desired output exactly (heuristic/code evaluator)
-- Does the output hallucinate or properly say that it lacks knowledge (LLM)
+- 输出是否调用正确工具？
+- 输出是否与期望参考输出相似？
+- 输出是否与期望输出完全匹配（启发式或代码评估器）？
+- 输出是否产生幻觉，还是恰当地表示缺乏相关知识（LLM）？
 
-These evaluators will run by default when an experiment is performed using the dataset unless otherwise specified.
+除非另有指定，使用该数据集运行实验时，默认执行这些评估器。
 
-Metaphorically speaking, datasets now define a workbench. When you load a particular dataset into the prompt playground, it automatically sets up the evaluators, which form a metaphorical "unit" testing suite.
+可以将数据集比作工作台：把特定数据集加载到提示词 Playground 时，会自动配置评估器，形成类似单元测试套件的结构。
 
-### Project Evaluators
+<a id="project-evaluators"></a>
+### 项目评估器
 
-As a user of Phoenix, once I start production tracing, I want certain segments of my data to be automatically evaluated at or after ingestion so that I can monitor and triage critical or potential failures. Project evaluators are the use of the above evaluation methodologies but with an associated automation. An example of a project evaluator definition might be:
+作为 Phoenix 用户，开始生产追踪后，我希望某些数据子集在摄入时或之后自动评估，以监控和分诊严重或潜在故障。项目评估器采用上述评估方法，并关联自动化配置。项目评估器定义示例：
 
-- Filter for LLM spans with a particular attribute ("final synthesis")
-- Sample down to 80% of traffic
-- Perform evaluation
+- 过滤具有特定属性（最终生成）的 LLM span。
+- 对流量采样，保留 80%。
+- 执行评估。
 
-As a user, I am tapping into different types of "events" in the system and performing particular types of automation (e.g., a trigger). An automation might look like:
+作为用户，我订阅系统中的不同事件，并执行特定自动化，例如触发器。自动化可以如下定义：
 
-- event: ingestion - A trace gets marked as "incorrect" by an evaluator
-- trigger: add to dataset - the trace gets captured as a dataset for human review and/or regression testing
+- 事件：摄入——一条追踪被评估器标记为错误。
+- 触发器：添加到数据集——将追踪收录为数据集，供人工审查和/或回归测试。
 
-### Evaluator Traces
+<a id="evaluator-traces"></a>
+### 评估器追踪
 
-As a user of Phoenix who is trying to audit or improve the evaluators, I want a clear project that captures all my evaluator traces. These traces can be annotated for corrective measures and even be used for training on my next iteration on the prompt (e.g., building out a train split).
+作为希望审计或改进评估器的 Phoenix 用户，我需要一个明确的项目记录所有评估器追踪。这些追踪可添加标注以进行纠正，甚至用于下一轮提示词迭代的训练，例如构建训练集划分。
 
-In a larger sense, as a user of Phoenix Evaluators, I want resources. Resources can be scaffolded initially (e.g., a training dataset) but also can be created from evaluator traces (e.g., corrected judgments).
+更广泛地说，作为 Phoenix Evaluators 用户，我需要相关资源。资源既可在初始时搭建，例如训练数据集，也可从评估器追踪中创建，例如纠正后的判断。

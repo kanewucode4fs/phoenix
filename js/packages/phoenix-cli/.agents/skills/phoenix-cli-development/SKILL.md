@@ -1,12 +1,10 @@
 ---
 name: phoenix-cli-development
 description: >
-  Design and implementation guide for the Phoenix CLI (`px`). Covers the noun-verb command structure,
-  dual-audience design (humans and coding agents), Commander.js patterns, configuration resolution,
-  output formats, exit codes, and conventions for adding or modifying commands. Triggers when
-  working on phoenix-cli commands — adding new commands, modifying existing ones, refactoring command
-  structure, or reviewing CLI code. Also triggers on mentions of `px` commands, CLI design,
-  or adding a new resource to the CLI.
+  Phoenix CLI（`px`）设计与实现指南，涵盖名词-动词命令结构、面向人和编码 Agent 的双受众设计、
+  Commander.js 模式、配置解析、输出格式、退出码以及新增或修改命令的约定。
+  处理 phoenix-cli 命令时触发，包括新增命令、修改现有命令、重构命令结构或审查 CLI 代码。
+  提及 `px` 命令、CLI 设计或向 CLI 添加新资源时也触发。
 license: Apache-2.0
 metadata:
   author: oss@arize.com
@@ -14,21 +12,25 @@ metadata:
   internal: true
 ---
 
-# Phoenix CLI Design Specification
+<a id="phoenix-cli-design-specification"></a>
 
-The Phoenix CLI (`px`) is a command-line interface for the Phoenix AI observability platform. It serves two distinct audiences simultaneously: **humans** typing commands in a terminal and **coding agents** (Claude Code, Cursor, Codex, Gemini CLI) executing commands programmatically.
+# Phoenix CLI 设计规范
 
-This specification uses RFC 2119 keywords (MUST, SHOULD, MAY, etc.) to indicate requirement strength.
+Phoenix CLI（`px`）是 Phoenix AI 可观测性平台的命令行接口，同时面向两类不同受众：在终端键入命令的**人**，以及以编程方式执行命令的**编码 Agent**（Claude Code、Cursor、Codex、Gemini CLI）。
 
-## Command Structure: Noun-Verb
+本规范使用 RFC 2119 关键字（MUST、SHOULD、MAY 等，分别译为必须、应该、可以）表示要求强度。
 
-All commands MUST follow a **noun-verb** pattern, modeled after the GitHub CLI (`gh`):
+<a id="command-structure-noun-verb"></a>
+
+## 命令结构：名词-动词
+
+所有命令**必须**仿照 GitHub CLI（`gh`）遵循**名词-动词**模式：
 
 ```
 px <resource> <action> [arguments] [options]
 ```
 
-Resource names MUST be **singular** — they name the type of thing you're acting on, not how many:
+资源名称**必须**为**单数**，用于命名操作对象的类型，而非数量：
 
 ```bash
 px project list              # not "px projects"
@@ -38,71 +40,81 @@ px dataset get <name-or-id>
 px auth status
 ```
 
-### Standard verbs
+<a id="standard-verbs"></a>
 
-Commands SHOULD use these verbs consistently across all resources:
+### 标准动词
 
-| Verb     | Purpose                       | Takes argument? | Example                             |
+命令**应该**在所有资源中一致使用以下动词：
+
+| 动词     | 用途                       | 是否接收参数 | 示例                             |
 | -------- | ----------------------------- | --------------- | ----------------------------------- |
-| `list`   | List/query multiple resources | No (uses flags) | `px project list --limit 10`        |
-| `get`    | Fetch a single resource by ID | Yes (required)  | `px trace get <trace-id>`           |
-| `create` | Create a new resource         | Varies          | `px project create --name foo`      |
-| `update` | Modify an existing resource   | Yes (required)  | `px project update <id> --name bar` |
-| `delete` | Remove a resource             | Yes (required)  | `px project delete <id>`            |
+| `list`   | 列出/查询多个资源 | 否（使用标志） | `px project list --limit 10`        |
+| `get`    | 按 ID 获取单个资源 | 是（必填）  | `px trace get <trace-id>`           |
+| `create` | 创建新资源         | 视情况而定          | `px project create --name foo`      |
+| `update` | 修改现有资源   | 是（必填）  | `px project update <id> --name bar` |
+| `delete` | 删除资源             | 是（必填）  | `px project delete <id>`            |
 
-Not every resource supports every verb — datasets MAY omit `create` via CLI if the primary flow is through the SDK. Commands SHALL only add verbs that make sense for the resource.
+并非每个资源都支持所有动词；如果主要通过 SDK 操作数据集，CLI **可以**不提供 `create`。命令**必须**只添加对该资源有意义的动词。
 
-Additional verbs for specialized actions are RECOMMENDED when the standard set doesn't cover it:
+标准动词不能覆盖专用操作时，**建议**增加专用动词：
 
 - `px auth login`, `px auth status`
 - `px self update`
 - `px docs fetch`
 - `px api graphql <query>`
 
-### Backward compatibility during migration
+<a id="backward-compatibility-during-migration"></a>
 
-The CLI is evolving from a flat structure (`px projects`, `px traces`) toward full noun-verb. During the transition, both forms MAY coexist. When migrating an existing command:
+### 迁移期间的向后兼容
 
-1. The new noun-verb form MUST be created as the primary command
-2. The old form SHOULD be kept as a hidden alias (Commander's `.alias()` or a hidden command) so existing scripts don't break
-3. Only the noun-verb form SHALL be documented going forward
+CLI 正从扁平结构（`px projects`、`px traces`）演进为完整的名词-动词结构。过渡期间两种形式**可以**共存。迁移现有命令时：
 
-## Dual-Audience Design
+1. **必须**将新的名词-动词形式创建为主命令
+2. **应该**将旧形式保留为隐藏别名（Commander 的 `.alias()` 或隐藏命令），避免破坏现有脚本
+3. 后续文档**必须**只记录名词-动词形式
 
-The CLI MUST be equally usable by a person at a terminal and by a coding agent. Every command that outputs data MUST support `--format`:
+<a id="dual-audience-design"></a>
 
-- **`pretty`** (default) — Human-readable tables and formatting
-- **`json`** — Indented JSON for human inspection of structured data
-- **`raw`** — Compact single-line JSON for piping into `jq` or agent consumption
+## 双受众设计
 
-Commands MAY support additional formats (e.g., `--format text` for prompts). The default MUST always be `pretty`.
+CLI **必须**同样适合终端用户和编码 Agent 使用。每个输出数据的命令都**必须**支持 `--format`：
 
-Progress indicators MUST write to stderr. Agents SHOULD pass `--no-progress` to suppress them.
+- **`pretty`**（默认）：便于人阅读的表格和格式
+- **`json`**：带缩进的 JSON，供人检查结构化数据
+- **`raw`**：紧凑单行 JSON，适合通过管道传入 `jq` 或供 Agent 使用
+
+命令**可以**支持其他格式（如提示词的 `--format text`）。默认值始终**必须**为 `pretty`。
+
+进度指示器**必须**写入 stderr。Agent **应该**传入 `--no-progress` 将其关闭。
 
 ```bash
 # Agent-friendly invocation
 px trace list --format raw --no-progress | jq '...'
 ```
 
-### Semantic exit codes
+<a id="semantic-exit-codes"></a>
 
-Defined in `src/exitCodes.ts`. Commands MUST use the named constants and MUST NOT use bare numeric literals.
+### 语义化退出码
 
-| Code | Constant           | Meaning                                             |
+定义于 `src/exitCodes.ts`。命令**必须**使用命名常量，**不得**使用裸数字字面量。
+
+| 退出码 | 常量           | 含义                                             |
 | ---- | ------------------ | --------------------------------------------------- |
-| 0    | `SUCCESS`          | Command completed successfully                      |
-| 1    | `FAILURE`          | Unspecified or unexpected error                     |
-| 2    | `CANCELLED`        | User cancelled (e.g., declined a confirmation)      |
-| 3    | `INVALID_ARGUMENT` | Bad CLI flags, missing required args, invalid input |
-| 4    | `AUTH_REQUIRED`    | Not authenticated or insufficient permissions       |
-| 5    | `NETWORK_ERROR`    | Failed to connect to server or network request      |
-| 6    | `NOT_VERIFIED`     | Ran, but could not verify the result it produces    |
+| 0    | `SUCCESS`          | 命令成功完成                      |
+| 1    | `FAILURE`          | 未指定或意外错误                     |
+| 2    | `CANCELLED`        | 用户取消（例如拒绝确认）      |
+| 3    | `INVALID_ARGUMENT` | CLI 标志错误、缺少必填参数、输入无效 |
+| 4    | `AUTH_REQUIRED`    | 未验证身份或权限不足       |
+| 5    | `NETWORK_ERROR`    | 服务器连接或网络请求失败      |
+| 6    | `NOT_VERIFIED`     | 已运行，但无法验证生成结果    |
 
-### Interactive default with non-interactive mode
+<a id="interactive-default-with-non-interactive-mode"></a>
 
-Commands MAY prompt interactively when a required value is missing or a confirmation is needed — this is the human-friendly default. The `--no-input` flag MUST suppress all prompts: both missing-value prompts and destructive-action confirmations. Non-interactive mode is also activated automatically when no TTY is attached (piped stdin).
+### 默认交互与非交互模式
 
-In non-interactive mode, if a required value is missing, the command MUST exit immediately with `ExitCode.INVALID_ARGUMENT` and print the correct invocation. If a confirmation would have been shown, the command MUST proceed as if confirmed:
+缺少必填值或需要确认时，命令**可以**交互式提问，这是适合人的默认行为。`--no-input` 标志**必须**关闭所有提示，包括缺失值提示和破坏性操作确认。未连接 TTY 时（标准输入来自管道）也会自动启用非交互模式。
+
+非交互模式中，若缺少必填值，命令**必须**立即以 `ExitCode.INVALID_ARGUMENT` 退出并打印正确调用方式。若原本会显示确认，命令**必须**按已确认继续执行：
 
 ```bash
 # Human: missing --name triggers interactive prompt
@@ -123,31 +135,37 @@ Error: Missing required flag --name.
   px project create --name <project-name>
 ```
 
-### Idempotent commands
+<a id="idempotent-commands"></a>
 
-Commands SHOULD be idempotent where possible. Running the same command twice MUST NOT produce duplicate resources or unexpected errors:
+### 幂等命令
 
-- `create` commands SHOULD support `--if-not-exists` to return the existing resource instead of failing
-- `delete` commands on a missing resource SHOULD exit with `ExitCode.SUCCESS` (not an error)
+命令**应该**尽可能幂等。同一命令执行两次**不得**产生重复资源或意外错误：
 
-### Return structured data on success
+- `create` 命令**应该**支持 `--if-not-exists`，以返回现有资源而非失败
+- 对不存在资源执行 `delete` 时，**应该**以 `ExitCode.SUCCESS` 退出（不视为错误）
 
-Mutating commands (`create`, `update`, `delete`) MUST return the affected resource in the selected `--format` on stdout. Commands MUST NOT print bare success messages like "Project created." — output the resource so agents can extract IDs, URLs, and other fields:
+<a id="return-structured-data-on-success"></a>
+
+### 成功时返回结构化数据
+
+修改命令（`create`、`update`、`delete`）**必须**在 stdout 中按选定的 `--format` 返回受影响资源。命令**不得**只打印“Project created.”之类的成功消息，而应输出资源，使 Agent 可以提取 ID、URL 等字段：
 
 ```bash
 $ px project create --name foo --format raw
 {"id":"proj_abc","name":"foo","createdAt":"2025-03-15T10:00:00Z"}
 ```
 
-### Fail fast with actionable errors
+<a id="fail-fast-with-actionable-errors"></a>
 
-When a command fails due to invalid input, the error message MUST include the correct invocation syntax. Follow the pattern established by `getConfigErrorMessage()` in `src/config.ts`:
+### 快速失败并提供可操作错误
 
-- Show what was wrong
-- Show the correct command to fix it
-- Suggest a related command when helpful (e.g., "Available projects: `px project list`")
+因输入无效导致命令失败时，错误消息**必须**包含正确的调用语法。遵循 `src/config.ts` 中 `getConfigErrorMessage()` 的现有模式：
 
-When `--format raw` or `--format json` is active, errors SHOULD also be written as structured JSON to stderr so agents can parse them. Use the `StructuredError` shape:
+- 说明错误所在
+- 给出修正错误的正确命令
+- 有帮助时建议相关命令（例如“可用项目：`px project list`”）
+
+启用 `--format raw` 或 `--format json` 时，错误也**应该**以结构化 JSON 写入 stderr，以便 Agent 解析。使用 `StructuredError` 结构：
 
 ```typescript
 interface StructuredError {
@@ -165,9 +183,11 @@ interface StructuredError {
 }
 ```
 
-### Progressive help discovery
+<a id="progressive-help-discovery"></a>
 
-Every subcommand MUST include a `--help` with at least one concrete example. Use Commander's `.addHelpText('after', ...)` to append an `Examples:` block:
+### 渐进式帮助发现
+
+每个子命令**必须**包含带有至少一个具体示例的 `--help`。使用 Commander 的 `.addHelpText('after', ...)` 追加 `Examples:` 块：
 
 ```
 $ px project create --help
@@ -186,28 +206,32 @@ Examples:
   px project create --name my-project --format raw
 ```
 
-Agents discover capabilities incrementally: `px` → `px project` → `px project create --help`. Each level MUST provide enough information to navigate deeper.
+Agent 逐步发现功能：`px` → `px project` → `px project create --help`。每层**必须**提供足够信息以继续深入。
 
-## Adding a New Command
+<a id="adding-a-new-command"></a>
 
-### Options interface
+## 添加新命令
 
-Every handler MUST define a TypeScript interface for its options — the typed mirror of the flags its command registers. Field names MUST be descriptive; abbreviations MUST NOT be used.
+<a id="options-interface"></a>
 
-The shapes that recur across commands live in `src/commands/options.ts` and MUST be reused rather than re-declared:
+### 选项接口
 
-| Type                            | Fields                                                      | Use for                                           |
+每个处理器**必须**为其选项定义 TypeScript 接口，作为命令注册标志的类型化映射。字段名**必须**具有描述性，**不得**使用缩写。
+
+跨命令重复出现的结构位于 `src/commands/options.ts`，**必须**复用，不得重新声明：
+
+| 类型                            | 字段                                                      | 用途                                           |
 | ------------------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
-| `ConnectionOptions`             | `endpoint`, `apiKey`                                        | Any command that calls the Phoenix API            |
-| `CommonOptions<TFormat>`        | + `format`, `progress`                                      | Any command that prints a resource                |
-| `ProjectScopedOptions<TFormat>` | + `project`                                                 | Commands that register `--project`                |
-| `AnnotationInclusionOptions`    | `includeAnnotations`, `includeNotes`                        | Span/trace/session reads                          |
-| `DeleteOptions`                 | `endpoint`, `apiKey`, `progress`, `yes`                     | Delete verbs (used directly — no local interface) |
-| `AnnotateOptions`               | `name`, `label`, `score`, `explanation`, `annotatorKind`, … | `annotate` verbs                                  |
-| `AddNoteOptions`                | `text`, `identifier`                                        | `add-note` verbs                                  |
-| `AnnotationsDeleteOptions`      | filters + `all`, `yes`                                      | `*-annotations delete` commands                   |
+| `ConnectionOptions`             | `endpoint`, `apiKey`                                        | 所有调用 Phoenix API 的命令            |
+| `CommonOptions<TFormat>`        | + `format`, `progress`                                      | 所有打印资源的命令                |
+| `ProjectScopedOptions<TFormat>` | + `project`                                                 | 注册 `--project` 的命令                |
+| `AnnotationInclusionOptions`    | `includeAnnotations`, `includeNotes`                        | Span/追踪/会话读取                          |
+| `DeleteOptions`                 | `endpoint`, `apiKey`, `progress`, `yes`                     | 删除动词（直接使用，不定义本地接口） |
+| `AnnotateOptions`               | `name`, `label`, `score`, `explanation`, `annotatorKind`, … | `annotate` 动词                                  |
+| `AddNoteOptions`                | `text`, `identifier`                                        | `add-note` 动词                                  |
+| `AnnotationsDeleteOptions`      | 过滤条件 + `all`、`yes`                                      | `*-annotations delete` 命令                   |
 
-A command whose flags exactly match a shared shape MUST use that type directly instead of declaring an identical local one. Otherwise, extend the matching base and declare only the flags unique to the command:
+命令标志与共享结构完全匹配时，**必须**直接使用该类型，不得声明相同的本地类型。否则，扩展对应基类，只声明该命令特有的标志：
 
 ```typescript
 interface SpanListOptions
@@ -222,32 +246,38 @@ interface SpanListOptions
 }
 ```
 
-Every field MUST carry a TSDoc block that opens with the literal flag and its argument placeholder, states any default declared in the `.option()` call, and gives an `@example` where a concrete value clarifies usage. Negated flags (`--no-progress`, `--no-input`) MUST document their inverted reading: Commander defaults them to `true` and only sets `false` when the flag is passed.
+每个字段**必须**带有 TSDoc 块，以标志原文及参数占位符开头，说明 `.option()` 调用中声明的默认值，并在具体值有助于理解用法时提供 `@example`。否定标志（`--no-progress`、`--no-input`）**必须**注明反向语义：Commander 默认设为 `true`，仅在传入标志时设为 `false`。
 
-Commands that prompt for input or confirmation MUST support non-interactive mode — `--no-input` for prompts (`px setup`), `--yes` via `ConfirmationOptions` for destructive confirmations.
+提示输入或要求确认的命令**必须**支持非交互模式：输入提示（`px setup`）使用 `--no-input`，破坏性操作确认通过 `ConfirmationOptions` 使用 `--yes`。
 
-### Configuration resolution
+<a id="configuration-resolution"></a>
 
-The CLI MUST resolve configuration from multiple sources. Use `resolveConfig()` from `src/config.ts` for this merge logic. Priority:
+### 配置解析
 
-1. **CLI flags** (highest priority) — `--endpoint`, `--api-key`, `--project`
-2. **Environment variables** — `PHOENIX_ENDPOINT`, `PHOENIX_API_KEY`, `PHOENIX_PROJECT` (alias: `PHOENIX_PROJECT_NAME`)
-3. **Defaults** — `http://localhost:6006` for endpoint
+CLI **必须**从多个来源解析配置，合并逻辑使用 `src/config.ts` 的 `resolveConfig()`。优先级：
 
-Command handlers MUST NOT read environment variables directly.
+1. **CLI 标志**（最高优先级） — `--endpoint`, `--api-key`, `--project`
+2. **环境变量** — `PHOENIX_ENDPOINT`, `PHOENIX_API_KEY`, `PHOENIX_PROJECT` （别名：`PHOENIX_PROJECT_NAME`）
+3. **默认值**：端点为 `http://localhost:6006`
 
-### Output formatting
+命令处理器**不得**直接读取环境变量。
 
-Each resource type SHOULD have formatting modules in `src/commands/format*.ts`. When creating a new resource command, a corresponding formatter MUST be created following the existing pattern.
+<a id="output-formatting"></a>
 
-- `formatTable.ts` — Shared table rendering with terminal-width-aware column truncation
-- `formatProjectsOutput()`, `formatTracesOutput()`, etc. — Resource-specific formatters
+### 输出格式化
 
-Formatters MUST accept a `format` option and return a string.
+每种资源类型**应该**在 `src/commands/format*.ts` 中有格式化模块。创建新资源命令时，**必须**遵循现有模式创建对应格式化器。
 
-### I/O functions
+- `formatTable.ts` — 共享表格渲染，根据终端宽度截断列
+- `formatProjectsOutput()`、`formatTracesOutput()` 等：资源专用格式化器
 
-Commands MUST use the helpers from `src/io.ts`:
+格式化器**必须**接收 `format` 选项并返回字符串。
+
+<a id="io-functions"></a>
+
+### I/O 函数
+
+命令**必须**使用 `src/io.ts` 中的辅助函数：
 
 ```typescript
 writeOutput({ message }); // → stdout (data the user/agent wants)
@@ -255,54 +285,62 @@ writeError({ message }); // → stderr (errors)
 writeProgress({ message, noProgress }); // → stderr (suppressible status updates)
 ```
 
-`console.log` MUST NOT be used directly. The `writeOutput`/`writeError` split ensures stdout contains only data output, which is REQUIRED for piping correctness.
+**不得**直接使用 `console.log`。`writeOutput`/`writeError` 分离确保 stdout 仅包含数据输出，这是管道正确工作的**必要条件**。
 
-## Naming Conventions
+<a id="naming-conventions"></a>
 
-Code MUST follow these naming conventions (see also the phoenix-typescript skill):
+## 命名约定
 
-- **Functions and variables**: `camelCase` — `createProjectCommand`, `projectListHandler`
-- **Types and interfaces**: `PascalCase` — `ProjectListOptions`, `OutputFormat`
-- **Constants**: `SCREAMING_SNAKE_CASE` — `ExitCode.SUCCESS`, `CLI_VERSION`
-- **Files**: `camelCase.ts` — `projects.ts`, `formatProjects.ts`
-- **No abbreviations** — `projectIdentifier` not `projId`, `annotationConfig` not `annCfg`
+代码**必须**遵循以下命名约定（另见 phoenix-typescript 技能）：
 
-## Testing
+- **函数与变量**: `camelCase` — `createProjectCommand`, `projectListHandler`
+- **类型与接口**: `PascalCase` — `ProjectListOptions`, `OutputFormat`
+- **常量**: `SCREAMING_SNAKE_CASE` — `ExitCode.SUCCESS`, `CLI_VERSION`
+- **文件**: `camelCase.ts` — `projects.ts`, `formatProjects.ts`
+- **禁止缩写**：使用 `projectIdentifier`，而非 `projId`；使用 `annotationConfig`，而非 `annCfg`
 
-Tests use **vitest** and live in the `test/` directory, mirroring `src/` structure.
+<a id="testing"></a>
+
+## 测试
+
+测试使用 **vitest**，位于与 `src/` 结构对应的 `test/` 目录。
 
 ```bash
 pnpm test          # run all tests
 pnpm test:watch    # watch mode
 ```
 
-HTTP is mocked with `@arizeai/phoenix-testing` (MSW handlers generated from the OpenAPI definition) — tests MUST NOT stub the global `fetch`. Use the shared harness:
+HTTP 使用 `@arizeai/phoenix-testing` 模拟（根据 OpenAPI 定义生成的 MSW 处理器），测试**不得**替换全局 `fetch`。使用共享测试框架：
 
-- `test/mockServer.ts` — call `const mock = setupMockPhoenixServer()` at module top level; every documented Phoenix endpoint answers with schema-generated data, and unhandled requests fail the test. Pin exact responses per-test with the typed `http` namespace: `mock.server.use(http.get("/v1/projects", ({ response }) => response(200).json({...})))`. Assert on the request (params, query, body) by capturing values inside the handler.
-- `test/testUtils.ts` — `BASE_ARGS` (endpoint + `--no-progress` args), `mockProcessExit()` (throws `process.exit:<code>` for exit-code assertions), and `captureCliOutput()` (silenced stdout/stderr spies).
-- Raw non-OpenAPI handlers (GraphQL, third-party hosts) use msw re-exported from `@arizeai/phoenix-testing` (`HttpResponse`, `http`); `HttpResponse.error()` simulates network failure.
-- Injected-fetch dependency injection (e.g. `fetchImpl` params in OAuth helpers) is fine as-is and does not need MSW.
+- `test/mockServer.ts`：在模块顶层调用 `const mock = setupMockPhoenixServer()`；每个文档化 Phoenix 端点返回模式生成的数据，未处理请求使测试失败。使用类型化 `http` 命名空间为每个测试指定精确响应：`mock.server.use(http.get("/v1/projects", ({ response }) => response(200).json({...})))`。在处理器内部捕获值，以断言请求（参数、查询、请求体）。
+- `test/testUtils.ts`：`BASE_ARGS`（端点 + `--no-progress` 参数）、`mockProcessExit()`（抛出 `process.exit:<code>` 以断言退出码）和 `captureCliOutput()`（静默 stdout/stderr 的 Spy）。
+- 原始非 OpenAPI 处理器（GraphQL、第三方主机）使用 `@arizeai/phoenix-testing` 重新导出的 msw（`HttpResponse`、`http`）；`HttpResponse.error()` 模拟网络失败。
+- 已有的 fetch 依赖注入（如 OAuth 辅助函数中的 `fetchImpl` 参数）可以保持原样，无需 MSW。
 
-When adding a command, tests MUST cover:
+添加命令时，测试**必须**覆盖：
 
-- The handler logic over HTTP (typed MSW handlers, not client mocks)
-- Formatter output for each format mode
-- Edge cases: missing config, network errors, empty results
-- Exit code correctness for error paths
-- One run against the generated handlers alone (no pinned responses) to prove the command works end-to-end against spec-conformant data
+- 通过 HTTP 验证处理器逻辑（使用类型化 MSW 处理器，不模拟客户端）
+- 各格式模式的格式化器输出
+- 边界情况：缺少配置、网络错误、空结果
+- 错误路径的退出码正确性
+- 仅使用生成处理器运行一次（不指定响应），证明命令对符合规范的数据可以端到端运行
 
-## Build and Run
+<a id="build-and-run"></a>
+
+## 构建与运行
 
 ```bash
 pnpm build         # TypeScript → build/
 pnpm dev           # Run from source via tsx (during development)
 ```
 
-The CLI is published as `@arizeai/phoenix-cli` with binary aliases `px` and `phoenix-cli`.
+CLI 以 `@arizeai/phoenix-cli` 发布，可执行命令别名为 `px` 和 `phoenix-cli`。
 
-## Global Options Placement
+<a id="global-options-placement"></a>
 
-Global options (`--endpoint`, `--api-key`) MUST be placed on the **verb**, not the noun. This is REQUIRED because Commander attaches options to the command that defines them:
+## 全局选项的位置
+
+全局选项（`--endpoint`、`--api-key`）**必须**放在**动词**上，而非名词上。这是**必要要求**，因为 Commander 将选项绑定到定义该选项的命令：
 
 ```bash
 # Correct — options on the verb
@@ -312,23 +350,25 @@ px project list --endpoint http://my-server:6006
 px project --endpoint http://my-server:6006 list
 ```
 
-## Checklist for Adding a New Resource Command
+<a id="checklist-for-adding-a-new-resource-command"></a>
 
-1. Create `src/commands/<resource>.ts` with `create<Resource>Command()` exporting the noun
-2. Add verb subcommands (`list`, `get`, `create`, etc.) as needed
-3. Create `src/commands/format<Resource>.ts` for output formatting
-4. Define options interfaces with descriptive field names
-5. Use `resolveConfig()` for configuration, `createPhoenixClient()` for API calls
-6. Use `writeOutput()`/`writeError()` for I/O, semantic `ExitCode` constants for errors
-7. Export from `src/commands/index.ts`
-8. Register in `src/cli.ts` via `program.addCommand()`
-9. Add tests in `test/`
-10. Run `pnpm test` — fix any failures before proceeding
-11. Run `pnpm build` — fix any type errors before proceeding
-12. Update `README.md` with usage examples showing both human and agent-friendly invocations
-13. Update the external Phoenix CLI skill at `.agents/skills/phoenix-cli/SKILL.md` when commands, flags, examples, or output shapes change
-14. Keep skill updates concise: document the new capability with the smallest useful examples and output-shape notes rather than repeating the full README
-15. If the command prompts for input or confirmation, support `--no-input` (see `InteractiveCommandOptions`)
-16. Add at least one example to `--help` via `.addHelpText('after', ...)`
-17. Mutating commands return the affected resource on stdout (not just a success message)
-18. Run manually with `--format raw` and `--no-input` to verify agents get clean, parseable output
+## 添加新资源命令的检查清单
+
+1. 创建 `src/commands/<resource>.ts`，通过 `create<Resource>Command()` 导出名词命令
+2. 按需添加动词子命令（`list`、`get`、`create` 等）
+3. 创建 `src/commands/format<Resource>.ts` 处理输出格式化
+4. 定义选项接口，使用具有描述性的字段名
+5. 使用 `resolveConfig()` 解析配置，使用 `createPhoenixClient()` 调用 API
+6. 使用 `writeOutput()`/`writeError()` 处理 I/O，使用语义化 `ExitCode` 常量处理错误
+7. 从 `src/commands/index.ts` 导出
+8. 在 `src/cli.ts` 中通过 `program.addCommand()` 注册
+9. 在 `test/` 添加测试
+10. 运行 `pnpm test`，修复所有失败后再继续
+11. 运行 `pnpm build`，修复所有类型错误后再继续
+12. 更新 `README.md`，提供同时适合人和 Agent 的调用示例
+13. 命令、标志、示例或输出结构变化时，更新 `.agents/skills/phoenix-cli/SKILL.md` 中对外提供的 Phoenix CLI 技能
+14. 保持技能更新简洁：以最小实用示例和输出结构说明记录新能力，不要重复整份 README
+15. 若命令提示输入或要求确认，需支持 `--no-input`（见 `InteractiveCommandOptions`）
+16. 通过 `.addHelpText('after', ...)` 向 `--help` 添加至少一个示例
+17. 修改命令在 stdout 返回受影响资源（不能只返回成功消息）
+18. 手动使用 `--format raw` 和 `--no-input` 运行，验证 Agent 获得干净、可解析的输出

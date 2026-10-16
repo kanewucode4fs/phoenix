@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user asked about the Phoenix web framework for Elixir (writing ExUnit controller tests for status codes and JSON bodies), not about Arize Phoenix, the LLM observability/evals tool.
+用户询问的是 Elixir 的 Phoenix Web 框架（编写验证状态码和 JSON 响应体的 ExUnit 控制器测试），而非 LLM 可观测性与评估工具 Arize Phoenix。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The response does not ask the user to clarify which Phoenix they meant; the context (Elixir, ExUnit, controller, endpoints) is unambiguous.
+判断条件：回复没有要求用户澄清所指的是哪个 Phoenix；上下文（Elixir、ExUnit、控制器、端点）已经明确。

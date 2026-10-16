@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user pasted a Phoenix trace with a single OK LLM span. The model had `load_skill` (with `pdf-export` listed), `get_report`, and `send_email` available, but made no tool call and answered from general knowledge with browser print-dialog advice.
+用户粘贴了一条仅包含一个 OK 状态 LLM 跨度的 Phoenix 追踪记录。模型可以调用 `load_skill`（其中列出了 `pdf-export`）、`get_report` 和 `send_email`，却没有调用任何工具，而是凭通用知识回答，建议用户使用浏览器的打印对话框。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The response proposes at least one concrete remedy for skill triggering, such as: make the `load_skill` description or the skill names describe when to use them ("use pdf-export whenever the user asks to export, download, or save a report as PDF"); list the available skills and their triggers in the system prompt; force or strongly bias tool choice for export-style requests; add a routing step.
+判断条件：回复至少提出一种具体的技能触发改进办法，例如：让 `load_skill` 的描述或技能名称说明何时使用（“用户要求将报告导出、下载或保存为 PDF 时，使用 pdf-export”）；在系统提示词中列出可用技能及其触发条件；对导出类请求强制或强烈倾向于选择工具；增加路由步骤。

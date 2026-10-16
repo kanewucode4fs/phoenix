@@ -1,176 +1,201 @@
-# Prompts
+<a id="prompts"></a>
+# 提示词
 
-Authors: @mikeldking @anticorrelator
+作者：@mikeldking @anticorrelator
 
-As a user of Phoenix, I want to be able to create, store, and modify the prompts that I use to interact with LLMs. The primary reason for this is to be able to reuse prompts across different use cases and to be able to load them into different LLMs in the playground and in code as needed.
+作为 Phoenix 用户，我希望能够创建、存储和修改与 LLM 交互时使用的提示词。主要目的是在不同场景中复用提示词，并按需在 Playground 和代码中将其加载到不同 LLM。
 
-## Terminology
+<a id="terminology"></a>
+## 术语
 
-- **Prompts** refer to the message(s) that are passed into the language model.
-- **Prompt Templates** refer a way of formatting information to get the prompt to hold the information you want (such as context and examples) Prompt templates can include placeholders (variables) for things such as examples (e.x. few-shot), outside context (RAG), or any other external data that is needed.
-- **Prompt Type** refer to the different types of prompts that can be used with the language model. For example, Chat, String. The primary prompt type will be Chat as it is the most common.
+- **提示词**：指传入语言模型的消息。
+- **提示词模板**：一种信息格式化方式，让提示词包含所需信息，如上下文和示例。模板可以包含用于示例（如少样本示例）、外部上下文（RAG）或其他所需外部数据的占位符（变量）。
+- **提示词类型**：可用于语言模型的不同提示词类型，例如 Chat、String。Chat 最常见，将作为主要类型。
 
-## Use-cases
+<a id="use-cases"></a>
+## 使用场景
 
-A user may want to store a prompt or prompt template to:
+用户可能希望存储提示词或提示词模板，以便：
 
-- Experiment with different prompts in the playground and test the output of the LLM against different models.
-- Store off prompts so that it can be loaded into a notebook when performing experiments.
-- Share prompts with other users so that they can have a reasonable starting point for new prompts.
-- Use Prompt as a source of truth for prompts in the case that prompts need to be versioned and tracked over time (e.x. beta-testing a new prompt, rolling back to an older version)
+- 在 Playground 中尝试不同提示词，并对不同模型的 LLM 输出进行测试。
+- 保存提示词，在执行实验时加载到 notebook。
+- 与其他用户分享提示词，为新提示词提供合理起点。
+- 将 Prompt 作为提示词的唯一事实来源，在需要时进行版本管理和长期跟踪，例如测试新提示词的 Beta 版本或回滚旧版。
 
-In the abstract a prompt template has:
+抽象而言，提示词模板包含：
 
-- A human-readable name (identifier)
-- A description / README (markdown)
-- A prompt type (Chat, String, ...)
-- A format (f-string / mustache)
-- A set of revisions to the prompt
+- 人类可读名称（标识符）。
+- 描述或 README（Markdown）。
+- 提示词类型（Chat、String 等）。
+- 格式（f-string / mustache）。
+- 一组提示词修订版本。
 
-In addition a prompt template might have associated model configurations (e.g. the prompt only works under certain parameters). In this case the prompt might have a model configuration associated with it. This includes:
+此外，模板可能关联模型配置，例如提示词只有在特定参数下才有效。此时，关联的模型配置包括：
 
-- The name of the model
-- The model provider (think Azure, Anthropic, OpenAI)
-- Model parameters (temperature, max_tokens, etc)
+- 模型名称。
+- 模型提供商，例如 Azure、Anthropic、OpenAI。
+- 模型参数，如 temperature、max_tokens 等。
 
-The model configuration is mainly meant as a guideline and might need to be tracked separately (TBD).
+模型配置主要作为指引，可能需要独立跟踪（待定）。
 
-### Prompt Types
+<a id="prompt-types"></a>
+### 提示词类型
 
-With LLMs, there are different ways to invoke an LLM. Broadly speaking there are the following prompting types:
+LLM 有不同调用方式。总体上存在以下提示词类型：
 
-- **Chat**: This is the most common type of prompt where the user is interacting with the LLM in a conversational manner.
-- **String**: This is a single string that is passed into the LLM. This is useful for generating text to submit to a model for completion. This is largely a legacy use-case.
+- **Chat**：最常见，用户以对话方式与 LLM 交互。
+- **String**：传给 LLM 的单一字符串，可用于生成提交给模型进行补全的文本。这主要是旧有使用场景。
 
-In addition to the above, a prompt template could be categorized into more granular types such as
+除上述类型外，提示词模板还可进一步细分，例如：
 
-- **ChatStructuredOutput**: Leveraging function / tool calls or output schemas to treat the LLM as a "function"
+- **ChatStructuredOutput**：利用函数/工具调用或输出 schema，将 LLM 作为函数使用。
 
-The above types are not exhaustive but mainly to indicate that we might want to extend the definition as use-cases evolve.
+这些类型并不穷尽所有可能，主要是说明随着使用场景演进，可能需要扩展定义。
 
-### System Messages
+<a id="system-messages"></a>
+### 系统消息
 
-Depending on the LLM provider, the notion of a system message can differ. For example with OpenAI, you can have a series of system messages defined by a role. For Anthropic, you have a single system message that is passed in with the prompt. For **Chat** prompts, we will assume that there can be system messages in the list. These system messages would be extracted and concatenated together in the case of platforms such as Anthropic.
+系统消息的概念因 LLM 提供商而异。例如，OpenAI 可以通过角色定义一系列系统消息；Anthropic 则随提示词传入单条系统消息。对于 **Chat** 提示词，我们假定列表中可以包含系统消息；对 Anthropic 等平台，会提取这些系统消息并将其拼接。
 
-### Revisions
+<a id="revisions"></a>
+### 修订版本
 
-Similar to a git - when modifying a prompt, a new revision / commit is created. This allows the user to see the history of the prompt and to revert back to a previous snapshot if needed. Note that there is no real need for complex git-like functionality as a linear history is sufficient. For that reason we will adopt the idea of a linear history of revisions.
+类似 Git，修改提示词时会创建新的修订或提交，用户可查看历史，并按需回退到先前快照。无需复杂的类 Git 功能，线性历史已经足够，因此采用线性修订历史。
 
-It's noting that prompt templates should also be "forkable" - meaning that a template is used as a starting point for a new prompt. The previous history of the prompt should carry over to the forked prompt.
+还需注意，提示词模板应支持派生副本，即将模板作为新提示词的起点。原提示词的历史也应保留到派生提示词中。
 
-### F-string vs mustache
+<a id="f-string-vs-mustache"></a>
+### f-string 与 Mustache
 
-Users should be able to format their prompt with input variables using either f-string or mustache format. Here is an example prompt with f-string format:
+用户应能使用 f-string 或 Mustache 格式，结合输入变量格式化提示词。以下是 f-string 示例：
 
 ```python
 Hello, {name}!
 ```
 
-And here is one with mustache:
+以下是 Mustache 示例：
 
 ```mustache
 Hello, {{name}}!
 ```
 
-#### Mustache format
+<a id="mustache-format"></a>
+#### Mustache 格式
 
-Mustache format gives your more flexibility around conditional variables, loops, and nested keys. Read the documentation
+Mustache 在条件变量、循环和嵌套键方面提供更多灵活性。请阅读相关文档。
 
-## Anatomy of a Prompt
+<a id="anatomy-of-a-prompt"></a>
+## 提示词的构成
 
-### Tools
+<a id="tools"></a>
+### 工具
 
-Tools are interfaces the LLM can use to interact with the outside world. Tools consist of a name, description, and JSON schema of arguments used to call the tool.
+工具是 LLM 与外部世界交互的接口，由名称、描述及调用参数的 JSON schema 组成。
 
-### Structured Output
+<a id="structured-output"></a>
+### 结构化输出
 
-Structured output is a feature of most state of the art LLMs, wherein instead of producing raw text as output they stick to a specified schema. This may or may not use Tools under the hood.
+结构化输出是多数先进 LLM 的功能：不输出原始文本，而是遵循指定 schema。其底层可能使用工具，也可能不使用。
 
-### Structured Output vs Tools
+<a id="structured-output-vs-tools"></a>
+### 结构化输出与工具
 
-Structured outputs are similar to tools, but different in a few key ways. With tools, the LLM choose which tool to call (or may choose not to call any); with structured output, the LLM always responds in this format. With tools, the LLM may select multiple tools; with structured output, only one response is generate.
+结构化输出类似工具，但存在几项关键区别：使用工具时，LLM 会选择调用哪个工具，也可以不调用；使用结构化输出时，LLM 始终按指定格式回复。工具调用可选择多个工具，而结构化输出只生成一个回复。
 
-### Model
+<a id="model"></a>
+### 模型
 
-Optionally, prompts can store a model configuration alongside a prompt template. This includes the name of the model and any other parameters (temperature, etc).
+提示词可以选择在模板旁存储模型配置，包括模型名称和其他参数，例如 temperature。
 
-### Prompt Versioning
+<a id="prompt-versioning"></a>
+### 提示词版本管理
 
-Versioning is a key part of iterating and collaborating on your different prompts.
+版本管理是提示词迭代和协作的关键部分。
 
-Every time you save a new version of a prompt, it is saved with a new commit. You can view old commit, allowing you to easily see previous prompt versions in case you need to revert to previous functionality. You can access a specific commit of the prompt in the SDK by specifying a commit alongside the prompt name.
+每次保存新版本，都会创建一个新提交。可以查看旧提交，方便了解此前版本，并在需要时恢复先前功能。在 SDK 中，可以同时指定提示词名称和提交，以访问特定提交。
 
-### Tags
+<a id="tags"></a>
+### 标签
 
-You may want to tag prompt version with a human-readable tag so that you can refer to it even as new versions are added. Common use cases include tagging a prompt with dev or prod tags. This allows you to track which versions of prompts are used where.
+可以给提示词版本附加人类可读标签，以便新增版本后仍能引用它。常见用法包括 dev、prod 标签，用于跟踪不同位置使用的提示词版本。
 
-It might be worth considering having pre-configured tags when a prompt template is created (e.g. heads/main)
+可以考虑在创建提示词模板时预配置标签，例如 heads/main。
 
-## Analytics
+<a id="analytics"></a>
+## 分析
 
-One of the benefits of using Phoenix as a source of prompts is that analytics about a given prompt can be tracked over time. This includes:
+使用 Phoenix 作为提示词来源的优势之一，是可以长期跟踪特定提示词的分析数据，包括：
 
-- The number of times a prompt has been used
-- first used
-- last used
-- linking of traces to a prompt
-- ...
+- 提示词使用次数。
+- 首次使用时间。
+- 最近使用时间。
+- 将追踪关联到提示词。
+- ……
 
-This can be useful for tracking the effectiveness of a prompt over time.
+这些信息有助于长期跟踪提示词效果。
 
-This could mean that when a prompt is used, context attributes can be set.
+这可能意味着，使用提示词时可以设置上下文属性。
 
-## User Journeys
+<a id="user-journeys"></a>
+## 用户旅程
 
-### First time creating a prompt
+<a id="first-time-creating-a-prompt"></a>
+### 首次创建提示词
 
-1. Create a new prompt template in the prompt playground, test it out until you are happy with it. Maybe create a small dataset that tracks the input and expected output of the prompt.
-2. Save the prompt template and optionally mark it as the version to use in "production" (YOLO)
-3. Continue to iterate on the prompt template, marking possible candidates for the next version.
-4. Run experiments, continuously comparing the new experiments with the experiment that was run on the last production version of the prompt.
-5. When you've created an experiment that results in a better evaluation, you mark the new version as the production version.
+1. 在提示词 Playground 创建新模板并测试，直到满意。也可以创建小数据集，跟踪提示词输入和预期输出。
+2. 保存模板，并可选地将其标记为生产使用版本（YOLO）。
+3. 持续迭代模板，标记下一版本的潜在候选。
+4. 运行实验，不断将新实验与上一生产提示词版本对应的实验进行比较。
+5. 新实验取得更好的评估结果后，将新版本标记为生产版本。
 
-### Forking a prompt
+<a id="forking-a-prompt"></a>
+### 派生提示词副本
 
-There might come a time when you want to create your own copy of a prompt template. This might be because you want to try out a new model or you want to make destructive changes to a prompt.
+有时需要创建提示词模板的个人副本，例如尝试新模型，或对提示词进行破坏性修改。
 
-1. Fork the prompt template. The prompt template carries over the history of the prompt.
-2. Make changes to the prompt template. You can make as many changes as you want, including the model
-3. When I look at the experiments that have been run, I can filter by the prompt template "name" and "version" so that I can just analyze the experiments that have been run on the forked template.
+1. 派生提示词模板副本，并保留原提示词历史。
+2. 修改模板，可以进行任意次数和范围的修改，包括模型。
+3. 查看已运行实验时，可按提示词模板名称和版本过滤，只分析派生模板上的实验。
 
-### Using a prompt in my IDE or code
+<a id="using-a-prompt-in-my-ide-or-code"></a>
+### 在 IDE 或代码中使用提示词
 
-If prompts are collaborative, versioned entities, I might want to pick up from a given snapshot of a prompt in my IDE.
+如果提示词是可协作、可版本管理的实体，我可能希望在 IDE 中从指定快照继续工作。
 
-1. I use `phoenix.client` to pull down a prompt template (maybe a specific tag or version is specified)
-2. Alternatively, I go to the Phoenix UI and copy the prompt template into my code.
-3. Run experiments or run the application using the updated prompt.
-4. Modify the prompt locally in my IDE. I can then push the prompt back to Phoenix as a new candidate version.
+1. 使用 `phoenix.client` 拉取提示词模板，可以指定特定标签或版本。
+2. 也可进入 Phoenix 界面，将提示词模板复制到代码。
+3. 使用更新后的提示词运行实验或应用。
+4. 在 IDE 中本地修改提示词，再将其推送回 Phoenix，作为新候选版本。
 
-### Using a prompt in production
+<a id="using-a-prompt-in-production"></a>
+### 在生产环境中使用提示词
 
-If I am managing prompts in Phoenix, I might want to know which traces are associated with a given prompt. This can be useful as you can track the effectiveness of a prompt over time and see if certain tweaks result in better performance under real-world conditions.
+如果在 Phoenix 中管理提示词，我可能希望了解哪些追踪关联到特定提示词。这有助于长期跟踪效果，观察某些调整是否在真实环境下带来更好表现。
 
-### Testing an alternative prompt template on an LLM Span
+<a id="testing-an-alternative-prompt-template-on-an-llm-span"></a>
+### 在 LLM span 上测试替代提示词模板
 
-Say I used a prompt template to invoke an LLM. I then want to reuse the data stored on the span to test an alternative prompt template.
+假设已经用某个模板调用 LLM，随后希望复用 span 中存储的数据，测试其他模板。
 
-1. I export the span to a dataset
-2. I load the dataset in step 1 into the prompt playground
-3. I load the prompt template into the playground
-4. I iterate on alternatives to the prompt template
+1. 将 span 导出到数据集。
+2. 将第一步的数据集加载到提示词 Playground。
+3. 将提示词模板加载到 Playground。
+4. 迭代不同模板方案。
 
-## Technical Considerations
+<a id="technical-considerations"></a>
+## 技术考虑
 
-Prompt templates are really an artifact that should live as close as possible to the source code. For that reason if you are relying on Phoenix to be a source of truth of the template, there should be mechanisms to reduce this risk. Some options include:
+提示词模板本质上是应尽量贴近源码存放的产物。因此，如果依赖 Phoenix 作为模板的唯一事实来源，就应提供机制降低这一风险。可选方案包括：
 
-- caching
-- syncing
+- 缓存。
+- 同步。
 
-### Server-Side Catching
+<a id="server-side-catching"></a>
+### 服务端缓存
 
-A solution to server-side caching would be to carefully structure the URL of the REST APIs so that caching occurs at the network level. In addition to this, the server could also cache certain versions of the prompt template (notably a tagged version).
+一种服务端缓存方案是仔细设计 REST API URL，使缓存发生在网络层。除此之外，服务端也可缓存模板的特定版本，尤其是带标签版本。
 
-### Client-Side Caching
+<a id="client-side-caching"></a>
+### 客户端缓存
 
-We will leverage the SDK to cache the prompt templates locally after pull. This will allow for faster access to the prompt templates and will reduce the number of requests to the server. The client should operate to always try to pull off the network (unless using a version specifier). In the case of a network failure, the client should use a cached version of the prompt template. If there is no cache, we might want to consider a graceful fallback.
+我们将通过 SDK 在拉取后本地缓存模板，以加快访问并减少服务端请求。客户端应始终尝试通过网络拉取，除非使用了版本指定符。网络失败时，应使用缓存版本；没有缓存时，可以考虑优雅回退。

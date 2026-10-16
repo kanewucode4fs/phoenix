@@ -1,1 +1,1 @@
-Is the agent getting stuck repeating itself in research-assistant? Find the tool called the most times within a single trace, and say how many times.
+research-assistant 中的智能体是否陷入了重复调用？找出在单条追踪记录中被调用次数最多的工具，并给出调用次数。

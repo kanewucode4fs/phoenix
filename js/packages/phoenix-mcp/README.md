@@ -4,44 +4,46 @@
             <picture>
                 <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg">
                 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix-white.svg">
-                <img alt="Arize Phoenix logo" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
+                <img alt="Arize Phoenix 标志" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
             </picture>
         </a>
         <br>
-        Arize Phoenix MCP Server
+        Arize Phoenix MCP 服务器
     </div>
 </h1>
 
 <p align="center">
     <a href="https://www.npmjs.com/package/@arizeai/phoenix-mcp">
-        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-mcp" alt="NPM Version">
+        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-mcp" alt="NPM 版本">
     </a>
     <a href="https://github.com/Arize-ai/phoenix/blob/main/js/packages/phoenix-mcp/LICENSE">
-        <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License">
+        <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="许可证">
     </a>
-    <img src="https://badge.mcpx.dev?status=on" title="MCP Enabled"/>
+    <img src="https://badge.mcpx.dev?status=on" title="已启用 MCP"/>
     <a href="https://cursor.com/install-mcp?name=phoenix&config=eyJjb21tYW5kIjoibnB4IC15IEBhcml6ZWFpL3Bob2VuaXgtbWNwQGxhdGVzdCAtLWJhc2VVcmwgaHR0cDovL2xvY2FsaG9zdDo2MDA2IC0tYXBpS2V5IHlvdXItYXBpLWtleSJ9">
-        <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add Arize Phoenix MCP server to Cursor" height=20 />
+        <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="将 Arize Phoenix MCP 服务器添加到 Cursor" height=20 />
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=js/packages/phoenix-mcp/README.md" />
 </p>
 
-Phoenix MCP Server is an implementation of the Model Context Protocol for the Arize Phoenix platform. It provides a unified interface to Phoenix's capabilities.
+Phoenix MCP 服务器是面向 Arize Phoenix 平台的模型上下文协议实现，为 Phoenix 的功能提供统一接口。
 
-You can use Phoenix MCP Server for:
+Phoenix MCP 服务器可用于：
 
-- **Projects Management**: List and explore projects that organize your observability data
-- **Traces, Spans & Annotations**: Retrieve traces, spans, and annotation configs for analysis and debugging
-- **Sessions**: Explore conversation flows and session-level annotations
-- **Prompts Management**: Create, list, update, and iterate on prompts
-- **Datasets**: Explore datasets and synthesize new examples
-- **Experiments**: Pull experiment results and visualize them with the help of an LLM
+- **项目管理**：列出并浏览用于组织可观测性数据的项目
+- **追踪、Span 和标注**：获取追踪、Span 及标注配置，用于分析和调试
+- **会话**：浏览对话流程和会话级标注
+- **提示词管理**：创建、列出、更新和迭代提示词
+- **数据集**：浏览数据集并合成新示例
+- **实验**：拉取实验结果，并借助 LLM 进行可视化
 
-Don't see a use-case covered? `@arizeai/phoenix-mcp` is [open-source](https://github.com/Arize-ai/phoenix)! Issues and PRs welcome.
+没有找到你的使用场景？`@arizeai/phoenix-mcp` 是[开源项目](https://github.com/Arize-ai/phoenix)！欢迎提交 Issue 和 PR。
 
-## Installation
+<a id="installation"></a>
 
-This MCP server can be used with `npx` and can be directly integrated with clients like Claude Desktop, Cursor, and more.
+## 安装
+
+此 MCP 服务器可通过 `npx` 使用，并可直接集成到 Claude Desktop、Cursor 等客户端。
 
 ```json
 {
@@ -61,11 +63,15 @@ This MCP server can be used with `npx` and can be directly integrated with clien
 }
 ```
 
-## Development
+<a id="development"></a>
 
-## Install
+## 开发
 
-This package is managed via a pnpm workspace.
+<a id="install"></a>
+
+## 安装
+
+此包通过 pnpm 工作区管理。
 
 ```sh
 // From the /js/ directory
@@ -73,84 +79,94 @@ pnpm install
 pnpm build
 ```
 
-This only needs to be repeated if dependencies change or there is a change to the phoenix-client.
+只有依赖或 phoenix-client 发生变化时才需要重复执行。
 
-### Building
+<a id="building"></a>
 
-To build the project:
+### 构建
+
+构建项目：
 
 ```sh
 pnpm build
 ```
 
-### Development Mode
+<a id="development-mode"></a>
 
-To run in development mode:
+### 开发模式
+
+以开发模式运行：
 
 ```bash
 pnpm dev
 ```
 
-### Debugging
+<a id="debugging"></a>
 
-You can build and run the MCP inspector using the following:
+### 调试
+
+可通过以下命令构建并运行 MCP 检查器：
 
 ```bash
 pnpm inspect
 ```
 
-## Environment Variables
+<a id="environment-variables"></a>
 
-When developing, the server requires the following environment variables:
+## 环境变量
 
-- `PHOENIX_API_KEY`: Your Phoenix API key
-- `PHOENIX_ENDPOINT`: The base URL for Phoenix
-- `PHOENIX_PROJECT`: Optional default project for project-scoped tools (alias: `PHOENIX_PROJECT_NAME`)
-- `PHOENIX_CLIENT_HEADERS`: Optional JSON-encoded request headers
+开发时，服务器需要以下环境变量：
 
-Make sure to set these in a `.env` file. See `.env.example`.
+- `PHOENIX_API_KEY`: 你的 Phoenix API 密钥
+- `PHOENIX_ENDPOINT`: Phoenix 基础 URL
+- `PHOENIX_PROJECT`: 项目范围工具使用的可选默认项目（别名：`PHOENIX_PROJECT_NAME`）
+- `PHOENIX_CLIENT_HEADERS`: 可选的 JSON 编码请求头
 
-At runtime the server also discovers the nearest `.env.phoenix` file at or
-above the working directory. Process environment variables and command-line
-options take precedence. If a higher-priority API key is paired with an
-endpoint from the file, the server warns once and continues. Set
-`PHOENIX_DISCOVER_CONFIG=false` to disable discovery.
+请在 `.env` 文件中设置这些变量，参考 `.env.example`。
 
-## Tool Coverage
+运行时，服务器还会发现工作目录或其上级目录中最近的 `.env.phoenix` 文件。进程环境变量和命令行选项优先。如果较高优先级的 API 密钥与文件中的端点组合使用，服务器会发出一次警告后继续。设置 `PHOENIX_DISCOVER_CONFIG=false` 可禁用发现。
 
-The MCP server covers the main operational Phoenix workflows:
+<a id="tool-coverage"></a>
 
-**Prompts** — `list-prompts`, `get-prompt`, `get-latest-prompt`, `get-prompt-by-identifier`, `get-prompt-version`, `list-prompt-versions`, `get-prompt-version-by-tag`, `list-prompt-version-tags`, `add-prompt-version-tag`, `upsert-prompt`
+## 工具覆盖范围
 
-**Projects** — `list-projects`, `get-project`
+MCP 服务器覆盖 Phoenix 的主要操作流程：
 
-**Traces** — `list-traces`, `get-trace`
+**提示词** — `list-prompts`, `get-prompt`, `get-latest-prompt`, `get-prompt-by-identifier`, `get-prompt-version`, `list-prompt-versions`, `get-prompt-version-by-tag`, `list-prompt-version-tags`, `add-prompt-version-tag`, `upsert-prompt`
 
-**Spans** — `get-spans`, `get-span-annotations`
+**项目** — `list-projects`, `get-project`
 
-**Sessions** — `list-sessions`, `get-session`
+**追踪** — `list-traces`, `get-trace`
 
-**Annotation Configs** — `list-annotation-configs`
+**Span** — `get-spans`, `get-span-annotations`
 
-**Datasets** — `list-datasets`, `get-dataset`, `get-dataset-examples`, `get-dataset-experiments`, `add-dataset-examples`
+**会话** — `list-sessions`, `get-session`
 
-**Experiments** — `list-experiments-for-dataset`, `get-experiment-by-id`
+**标注配置** — `list-annotation-configs`
 
-For Phoenix documentation search, use the separate Phoenix Docs MCP server instead of this package.
+**数据集** — `list-datasets`, `get-dataset`, `get-dataset-examples`, `get-dataset-experiments`, `add-dataset-examples`
 
-## Community
+**实验** — `list-experiments-for-dataset`, `get-experiment-by-id`
 
-Join our community to connect with thousands of AI builders:
+搜索 Phoenix 文档时，请使用独立的 Phoenix Docs MCP 服务器，不要使用此包。
 
-- 🌍 Join our [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
-- 📚 Read the [Phoenix documentation](https://arize.com/docs/phoenix).
-- 💡 Ask questions and provide feedback in the _#phoenix-support_ channel.
-- 🌟 Leave a star on our [GitHub](https://github.com/Arize-ai/phoenix).
-- 🐞 Report bugs with [GitHub Issues](https://github.com/Arize-ai/phoenix/issues).
-- 𝕏 Follow us on [𝕏](https://twitter.com/ArizePhoenix).
-- 💼 Follow us on [LinkedIn](https://www.linkedin.com/showcase/113218220).
-- 🗺️ Check out our [roadmap](https://github.com/orgs/Arize-ai/projects/45) to see where we're heading next.
+<a id="community"></a>
 
-## License
+## 社区
+
+加入我们的社区，与数千名 AI 开发者交流：
+
+- 🌍 加入我们的 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
+- 📚 阅读 [Phoenix 文档](https://arize.com/docs/phoenix).
+- 💡 在 _#phoenix-support_ 频道提问并反馈。
+- 🌟 为我们的 [GitHub](https://github.com/Arize-ai/phoenix) 加星。
+- 🐞 通过 [GitHub Issues](https://github.com/Arize-ai/phoenix/issues) 报告问题。
+- 𝕏 在 [𝕏](https://twitter.com/ArizePhoenix) 关注我们。
+- 💼 在 [LinkedIn](https://www.linkedin.com/showcase/113218220) 关注我们。
+- 🗺️ 查看我们的[路线图](https://github.com/orgs/Arize-ai/projects/45)，了解未来方向。
+
+<a id="license"></a>
+
+## 许可证
 
 Apache 2.0

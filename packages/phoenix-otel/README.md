@@ -4,7 +4,7 @@
             <picture>
                 <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix-white.svg">
                 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg">
-                <img alt="Arize Phoenix logo" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
+                <img alt="Arize Phoenix 标志" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
             </picture>
         </a>
         <br>
@@ -14,35 +14,39 @@
 
 <p align="center">
     <a href="https://pypi.org/project/arize-phoenix-otel/">
-        <img src="https://img.shields.io/pypi/v/arize-phoenix-otel" alt="PyPI Version">
+        <img src="https://img.shields.io/pypi/v/arize-phoenix-otel" alt="PyPI 版本">
     </a>
     <a href="https://arize-phoenix.readthedocs.io/projects/otel/">
-        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="Documentation">
+        <img src="https://img.shields.io/badge/docs-blue?logo=readthedocs&logoColor=white" alt="文档">
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=packages/phoenix-otel/README.md" />
 </p>
 
-Provides a lightweight wrapper around OpenTelemetry primitives with Phoenix-aware defaults. Phoenix OTEL also gives you access to tracing decorators for common GenAI patterns.
+提供对 OpenTelemetry 基础能力的轻量封装，带有适合 Phoenix 的默认值。Phoenix OTEL 还提供常见 GenAI 模式的追踪装饰器。
 
-## Features
+<a id="features"></a>
 
-`arize-phoenix-otel` simplifies OpenTelemetry configuration for Phoenix users by providing:
+## 功能
 
-- **Phoenix-aware defaults** for common OpenTelemetry primitives
-- **Automatic configuration** from environment variables
-- **Drop-in replacements** for OTel classes with enhanced functionality
-- **Simplified tracing setup** with the `register()` function
-- **Tracing decorators** for GenAI patterns
+`arize-phoenix-otel` 通过以下功能简化 Phoenix 用户的 OpenTelemetry 配置：
 
-## Key Benefits
+- 为常见 OpenTelemetry 基础能力提供**适合 Phoenix 的默认值**
+- 从环境变量**自动配置**
+- 提供功能增强的 OTel 类**直接替代实现**
+- 通过 `register()` 函数**简化追踪配置**
+- GenAI 模式的**追踪装饰器**
 
-- **Zero Code Changes**: Enable `auto_instrument=True` to automatically instrument AI libraries
-- **Production Ready**: Built-in batching and authentication
-- **Phoenix Integration**: Seamless integration with Phoenix Cloud and self-hosted instances
-- **OpenTelemetry Compatible**: Works with existing OpenTelemetry infrastructure
-- **Server Version Independent**: Versioned separately from the Phoenix server — any recent `arize-phoenix-otel` works with any Phoenix server version, with no version pairing to track (traces are sent over OTLP using OpenInference semantic conventions, both backward compatible)
+<a id="key-benefits"></a>
 
-These defaults are aware of environment variables you may have set to configure Phoenix:
+## 主要优势
+
+- **零代码改动**：启用 `auto_instrument=True` 自动为 AI 库插桩
+- **适用于生产**：内置批处理和身份验证
+- **Phoenix 集成**：无缝集成 Phoenix Cloud 和自托管实例
+- **兼容 OpenTelemetry**：可与现有 OpenTelemetry 基础设施配合使用
+- **独立于服务器版本**：与 Phoenix 服务器分别管理版本；近期任一 `arize-phoenix-otel` 均可配合任何 Phoenix 服务器版本使用，无需维护版本配对（追踪使用 OpenInference 语义约定，通过 OTLP 发送，两者均向后兼容）
+
+这些默认值会识别你可能已设置的 Phoenix 配置环境变量：
 
 - `PHOENIX_COLLECTOR_ENDPOINT`
 - `PHOENIX_PROJECT_NAME`
@@ -50,17 +54,21 @@ These defaults are aware of environment variables you may have set to configure 
 - `PHOENIX_API_KEY`
 - `PHOENIX_GRPC_PORT`
 
-## Installation
+<a id="installation"></a>
 
-Install via `pip`:
+## 安装
+
+通过 `pip` 安装：
 
 ```shell
 pip install arize-phoenix-otel
 ```
 
-## Quick Start
+<a id="quick-start"></a>
 
-**Recommended**: Enable automatic instrumentation to trace your AI libraries with zero code changes:
+## 快速开始
+
+**推荐**：启用自动插桩，无需修改代码即可追踪 AI 库：
 
 ```python
 from phoenix.otel import register
@@ -73,9 +81,9 @@ tracer_provider = register(
 )
 ```
 
-That's it! All `openinference-*` AI libraries are now automatically traced and sent to Phoenix.
+完成！所有 `openinference-*` AI 库现在都会自动被追踪，并将追踪发送到 Phoenix。
 
-**Note**: `auto_instrument=True` only works if the corresponding OpenInference instrumentation libraries are installed. For example, to automatically trace OpenAI calls, you need `openinference-instrumentation-openai` installed:
+**注意**：只有安装对应 OpenInference 插桩库时，`auto_instrument=True` 才生效。例如，要自动追踪 OpenAI 调用，需要安装 `openinference-instrumentation-openai`：
 
 ```bash
 pip install openinference-instrumentation-openai
@@ -83,9 +91,11 @@ pip install openinference-instrumentation-langchain  # For LangChain
 pip install openinference-instrumentation-llama-index  # For LlamaIndex
 ```
 
-See the [OpenInference repository](https://github.com/Arize-ai/openinference) for the complete list of available instrumentation packages.
+可用插桩包的完整列表见 [OpenInference 仓库](https://github.com/Arize-ai/openinference)。
 
-### Authentication
+<a id="authentication"></a>
+
+### 身份验证
 
 ```bash
 export PHOENIX_API_KEY="your-api-key"
@@ -96,18 +106,20 @@ export PHOENIX_API_KEY="your-api-key"
 tracer_provider = register(api_key="your-api-key")
 ```
 
-### Endpoint Configuration
+<a id="endpoint-configuration"></a>
 
-Configure where to send your traces:
+### 端点配置
 
-**Environment Variables** (Recommended):
+配置追踪发送位置：
+
+**环境变量**（推荐）：
 
 ```bash
 export PHOENIX_COLLECTOR_ENDPOINT="https://your-phoenix-instance.com"
 export PHOENIX_PROJECT_NAME="my-project"
 ```
 
-**Direct Configuration**:
+**直接配置**：
 
 ```python
 tracer_provider = register(
@@ -116,9 +128,13 @@ tracer_provider = register(
 )
 ```
 
-## Usage Examples
+<a id="usage-examples"></a>
 
-### Simple Setup
+## 使用示例
+
+<a id="simple-setup"></a>
+
+### 简单配置
 
 ```python
 from phoenix.otel import register
@@ -127,7 +143,9 @@ from phoenix.otel import register
 tracer_provider = register(auto_instrument=True)
 ```
 
-### Production Configuration
+<a id="production-configuration"></a>
+
+### 生产配置
 
 ```python
 tracer_provider = register(
@@ -139,9 +157,11 @@ tracer_provider = register(
 )
 ```
 
-### Manual Configuration
+<a id="manual-configuration"></a>
 
-For advanced use cases, use Phoenix OTEL components directly:
+### 手动配置
+
+高级用例可直接使用 Phoenix OTEL 组件：
 
 ```python
 from phoenix.otel import TracerProvider, BatchSpanProcessor, HTTPSpanExporter
@@ -152,7 +172,9 @@ processor = BatchSpanProcessor(span_exporter=exporter)
 tracer_provider.add_span_processor(processor)
 ```
 
-### Using Decorators
+<a id="using-decorators"></a>
+
+### 使用装饰器
 
 ```python
 from phoenix.otel import register
@@ -173,23 +195,24 @@ def weather(location):
     return "sunny"
 ```
 
-## Environment Variables
+<a id="environment-variables"></a>
 
-| Variable                     | Description          | Example                                      |
+## 环境变量
+
+| 变量                     | 说明          | 示例                                      |
 | ---------------------------- | -------------------- | -------------------------------------------- |
-| `PHOENIX_COLLECTOR_ENDPOINT` | Where to send traces | `https://your-phoenix-instance.com`          |
-| `PHOENIX_PROJECT_NAME`       | Project name         | `my-llm-app`                                 |
-| `PHOENIX_API_KEY`            | Authentication key   | `your-api-key`                               |
-| `PHOENIX_CLIENT_HEADERS`     | Custom headers       | `Authorization=Bearer token`                 |
-| `PHOENIX_GRPC_PORT`          | gRPC port override   | `4317`                                       |
-| `PHOENIX_DISCOVER_CONFIG`    | Set to `false` to disable `.env.phoenix` discovery | `false`        |
+| `PHOENIX_COLLECTOR_ENDPOINT` | 追踪发送位置 | `https://your-phoenix-instance.com`          |
+| `PHOENIX_PROJECT_NAME`       | 项目名称         | `my-llm-app`                                 |
+| `PHOENIX_API_KEY`            | 身份验证密钥   | `your-api-key`                               |
+| `PHOENIX_CLIENT_HEADERS`     | 自定义请求头       | `Authorization=Bearer token`                 |
+| `PHOENIX_GRPC_PORT`          | 覆盖 gRPC 端口   | `4317`                                       |
+| `PHOENIX_DISCOVER_CONFIG`    | 设为 `false` 可禁用 `.env.phoenix` 发现 | `false`        |
 
-### Credential File Discovery (`.env.phoenix`)
+<a id="credential-file-discovery-envphoenix"></a>
 
-When a setting is not provided by argument or environment variable, `register()`
-looks for a `.env.phoenix` file in the current working directory — walking up
-toward the filesystem root and stopping at the first match — and reads
-`PHOENIX_`-prefixed keys from it (dotenv format):
+### 凭证文件发现（`.env.phoenix`）
+
+当参数或环境变量未提供某项配置时，`register()` 从当前工作目录开始向文件系统根目录逐级查找 `.env.phoenix`，在首个匹配处停止，并读取其中以 `PHOENIX_` 为前缀的键（dotenv 格式）：
 
 ```bash
 # .env.phoenix
@@ -197,46 +220,40 @@ PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
 PHOENIX_API_KEY=your-api-key
 ```
 
-Explicit arguments and environment variables always take precedence — the file
-never overrides anything already set. Set `PHOENIX_DISCOVER_CONFIG=false` to
-disable discovery entirely.
+显式参数和环境变量始终优先，文件绝不会覆盖已设置的值。设置 `PHOENIX_DISCOVER_CONFIG=false` 可完全禁用发现。
 
-Credentials (`PHOENIX_API_KEY`, `PHOENIX_CLIENT_HEADERS`, and
-`OTEL_EXPORTER_OTLP_HEADERS`) and server location
-(`PHOENIX_COLLECTOR_ENDPOINT`, `OTEL_EXPORTER_OTLP_ENDPOINT`, and
-`PHOENIX_GRPC_PORT`) are each resolved as a group from one source tier. This
-prevents a file-only gRPC port from rewriting a process-provided endpoint. If
-explicit or process credentials are paired with an endpoint from
-`.env.phoenix`, Phoenix OTel warns once and continues without logging credential
-values.
+凭证（`PHOENIX_API_KEY`、`PHOENIX_CLIENT_HEADERS` 和 `OTEL_EXPORTER_OTLP_HEADERS`）与服务器位置（`PHOENIX_COLLECTOR_ENDPOINT`、`OTEL_EXPORTER_OTLP_ENDPOINT` 和 `PHOENIX_GRPC_PORT`）各自作为一组，从同一来源层级解析，避免仅在文件中设置的 gRPC 端口改写进程提供的端点。若显式或进程凭证与 `.env.phoenix` 中的端点配对，Phoenix OTel 会发出一次警告后继续，不记录凭证值。
 
-Discovery results, including a missing file, are cached per working directory
-for the process lifetime. Long-running processes can call
-`phoenix.otel.settings.clear_env_file_cache()` after creating or changing the
-file.
+发现结果（包括文件缺失）按工作目录缓存，持续整个进程生命周期。长期运行的进程可在创建或修改文件后调用 `phoenix.otel.settings.clear_env_file_cache()`。
 
-## Coding Agent Skill
+<a id="coding-agent-skill"></a>
 
-The Phoenix repo includes a [phoenix-tracing skill](https://github.com/Arize-ai/phoenix/tree/main/.agents/skills/phoenix-tracing) that teaches coding agents (Claude Code, Cursor, etc.) how to instrument LLM applications with OpenInference tracing. Install it with:
+## 编码 Agent 技能
+
+Phoenix 仓库包含 [phoenix-tracing 技能](https://github.com/Arize-ai/phoenix/tree/main/.agents/skills/phoenix-tracing)，用于指导编码 Agent（Claude Code、Cursor 等）使用 OpenInference 追踪为 LLM 应用插桩。安装方式：
 
 ```bash
 npx skills add Arize-ai/phoenix --skill phoenix-tracing
 ```
 
-## Documentation
+<a id="documentation"></a>
 
-- **[Full Documentation](https://arize-phoenix.readthedocs.io/projects/otel/)** - Complete API reference and guides
-- **[Phoenix Docs](https://arize.com/docs/phoenix)** - Detailed tracing examples and patterns
-- **[OpenInference](https://github.com/Arize-ai/openinference)** - Auto-instrumentation libraries for frameworks
+## 文档
 
-## Community
+- **[完整文档](https://arize-phoenix.readthedocs.io/projects/otel/)** - 完整 API 参考与指南
+- **[Phoenix 文档](https://arize.com/docs/phoenix)** - 详细追踪示例与模式
+- **[OpenInference](https://github.com/Arize-ai/openinference)** - 面向框架的自动插桩库
 
-Join our community to connect with thousands of AI builders:
+<a id="community"></a>
 
-- 🌍 Join our [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
-- 💡 Ask questions and provide feedback in the _#phoenix-support_ channel.
-- 🌟 Leave a star on our [GitHub](https://github.com/Arize-ai/phoenix).
-- 🐞 Report bugs with [GitHub Issues](https://github.com/Arize-ai/phoenix/issues).
-- 𝕏 Follow us on [𝕏](https://twitter.com/ArizePhoenix).
-- 💼 Follow us on [LinkedIn](https://www.linkedin.com/showcase/113218220).
-- 🗺️ Check out our [roadmap](https://github.com/orgs/Arize-ai/projects/45) to see where we're heading next.
+## 社区
+
+加入我们的社区，与数千名 AI 开发者交流：
+
+- 🌍 加入我们的 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g).
+- 💡 在 _#phoenix-support_ 频道提问并反馈。
+- 🌟 为我们的 [GitHub](https://github.com/Arize-ai/phoenix) 加星。
+- 🐞 通过 [GitHub Issues](https://github.com/Arize-ai/phoenix/issues) 报告问题。
+- 𝕏 在 [𝕏](https://twitter.com/ArizePhoenix) 关注我们。
+- 💼 在 [LinkedIn](https://www.linkedin.com/showcase/113218220) 关注我们。
+- 🗺️ 查看我们的[路线图](https://github.com/orgs/Arize-ai/projects/45)，了解未来方向。

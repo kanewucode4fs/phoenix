@@ -1,20 +1,24 @@
-# Appendix: Error Types Across LLM Provider SDKs
+<a id="appendix-error-types-across-llm-provider-sdks"></a>
+# 附录：各 LLM 提供商 SDK 的错误类型
 
-This appendix documents how rate limit errors and other errors manifest across the various Python SDKs used by Phoenix for LLM inference. Understanding these patterns is critical for implementing robust error detection and retry logic in the background experiment runner.
+本附录说明 Phoenix 用于 LLM 推理的各类 Python SDK 如何呈现限流错误及其他错误。理解这些模式，是为后台实验运行器实现稳健错误检测和重试逻辑的关键。
 
-## Overview
+<a id="overview"></a>
+## 概述
 
-All modern LLM SDKs use a common pattern:
-- **HTTP-based errors** map to specific exception classes
-- **Rate limiting** is signaled via HTTP 429 (or provider-specific codes)
-- **Retry-After headers** provide backoff guidance
-- **Transient vs permanent errors** determine retry eligibility
+现代 LLM SDK 都采用一种共同模式：
+- **基于 HTTP 的错误**映射到具体异常类。
+- **限流**通过 HTTP 429 或提供商专用代码表示。
+- **Retry-After 请求头**提供退避指引。
+- **暂时性与永久性错误**决定是否可以重试。
 
-## Provider-Specific Error Hierarchies
+<a id="provider-specific-error-hierarchies"></a>
+## 各提供商的错误层级
 
-### OpenAI SDK (`openai`)
+<a id="openai-sdk-openai"></a>
+### OpenAI SDK（`openai`）
 
-**Source**: Stainless-generated SDK
+**来源**：Stainless 生成的 SDK。
 
 ```
 OpenAIError (base)
@@ -33,13 +37,13 @@ OpenAIError (base)
     └── APIResponseValidationError
 ```
 
-**Key Properties on `APIStatusError`**:
-- `status_code: int` - HTTP status code
-- `response: httpx.Response` - Full response object
-- `request_id: str | None` - From `x-request-id` header
-- `body: object | None` - Parsed JSON response body
+**`APIStatusError` 的关键属性**：
+- `status_code: int`：HTTP 状态码。
+- `response: httpx.Response`：完整响应对象。
+- `request_id: str | None`：来自 `x-request-id` 请求头。
+- `body: object | None`：解析后的 JSON 响应体。
 
-**Detection Pattern**:
+**检测模式**：
 ```python
 from openai import RateLimitError
 
@@ -53,9 +57,10 @@ except RateLimitError as e:
 
 ---
 
-### Anthropic SDK (`anthropic`)
+<a id="anthropic-sdk-anthropic"></a>
+### Anthropic SDK（`anthropic`）
 
-**Source**: Stainless-generated SDK
+**来源**：Stainless 生成的 SDK。
 
 ```
 AnthropicError (base)
@@ -78,11 +83,11 @@ AnthropicError (base)
     └── APIResponseValidationError
 ```
 
-**Anthropic-Specific Notes**:
-- **HTTP 529 (Overloaded)**: Anthropic uses this non-standard code when their API is overloaded. Should be treated like rate limiting with longer backoff.
-- **HTTP 503/504**: Transient errors that should be retried
+**Anthropic 特有说明**：
+- **HTTP 529（过载）**：Anthropic 在 API 过载时使用这一非标准状态码，应按限流处理，并采用更长退避时间。
+- **HTTP 503/504**：应重试的暂时性错误。
 
-**Detection Pattern**:
+**检测模式**：
 ```python
 from anthropic import RateLimitError, OverloadedError
 
@@ -95,9 +100,10 @@ except (RateLimitError, OverloadedError) as e:
 
 ---
 
-### Google GenAI SDK (`google-genai`)
+<a id="google-genai-sdk-google-genai"></a>
+### Google GenAI SDK（`google-genai`）
 
-**Source**: Stainless-generated SDK (newer versions)
+**来源**：Stainless 生成的 SDK（较新版本）。
 
 ```
 GeminiNextGenAPIClientError (base)
@@ -118,13 +124,14 @@ GeminiNextGenAPIClientError (base)
 
 ---
 
-### AWS Bedrock via botocore
+<a id="aws-bedrock-via-botocore"></a>
+### 通过 botocore 使用 AWS Bedrock
 
-**Source**: botocore service definitions
+**来源**：botocore 服务定义。
 
-AWS uses error **codes** rather than exception classes. Errors come as `botocore.exceptions.ClientError` with an error code in the response.
+AWS 使用错误**代码**而非异常类。错误以 `botocore.exceptions.ClientError` 形式出现，响应中包含错误代码。
 
-**Throttling Error Codes** (from `botocore/retries/standard.py`):
+**限流错误代码**（来自 `botocore/retries/standard.py`）：
 ```python
 _THROTTLED_ERROR_CODES = [
     "Throttling",
@@ -144,18 +151,18 @@ _THROTTLED_ERROR_CODES = [
 ]
 ```
 
-**Bedrock-Specific Errors** (from service model):
-| Error | Description | Retryable |
+**Bedrock 特有错误**（来自服务模型）：
+| 错误 | 说明 | 是否可重试 |
 |-------|-------------|-----------|
-| `ThrottlingException` | Request rate exceeded | Yes (with backoff) |
-| `ServiceQuotaExceededException` | Account quota exceeded | No (needs quota increase) |
-| `ModelTimeoutException` | Model inference timeout | Maybe |
-| `ModelErrorException` | Model returned error | No |
-| `ModelNotReadyException` | Model warming up | Yes (with backoff) |
-| `ServiceUnavailableException` | Service temporarily unavailable | Yes |
-| `InternalServerException` | Internal error | Yes |
+| `ThrottlingException` | 请求速率超限 | 是（需退避） |
+| `ServiceQuotaExceededException` | 账号配额超限 | 否（需提高配额） |
+| `ModelTimeoutException` | 模型推理超时 | 可能 |
+| `ModelErrorException` | 模型返回错误 | 否 |
+| `ModelNotReadyException` | 模型正在预热 | 是（需退避） |
+| `ServiceUnavailableException` | 服务暂时不可用 | 是 |
+| `InternalServerException` | 内部错误 | 是 |
 
-**Transient Error Codes** (from `botocore/retries/standard.py`):
+**暂时性错误代码**（来自 `botocore/retries/standard.py`）：
 ```python
 _TRANSIENT_ERROR_CODES = [
     "RequestTimeout",
@@ -166,7 +173,7 @@ _TRANSIENT_ERROR_CODES = [
 _TRANSIENT_STATUS_CODES = [500, 502, 503, 504]
 ```
 
-**Detection Pattern**:
+**检测模式**：
 ```python
 from botocore.exceptions import ClientError
 
@@ -184,9 +191,10 @@ except ClientError as e:
 
 ---
 
-### Azure SDK (`azure-core`)
+<a id="azure-sdk-azure-core"></a>
+### Azure SDK（`azure-core`）
 
-**Source**: Azure Core library
+**来源**：Azure Core 库。
 
 ```
 AzureError (base)
@@ -206,10 +214,10 @@ AzureError (base)
     └── ODataV4Error
 ```
 
-**Azure OpenAI Specifics**:
-Azure OpenAI wraps the OpenAI SDK, so errors come as `openai.RateLimitError` but may have Azure-specific headers.
+**Azure OpenAI 特有行为**：
+Azure OpenAI 包装了 OpenAI SDK，因此错误类型为 `openai.RateLimitError`，但可能包含 Azure 专用请求头。
 
-**Detection Pattern**:
+**检测模式**：
 ```python
 from azure.core.exceptions import HttpResponseError
 
@@ -223,9 +231,10 @@ except HttpResponseError as e:
 
 ---
 
-## Retry-After Header Handling
+<a id="retry-after-header-handling"></a>
+## Retry-After 请求头处理
 
-All Stainless-generated SDKs (OpenAI, Anthropic, Google GenAI) implement identical `retry-after` parsing logic:
+所有 Stainless 生成的 SDK（OpenAI、Anthropic、Google GenAI）都实现了相同的 `retry-after` 解析逻辑：
 
 ```python
 def _parse_retry_after_header(response_headers):
@@ -249,16 +258,17 @@ def _parse_retry_after_header(response_headers):
     return None
 ```
 
-**SDK Behavior**:
-- If `retry-after` is between 0-60 seconds, SDKs respect it
-- Otherwise, exponential backoff is used
-- Default max backoff is typically 20-60 seconds
+**SDK 行为**：
+- `retry-after` 在 0–60 秒之间时，SDK 遵循该值。
+- 否则采用指数退避。
+- 默认最大退避时间通常为 20–60 秒。
 
 ---
 
-## Error Classification Matrix
+<a id="error-classification-matrix"></a>
+## 错误分类矩阵
 
-| Provider | Rate Limit | Transient (Retry) | Permanent (Abort) |
+| 提供商 | 限流 | 暂时性错误（重试） | 永久性错误（中止） |
 |----------|------------|-------------------|-------------------|
 | **OpenAI** | `RateLimitError` (429) | `InternalServerError` (5xx), `APITimeoutError` | `BadRequestError`, `AuthenticationError`, `NotFoundError` |
 | **Anthropic** | `RateLimitError` (429), `OverloadedError` (529) | `ServiceUnavailableError` (503), `DeadlineExceededError` (504), `InternalServerError` | `BadRequestError`, `AuthenticationError`, `NotFoundError` |
@@ -268,9 +278,11 @@ def _parse_retry_after_header(response_headers):
 
 ---
 
-## Implementation Recommendations
+<a id="implementation-recommendations"></a>
+## 实施建议
 
-### 1. Generic Rate Limit Detection
+<a id="1-generic-rate-limit-detection"></a>
+### 1. 通用限流检测
 
 ```python
 def is_rate_limit_error(e: Exception) -> bool:
@@ -298,7 +310,8 @@ def is_rate_limit_error(e: Exception) -> bool:
     return False
 ```
 
-### 2. Generic Transient Error Detection
+<a id="2-generic-transient-error-detection"></a>
+### 2. 通用暂时性错误检测
 
 ```python
 def is_transient_error(e: Exception) -> bool:
@@ -323,7 +336,8 @@ def is_transient_error(e: Exception) -> bool:
     return False
 ```
 
-### 3. Extract Retry-After Duration
+<a id="3-extract-retry-after-duration"></a>
+### 3. 提取 Retry-After 时长
 
 ```python
 def get_retry_after_seconds(e: Exception) -> float | None:
@@ -351,9 +365,10 @@ def get_retry_after_seconds(e: Exception) -> float | None:
     return None
 ```
 
-### 4. Exponential Backoff
+<a id="4-exponential-backoff"></a>
+### 4. 指数退避
 
-When no `retry-after` header is provided:
+未提供 `retry-after` 请求头时：
 
 ```python
 def calculate_backoff(attempt: int, base: float = 1.0, max_backoff: float = 60.0) -> float:
@@ -367,22 +382,24 @@ def calculate_backoff(attempt: int, base: float = 1.0, max_backoff: float = 60.0
 
 ---
 
-## Phoenix Integration
+<a id="phoenix-integration"></a>
+## Phoenix 集成
 
-Phoenix currently uses a `PlaygroundRateLimiter` class that:
-1. Accepts a provider-specific `rate_limit_error` class
-2. Uses adaptive token bucket with 3 max retries
-3. Coordinates across concurrent requests with locks
+Phoenix 当前使用 `PlaygroundRateLimiter` 类：
+1. 接受提供商专用的 `rate_limit_error` 类。
+2. 使用自适应令牌桶，最多重试 3 次。
+3. 通过锁协调并发请求。
 
-For the background experiment runner, we should:
-1. Use the generic detection functions above for broader coverage
-2. Extract `retry-after` headers when available
-3. Implement per-experiment rate limiting (not global)
-4. Distinguish between rate limits (retry with backoff) and permanent errors (abort task)
+对于后台实验运行器，我们应该：
+1. 使用上述通用检测函数以覆盖更多情况。
+2. 存在 `retry-after` 请求头时提取其值。
+3. 按实验实施限流，而非全局限流。
+4. 区分限流（退避后重试）与永久性错误（中止任务）。
 
 ---
 
-## References
+<a id="references"></a>
+## 参考资料
 
 - [OpenAI Python SDK - `_exceptions.py`](https://github.com/openai/openai-python/blob/722d3fffb82e9150a16da01e432b70d126ca5254/src/openai/_exceptions.py)
 - [Anthropic Python SDK - `_exceptions.py`](https://github.com/anthropics/anthropic-sdk-python/blob/9b5ab24ba17bcd5e762e5a5fd69bb3c17b100aaa/src/anthropic/_exceptions.py)

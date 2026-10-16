@@ -1,1 +1,1 @@
-How many traces are in the research-assistant project?
+research-assistant 项目中共有多少条追踪记录？

@@ -1,6 +1,10 @@
-# Code Examples
+<a id="code-examples"></a>
 
-## LDAPConfig Dataclass
+# 代码示例
+
+<a id="ldapconfig-dataclass"></a>
+
+## LDAPConfig 数据类
 
 ```python
 from dataclasses import dataclass
@@ -157,7 +161,9 @@ class LDAPConfig:
         )
 ```
 
-## LDAPAuthenticator Class (Skeleton)
+<a id="ldapauthenticator-class-skeleton"></a>
+
+## LDAPAuthenticator 类（骨架）
 
 ```python
 from ldap3 import Server, Connection, Tls, SUBTREE
@@ -259,7 +265,9 @@ class LDAPAuthenticator:
         return False
 ```
 
-## API Endpoint
+<a id="api-endpoint"></a>
+
+## API 端点
 
 ```python
 from fastapi import APIRouter, HTTPException, status
@@ -331,8 +339,8 @@ async def ldap_login(
     )
 ```
 
-**Note**: For complete, production-ready implementations, see:
-- `src/phoenix/config.py` - LDAPConfig with full validation
-- `src/phoenix/server/ldap.py` - LDAPAuthenticator with all features
-- `src/phoenix/server/api/routers/auth.py` - LDAP login endpoint
+**说明**：完整的生产级实现参见：
+- `src/phoenix/config.py` — 带完整校验的 LDAPConfig
+- `src/phoenix/server/ldap.py` — 包含全部功能的 LDAPAuthenticator
+- `src/phoenix/server/api/routers/auth.py` — LDAP 登录端点
 

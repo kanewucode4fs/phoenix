@@ -1,25 +1,31 @@
-# Running phoenix-evals Examples
+<a id="running-phoenix-evals-examples"></a>
 
-To run the TypeScript examples in this directory, you need to have `tsx` installed globally. `tsx` allows you to run TypeScript files directly without compiling them first.
+# 运行 phoenix-evals 示例
 
-## Install tsx globally
+运行本目录中的 TypeScript 示例需要全局安装 `tsx`。`tsx` 可直接运行 TypeScript 文件，无需预先编译。
+
+<a id="install-tsx-globally"></a>
+
+## 全局安装 tsx
 
 ```sh
 pnpm install tsx -g
 ```
 
-## Run an example
+<a id="run-an-example"></a>
 
-You can run any example TypeScript file in this directory using `tsx` like this:
+## 运行示例
+
+可使用 `tsx` 运行本目录中任意 TypeScript 示例文件：
 
 ```sh
 tsx <example-file>.ts
 ```
 
-For example, to run `classification_example.ts`:
+例如，运行 `classification_example.ts`：
 
 ```sh
 tsx classification_example.ts
 ```
 
-Make sure you are in the `examples` directory when running the command, or provide the correct relative path to the example file.
+运行命令时请确保位于 `examples` 目录，或提供示例文件的正确相对路径。

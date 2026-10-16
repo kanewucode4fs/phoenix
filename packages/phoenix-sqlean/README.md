@@ -1,20 +1,11 @@
 # arize-phoenix-sqlean
 
-This package provides an SQLite Python wrapper bundled with [sqlean](https://github.com/nalgeon/sqlean) extensions. It's a drop-in replacement for the standard library's [sqlite3](https://docs.python.org/3/library/sqlite3.html) module.
+此包提供捆绑 [sqlean](https://github.com/nalgeon/sqlean) 扩展的 SQLite Python 封装，可直接替代标准库的 [sqlite3](https://docs.python.org/3/library/sqlite3.html) 模块。
 
 > [!NOTE]
-> This is a modified fork of [nalgeon/sqlean.py](https://github.com/nalgeon/sqlean.py),
-> which was archived upstream in February 2026. It was imported at upstream commit
-> [`bdd7097`](https://github.com/nalgeon/sqlean.py/commit/bdd7097f8d5777bc9e3ac3235d9be66b9db34519)
-> and is maintained by [Arize AI](https://arize.com) as part of the Phoenix monorepo.
-> Original work by Anton Zhiyanov and contributors,
-> [zlib License](https://github.com/Arize-ai/phoenix/blob/main/packages/phoenix-sqlean/LICENSE).
-> The `src/` directory contains code derived from CPython's `sqlite3` module
-> (PSF License 2.0). Builds download the SQLite amalgamation (public domain) and
-> [sqlean](https://github.com/nalgeon/sqlean) extension sources (MIT License), which
-> include PCRE2 (BSD 3-Clause), STC (MIT), and code based on Go's time package
-> (BSD 3-Clause). Full notices and the CPython change summary are in
-> [THIRD_PARTY_LICENSES](https://github.com/Arize-ai/phoenix/blob/main/packages/phoenix-sqlean/THIRD_PARTY_LICENSES).
+> 这是 [nalgeon/sqlean.py](https://github.com/nalgeon/sqlean.py) 的修改版分支，上游于 2026 年 2 月归档。此分支基于上游提交 [`bdd7097`](https://github.com/nalgeon/sqlean.py/commit/bdd7097f8d5777bc9e3ac3235d9be66b9db34519) 导入，作为 Phoenix 单体仓库的一部分由 [Arize AI](https://arize.com) 维护。
+> 原始作品由 Anton Zhiyanov 及贡献者编写，采用 [zlib 许可证](https://github.com/Arize-ai/phoenix/blob/main/packages/phoenix-sqlean/LICENSE)。
+> `src/` 目录包含源自 CPython `sqlite3` 模块的代码（PSF License 2.0）。构建时会下载 SQLite 合并源码（公有领域）及 [sqlean](https://github.com/nalgeon/sqlean) 扩展源码（MIT 许可证），其中包含 PCRE2（BSD 3-Clause）、STC（MIT）以及基于 Go time 包的代码（BSD 3-Clause）。完整声明和 CPython 修改摘要见 [THIRD_PARTY_LICENSES](https://github.com/Arize-ai/phoenix/blob/main/packages/phoenix-sqlean/THIRD_PARTY_LICENSES)。
 
 ```
 pip install arize-phoenix-sqlean
@@ -38,39 +29,45 @@ print(cur.fetchone())
 conn.close()
 ```
 
-## Extensions
+<a id="extensions"></a>
 
-This package bundles essential SQLite extensions:
+## 扩展
 
--   [crypto](https://github.com/nalgeon/sqlean/blob/main/docs/crypto.md): Hashing, encoding and decoding data
--   [define](https://github.com/nalgeon/sqlean/blob/main/docs/define.md): User-defined functions and dynamic SQL
--   [fileio](https://github.com/nalgeon/sqlean/blob/main/docs/fileio.md): Reading and writing files
--   [fuzzy](https://github.com/nalgeon/sqlean/blob/main/docs/fuzzy.md): Fuzzy string matching and phonetics
--   [ipaddr](https://github.com/nalgeon/sqlean/blob/main/docs/ipaddr.md): IP address manipulation
--   [regexp](https://github.com/nalgeon/sqlean/blob/main/docs/regexp.md): Regular expressions
--   [stats](https://github.com/nalgeon/sqlean/blob/main/docs/stats.md): Math statistics
--   [text](https://github.com/nalgeon/sqlean/blob/main/docs/text.md): String functions
--   [time](https://github.com/nalgeon/sqlean/blob/main/docs/time.md): High-precision date/time
--   [uuid](https://github.com/nalgeon/sqlean/blob/main/docs/uuid.md): Universally Unique IDentifiers
--   [vsv](https://github.com/nalgeon/sqlean/blob/main/docs/vsv.md): CSV files as virtual tables
+此包捆绑以下常用 SQLite 扩展：
 
-## Installation
+-   [crypto](https://github.com/nalgeon/sqlean/blob/main/docs/crypto.md): 数据哈希、编码和解码
+-   [define](https://github.com/nalgeon/sqlean/blob/main/docs/define.md): 用户自定义函数和动态 SQL
+-   [fileio](https://github.com/nalgeon/sqlean/blob/main/docs/fileio.md): 文件读写
+-   [fuzzy](https://github.com/nalgeon/sqlean/blob/main/docs/fuzzy.md): 模糊字符串匹配和语音学处理
+-   [ipaddr](https://github.com/nalgeon/sqlean/blob/main/docs/ipaddr.md): IP 地址操作
+-   [regexp](https://github.com/nalgeon/sqlean/blob/main/docs/regexp.md): 正则表达式
+-   [stats](https://github.com/nalgeon/sqlean/blob/main/docs/stats.md): 数学统计
+-   [text](https://github.com/nalgeon/sqlean/blob/main/docs/text.md): 字符串函数
+-   [time](https://github.com/nalgeon/sqlean/blob/main/docs/time.md): 高精度日期/时间
+-   [uuid](https://github.com/nalgeon/sqlean/blob/main/docs/uuid.md): 通用唯一标识符
+-   [vsv](https://github.com/nalgeon/sqlean/blob/main/docs/vsv.md): 将 CSV 文件作为虚拟表
+
+<a id="installation"></a>
+
+## 安装
 
 ```
 pip install arize-phoenix-sqlean
 ```
 
-Note that the package name is `arize-phoenix-sqlean`, while the code imports are just `sqlean` — the same import name as the upstream `sqlean.py` package, so this fork is a drop-in replacement (only one of the two can be installed in an environment).
+注意，包名为 `arize-phoenix-sqlean`，代码导入名则仅为 `sqlean`，与上游 `sqlean.py` 包相同。因此，此分支可直接替代上游包（同一环境中两者只能安装一个）。
 
-A binary package (wheel) is available for the following operating systems:
+以下操作系统提供二进制包（wheel）：
 
 -   Linux (x86_64/aarch64)
 -   macOS (x86_64/arm64)
 -   Windows (x86_64)
 
-## Usage
+<a id="usage"></a>
 
-All extensions are disabled by default. You can still use `sqlean` as a drop-in replacement for `sqlite3`:
+## 用法
+
+所有扩展默认禁用。你仍可直接用 `sqlean` 替代 `sqlite3`：
 
 ```python
 import sqlean as sqlite3
@@ -81,7 +78,7 @@ print(cur.fetchone())
 conn.close()
 ```
 
-To enable all extensions, call `sqlean.extensions.enable_all()` before calling `connect()`:
+要启用全部扩展，请在调用 `connect()` 前调用 `sqlean.extensions.enable_all()`：
 
 ```python
 import sqlean
@@ -94,7 +91,7 @@ print(cur.fetchone())
 conn.close()
 ```
 
-To enable specific extensions, call `sqlean.extensions.enable()`:
+要启用指定扩展，请调用 `sqlean.extensions.enable()`：
 
 ```python
 import sqlean
@@ -107,9 +104,11 @@ print(cur.fetchone())
 conn.close()
 ```
 
-## Building from source
+<a id="building-from-source"></a>
 
-Prepare source files:
+## 从源码构建
+
+准备源文件：
 
 ```
 make prepare-src
@@ -117,12 +116,14 @@ make download-sqlite
 make download-sqlean
 ```
 
-Build and test the package:
+构建并测试包：
 
 ```
 make clean build
 ```
 
-## Credits
+<a id="credits"></a>
 
-Based on the [pysqlite3](https://github.com/coleifer/pysqlite3) project by Charles Leifer, which is in turn based on [pysqlite](https://github.com/ghaering/pysqlite) by Gerhard Häring. Available under the [zlib license](https://github.com/Arize-ai/phoenix/blob/main/packages/phoenix-sqlean/LICENSE).
+## 致谢
+
+基于 Charles Leifer 的 [pysqlite3](https://github.com/coleifer/pysqlite3) 项目，后者又基于 Gerhard Häring 的 [pysqlite](https://github.com/ghaering/pysqlite)。采用 [zlib 许可证](https://github.com/Arize-ai/phoenix/blob/main/packages/phoenix-sqlean/LICENSE)。

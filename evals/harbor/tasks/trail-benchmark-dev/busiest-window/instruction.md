@@ -1,1 +1,1 @@
-Group the research-assistant traces into 10-minute windows by when each trace started, with windows aligned to the clock (for example 16:00 to 16:10 UTC). Which window had the most traces start, and how many?
+按照每条追踪记录的开始时间，将 research-assistant 的追踪记录划分到与时钟刻度对齐的 10 分钟时间窗口中（例如 UTC 16:00 至 16:10）。哪个窗口内开始的追踪记录最多？共有多少条？

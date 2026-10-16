@@ -1,10 +1,14 @@
-# LDAP Testing Procedures
+<a id="ldap-testing-procedures"></a>
 
-Quick reference for running LDAP authentication tests.
+# LDAP 测试流程
+
+运行 LDAP 身份验证测试的快速参考。
 
 ---
 
-## Test Layers
+<a id="test-layers"></a>
+
+## 测试层次
 
 ```mermaid
 flowchart TB
@@ -23,16 +27,22 @@ flowchart TB
     Docker --> Integration --> Unit
 ```
 
-## Running Tests
+<a id="running-tests"></a>
 
-### Unit Tests
+## 运行测试
+
+<a id="unit-tests"></a>
+
+### 单元测试
 
 ```bash
 # LDAP config tests
 tox -e unit -- -k ldap
 ```
 
-### Integration Tests
+<a id="integration-tests"></a>
+
+### 集成测试
 
 ```bash
 # All LDAP tests
@@ -42,7 +52,9 @@ tox -e integration -- -k ldap
 tox -e integration -- -k TestLDAPAuthentication
 ```
 
-### Docker Tests
+<a id="docker-tests"></a>
+
+### Docker 测试
 
 ```bash
 cd scripts/docker/devops
@@ -56,15 +68,17 @@ docker logs -f devops-ldap-test
 
 ---
 
-## Key Files
+<a id="key-files"></a>
 
-| File | Purpose |
+## 关键文件
+
+| 文件 | 用途 |
 |------|---------|
-| `tests/unit/test_config.py` | Unit tests (config parsing) |
-| `tests/integration/auth/test_ldap.py` | Integration tests |
-| `tests/integration/auth/conftest.py` | Test fixtures |
-| `tests/integration/_mock_ldap_server.py` | Mock LDAP protocol |
-| `scripts/docker/devops/scripts/test_ldap_integration.py` | Docker tests |
-| `scripts/docker/devops/scripts/test_ldap_tls.py` | TLS/STARTTLS tests |
-| `scripts/docker/devops/overrides/ldap-test.yml` | Docker environment |
-| `scripts/docker/devops/LDAP-TLS-TESTING.md` | TLS testing guide |
+| `tests/unit/test_config.py` | 单元测试，配置解析 |
+| `tests/integration/auth/test_ldap.py` | 集成测试 |
+| `tests/integration/auth/conftest.py` | 测试 fixture |
+| `tests/integration/_mock_ldap_server.py` | 模拟 LDAP 协议 |
+| `scripts/docker/devops/scripts/test_ldap_integration.py` | Docker 测试 |
+| `scripts/docker/devops/scripts/test_ldap_tls.py` | TLS/STARTTLS 测试 |
+| `scripts/docker/devops/overrides/ldap-test.yml` | Docker 环境 |
+| `scripts/docker/devops/LDAP-TLS-TESTING.md` | TLS 测试指南 |

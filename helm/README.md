@@ -1,220 +1,230 @@
-# phoenix-helm
+<a id="phoenix-helm"></a>
 
-![Version: 12.0.23](https://img.shields.io/badge/Version-12.0.23-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 20.23.0](https://img.shields.io/badge/AppVersion-20.23.0-informational?style=flat-square)
+# Phoenix Helm 部署
+
+![版本： 12.0.23](https://img.shields.io/badge/Version-12.0.23-informational?style=flat-square) ![类型：应用](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![应用版本： 20.23.0](https://img.shields.io/badge/AppVersion-20.23.0-informational?style=flat-square)
 
 <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=helm/README.md" />
 
-Phoenix is an open-source AI observability platform designed for experimentation, evaluation, and troubleshooting. For instructions on how to deploy this Helm chart, see the [self-hosting docs](https://arize.com/docs/phoenix/self-hosting).
-  - [**_Tracing_**](https://arize.com/docs/phoenix/tracing/llm-traces) - Trace your LLM application's runtime using OpenTelemetry-based instrumentation.
-  - [**_Evaluation_**](https://arize.com/docs/phoenix/evaluation/llm-evals) - Leverage LLMs to benchmark your application's performance using response and retrieval evals.
-  - [**_Datasets_**](https://arize.com/docs/phoenix/datasets-and-experiments/overview-datasets) - Create versioned datasets of examples for experimentation, evaluation, and fine-tuning.
-  - [**_Experiments_**](https://arize.com/docs/phoenix/datasets-and-experiments/overview-datasets#experiments) - Track and evaluate changes to prompts, LLMs, and retrieval.
-  - [**_Playground_**](https://arize.com/docs/phoenix/prompt-engineering/overview-prompts)- Optimize prompts, compare models, adjust parameters, and replay traced LLM calls.
-  - [**_Prompt Management_**](https://arize.com/docs/phoenix/prompt-engineering/overview-prompts/prompt-management)- Manage and test prompt changes systematically using version control, tagging, and experimentation.
+Phoenix 是面向实验、评估和故障排查的开源 AI 可观测平台。此 Helm chart 的部署方法见[自行部署文档](https://arize.com/docs/phoenix/self-hosting)。
+  - [**_追踪_**](https://arize.com/docs/phoenix/tracing/llm-traces) - 基于 OpenTelemetry 插桩，追踪 LLM 应用的运行过程。
+  - [**_评估_**](https://arize.com/docs/phoenix/evaluation/llm-evals) - 使用 LLM，通过回答和检索评估衡量应用表现。
+  - [**_数据集_**](https://arize.com/docs/phoenix/datasets-and-experiments/overview-datasets) - 创建带版本的示例数据集，用于实验、评估和微调。
+  - [**_实验_**](https://arize.com/docs/phoenix/datasets-and-experiments/overview-datasets#experiments) - 跟踪并评估提示词、LLM 和检索的改动。
+  - [**_Playground 试验台_**](https://arize.com/docs/phoenix/prompt-engineering/overview-prompts) - 优化提示词、比较模型、调整参数，并重放已追踪的 LLM 调用。
+  - [**_提示词管理_**](https://arize.com/docs/phoenix/prompt-engineering/overview-prompts/prompt-management) - 通过版本控制、标签和实验，系统管理并测试提示词改动。
 
-**Homepage:** <https://phoenix.arize.com/>
+**主页：** <https://phoenix.arize.com/>
 
-## Maintainers
+<a id="maintainers"></a>
 
-| Name | Email | Url |
+## 维护者
+
+| 名称 | 邮箱 | URL |
 | ---- | ------ | --- |
 | arize | <phoenix-devs@arize.com> | <https://phoenix.arize.com/> |
 
-## Source Code
+<a id="source-code"></a>
+
+## 源代码
 
 * <https://github.com/Arize-ai/phoenix>
 
-## Requirements
+<a id="requirements"></a>
 
-| Repository | Name | Version |
+## 依赖要求
+
+| 仓库 | 名称 | 版本 |
 |------------|------|---------|
 | https://groundhog2k.github.io/helm-charts/ | postgresql(postgres) | 1.5.8 |
 
-## Values
+<a id="values"></a>
 
-| Key | Type | Default | Description |
+## 配置值
+
+| 配置键 | 类型 | 默认值 | 说明 |
 |-----|------|---------|-------------|
-| additionalEnv | list | `[]` | Additional environment variables to add to the deployments pod spec For supported environment variables see https://arize.com/docs/phoenix/self-hosting/configuration#environment-variables Should only be used for capabilities not exposed via the helm chart directly |
-| auth.accessTokenExpiryMinutes | int | `60` | Duration in minutes before access tokens expire and require renewal (PHOENIX_ACCESS_TOKEN_EXPIRY_MINUTES) |
-| auth.admins | string | `""` | Semicolon-separated list of username and email pairs to create as admin users on startup (PHOENIX_ADMINS) Format: "username=email;username2=email2" (e.g., "John Doe=john@example.com;Jane Doe=jane@example.com") These users will be created with random passwords that must be reset on first login |
-| auth.allowedOrigins | list | `[]` | List of allowed CORS origins for cross-origin requests to the Phoenix API (PHOENIX_ALLOWED_ORIGINS) |
-| auth.bruteForceLoginProtectionMaxAttempts | int | `5` | Maximum failed login attempts before temporary lockout (PHOENIX_BRUTE_FORCE_LOGIN_PROTECTION_MAX_ATTEMPTS) Only applies when brute force protection is enabled. Lockout duration is 5 minutes. |
-| auth.cookiesPath | string | `"/"` | Cookie path for authentication cookies (PHOENIX_COOKIES_PATH) Set this when Phoenix is hosted under a sub-path |
-| auth.createSecret | bool | `true` | Create Secret Boolean - Should the secret be created. If False and auth is enabled, this must preexist |
-| auth.csrfTrustedOrigins | list | `[]` | List of trusted origins for CSRF protection to prevent cross-site request forgery attacks (PHOENIX_CSRF_TRUSTED_ORIGINS) |
-| auth.defaultAdminPassword | string | `"admin"` | Default password for the admin user on initial setup (PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD) |
-| auth.disableBasicAuth | bool | `false` | Disable password-based authentication (PHOENIX_DISABLE_BASIC_AUTH) When true, users can only authenticate via OAuth2/OIDC. Useful for SSO-only deployments. |
-| auth.disableBruteForceLoginProtection | bool | `false` | Disable brute force login protection (PHOENIX_DISABLE_BRUTE_FORCE_LOGIN_PROTECTION) When false (default), repeated failed logins will temporarily lock the account |
-| auth.enableAuth | bool | `true` | Enable authentication and authorization for Phoenix (PHOENIX_ENABLE_AUTH) |
-| auth.enableStrongPasswordPolicy | bool | `false` | Enable strong password policy requiring 12+ characters with uppercase, lowercase, digit, and special character (PHOENIX_ENABLE_STRONG_PASSWORD_POLICY) |
-| auth.ldap.allowSignUp | bool | `true` | Allow automatic user creation on first LDAP login. Set to false to require pre-provisioned users. |
-| auth.ldap.attrDisplayName | string | `"displayName"` | LDAP attribute containing user's display name. |
-| auth.ldap.attrEmail | string | `"mail"` | LDAP attribute containing user's email address. Valid values:   - "mail" (or other attribute name): Use that LDAP attribute for email   - "null": No-email mode for directories without email When using no-email mode ("null"):   - attrUniqueId is REQUIRED (users identified by unique ID instead of email)   - allowSignUp must be true (users auto-provisioned on first login)   - auth.admins cannot be used (use groupRoleMappings for admin assignment) |
-| auth.ldap.attrMemberOf | string | `"memberOf"` | LDAP attribute containing group memberships (default: "memberOf"). Used when groupSearchFilter is not set (Active Directory mode). Typical values: "memberOf" (AD, OpenLDAP with memberOf overlay) |
-| auth.ldap.attrUniqueId | string | `""` | LDAP attribute containing an immutable unique identifier. REQUIRED when attrEmail is "null" (no-email mode). Also recommended if you expect user emails to change frequently. Active Directory: "objectGUID", OpenLDAP: "entryUUID", 389 DS: "nsUniqueId" |
-| auth.ldap.bindDn | string | `""` | Service account DN for binding to LDAP server. Example: "CN=svc-phoenix,OU=Service Accounts,DC=corp,DC=com" |
-| auth.ldap.bindPassword | string | `""` | Service account password for binding to LDAP server. Can be set directly here or via auth.secret with key PHOENIX_LDAP_BIND_PASSWORD |
-| auth.ldap.enabled | bool | `false` | Enable LDAP authentication |
-| auth.ldap.groupRoleMappings | string | `"[]"` | JSON array mapping LDAP groups to Phoenix roles. Format: [{"group_dn": "CN=Phoenix Admins,OU=Groups,DC=corp,DC=com", "role": "ADMIN"}] Supported roles: "ADMIN", "MEMBER", "VIEWER" (case-insensitive) Special group_dn value "*" matches all users (wildcard for default role) |
-| auth.ldap.groupSearchBaseDns | list | `[]` | List of base DNs for group searches. Required when groupSearchFilter is set. Example: ["ou=groups,dc=example,dc=com"] Multiple: ["ou=groups,dc=corp,dc=com", "ou=teams,dc=corp,dc=com"] |
-| auth.ldap.groupSearchFilter | string | `""` | LDAP filter for finding groups. Use %s as placeholder for user identifier. Two modes:   - AD Mode (not set, recommended for Active Directory): Reads memberOf from user entry   - Search Mode (set): Searches for groups containing the user Example for POSIX: "(&(objectClass=posixGroup)(memberUid=%s))" |
-| auth.ldap.groupSearchFilterUserAttr | string | `""` | LDAP attribute from the user entry to substitute for %s in groupSearchFilter. When set: Reads the specified attribute from the user's LDAP entry When not set (default): Uses the login username directly Understanding group types:   - POSIX (memberUid): Contains usernames like "jdoe" → use default or "uid"   - groupOfNames (member): Contains full DNs → use "distinguishedName" (AD only) Note: OpenLDAP does not expose DN as an attribute. For groupOfNames with OpenLDAP, use memberOf overlay instead (AD mode). |
-| auth.ldap.host | string | `""` | LDAP server hostname (required when enabled). Comma-separated for multiple servers with failover. Examples: "ldap.corp.com" or "dc1.corp.com,dc2.corp.com,dc3.corp.com" |
-| auth.ldap.port | string | `""` | LDAP server port. Defaults to 389 for StartTLS, 636 for LDAPS. |
-| auth.ldap.tlsCaCertFile | string | `""` | Path to custom CA certificate file (PEM format) for TLS verification. Use when LDAP server uses a private/internal CA not in the system trust store. |
-| auth.ldap.tlsClientCertFile | string | `""` | Path to client certificate file (PEM format) for mutual TLS authentication. Requires tlsClientKeyFile to also be set. |
-| auth.ldap.tlsClientKeyFile | string | `""` | Path to client private key file (PEM format) for mutual TLS authentication. Requires tlsClientCertFile to also be set. |
-| auth.ldap.tlsMode | string | `"starttls"` | TLS connection mode: "starttls", "ldaps", or "none" - starttls: Upgrade from plaintext to TLS on port 389 (recommended) - ldaps: TLS from connection start on port 636 - none: No encryption (testing only, credentials sent in plaintext) |
-| auth.ldap.tlsVerify | bool | `true` | Verify TLS certificates. Should always be true in production. |
-| auth.ldap.userSearchBaseDns | list | `[]` | List of base DNs for user searches (required when enabled). Searched in order. Example: ["OU=Users,DC=corp,DC=com"] Multiple: ["OU=Employees,DC=corp,DC=com", "OU=Contractors,DC=corp,DC=com"] |
-| auth.ldap.userSearchFilter | string | `"(&(objectClass=user)(sAMAccountName=%s))"` | LDAP filter for finding users. Use %s as placeholder for username. Default for Active Directory: "(&(objectClass=user)(sAMAccountName=%s))" OpenLDAP example: "(&(objectClass=inetOrgPerson)(uid=%s))" |
-| auth.name | string | `"phoenix-secret"` | Name of the Kubernetes secret containing authentication credentials |
-| auth.oauth2.enabled | bool | `false` | Enable OAuth2/OIDC authentication |
-| auth.oauth2.providers | string | `nil` | List of OAuth2 identity providers to configure Each provider requires client_id, client_secret (unless token_endpoint_auth_method="none" or "client_assertion_jwt"), and oidc_config_url You can also define corresponding ENVs via auth.secrets[].valueFrom to use existing secrets ENVs: PHOENIX_OAUTH2_{{ $provider_upper }}_{{ setting }}, e.g. PHOENIX_OAUTH2_GOOGLE_CLIENT_SECRET |
-| auth.oauth2AuthorizationServer.allowedRedirectHosts | list | `[]` | List of HTTPS redirect hosts allowed for dynamically registered OAuth2 clients (PHOENIX_OAUTH2_ALLOWED_REDIRECT_HOSTS) When empty, all HTTPS redirect hosts are accepted while dynamicClientRegistration is "enabled"; set this to restrict HTTPS deliveries to specific hosts. Loopback redirect URIs are always allowed. Example: ["app.example.com"] |
-| auth.oauth2AuthorizationServer.consentOriginCheck | string | `"strict"` | Origin-header enforcement mode for the OAuth2 consent endpoint (PHOENIX_OAUTH2_CONSENT_ORIGIN_CHECK) Valid values: "strict" (reject consent decisions from untrusted origins) or "off" |
-| auth.oauth2AuthorizationServer.dcrRateLimitPerHour | int | `10` | Per-IP hourly rate limit for dynamic OAuth2 client registration (PHOENIX_OAUTH2_DCR_RATE_LIMIT_PER_HOUR) |
-| auth.oauth2AuthorizationServer.dynamicClientRegistration | string | `"enabled"` | Dynamic client registration mode (PHOENIX_OAUTH2_DYNAMIC_CLIENT_REGISTRATION) Valid values: "disabled", "local_only" (loopback redirect URIs only), or "enabled" |
-| auth.oauth2AuthorizationServer.enabled | bool | `true` | Serve the built-in OAuth2 authorization server (PHOENIX_ENABLE_OAUTH2_AUTHORIZATION_SERVER) |
-| auth.oauth2AuthorizationServer.grantExpiryDays | int | `90` | Expiry ceiling in days applied to newly minted OAuth2 grants (PHOENIX_OAUTH2_GRANT_EXPIRY_DAYS) |
-| auth.passwordResetTokenExpiryMinutes | int | `60` | Duration in minutes before password reset tokens expire (PHOENIX_PASSWORD_RESET_TOKEN_EXPIRY_MINUTES) |
-| auth.refreshTokenExpiryMinutes | int | `43200` | Duration in minutes before refresh tokens expire (PHOENIX_REFRESH_TOKEN_EXPIRY_MINUTES) |
-| auth.secret[0] | object | `{"key":"PHOENIX_SECRET","value":""}` | Environment variable name for the main Phoenix secret key used for encryption |
-| auth.secret[0].value | string | `""` | Autogenerated if empty |
-| auth.secret[1] | object | `{"key":"PHOENIX_ADMIN_SECRET","value":""}` | Environment variable name for the admin secret key |
-| auth.secret[1].value | string | `""` | Autogenerated if empty |
-| auth.secret[2] | object | `{"key":"PHOENIX_POSTGRES_PASSWORD","value":"postgres"}` | Environment variable name for the PostgreSQL password |
-| auth.secret[2].value | string | `"postgres"` | If using postgres in this chart, password must match with database.postgres.password |
-| auth.secret[3] | object | `{"key":"PHOENIX_SMTP_PASSWORD","value":""}` | Environment variable name for the SMTP password |
-| auth.secret[3].value | string | `""` | Autogenerated if empty |
-| auth.secret[4] | object | `{"key":"PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD","value":""}` | Environment variable name for the default admin password |
-| auth.secret[4].value | string | `""` | Default password for the admin user on initial setup, uses defaultAdminPassword if empty |
-| auth.useSecureCookies | bool | `false` | Enable secure cookies (should be true when using HTTPS) |
-| database.allocatedStorageGiB | int | `20` | Storage allocation in GiB for the database persistent volume |
-| database.defaultRetentionPolicyDays | int | `0` | Default retention policy for traces in days (PHOENIX_DEFAULT_RETENTION_POLICY_DAYS) Set to 0 to disable automatic trace cleanup. When set to a positive value, traces older than this many days will be automatically removed from the database. |
-| database.postgres.azureScope | string | `""` | Azure scope URL for PostgreSQL access token requests (PHOENIX_POSTGRES_AZURE_SCOPE) When empty, Phoenix uses the default Azure Database for PostgreSQL - Flexible Server scope (https://ossrdbms-aad.database.windows.net/.default). Override for sovereign clouds such as Azure Government (https://ossrdbms-aad.database.usgovcloudapi.net/.default). Only used when useAzureManagedIdentity is true. |
-| database.postgres.db | string | `"phoenix"` | Name of the PostgreSQL database (PHOENIX_POSTGRES_DB) |
-| database.postgres.host | string | `""` | Postgres Host (PHOENIX_POSTGRES_HOST) Default points to the groundhog2k PostgreSQL service when postgresql.enabled=true IMPORTANT: Only change this when using external PostgreSQL (postgresql.enabled=false, database.url empty) Examples: "localhost", "postgres.example.com", "your-rds-endpoint.region.rds.amazonaws.com" |
-| database.postgres.password | string | `"postgres"` | PostgreSQL password (should match auth.secret."PHOENIX_POSTGRES_PASSWORD", PHOENIX_POSTGRES_PASSWORD) |
-| database.postgres.port | int | `5432` | Port number for PostgreSQL connections (PHOENIX_POSTGRES_PORT) |
-| database.postgres.schema | string | `""` | PostgreSQL schema to use (PHOENIX_SQL_DATABASE_SCHEMA). When empty, the chart omits the env var and Phoenix uses the default schema (typically public). |
-| database.postgres.useAwsIamAuth | bool | `false` | Enable AWS RDS IAM authentication for PostgreSQL (PHOENIX_POSTGRES_USE_AWS_IAM_AUTH) When enabled, Phoenix will use AWS IAM credentials to generate short-lived authentication tokens instead of using a static password. Requires aioboto3 to be installed: pip install 'arize-phoenix[aws]' IMPORTANT: When enabled, do not set database.postgres.password |
-| database.postgres.useAzureManagedIdentity | bool | `false` | Enable Azure managed identity authentication for PostgreSQL (PHOENIX_POSTGRES_USE_AZURE_MANAGED_IDENTITY) When enabled, Phoenix will use Azure DefaultAzureCredential to obtain short-lived authentication tokens instead of using a static password. Requires azure-identity to be installed: pip install 'arize-phoenix[azure]'. Cannot be used with useAwsIamAuth. IMPORTANT: When enabled, do not set database.postgres.password |
-| database.postgres.user | string | `"postgres"` | PostgreSQL username (PHOENIX_POSTGRES_USER) |
-| database.readReplicaUrl | string | `""` | Optional PostgreSQL read replica URL for read-only query routing (PHOENIX_SQL_DATABASE_READ_REPLICA_URL) When set, Phoenix routes read-only queries to this replica while keeping writes on the primary. Ignored for SQLite deployments. |
-| database.url | string | `""` | Full database connection URL (overrides postgres settings if provided) IMPORTANT: Only set this for external databases (Strategy 3) - When using SQLite (Strategy 1): MUST be empty - SQLite auto-uses persistent volume - When using built-in PostgreSQL (Strategy 2): MUST be empty - auto-configured - When using external database (Strategy 3): MUST be configured with full connection string  Examples for external databases: PostgreSQL: "postgresql://username:password@your-rds-endpoint.region.rds.amazonaws.com:5432/phoenix" SQLite: "sqlite:///path/to/database.db" (only for external SQLite files, not recommended)  WARNING: Setting this will override all database.postgres.* settings and disable built-in PostgreSQL validation |
+| additionalEnv | list | `[]` | 添加到部署 Pod 规格中的额外环境变量。支持的变量见 https://arize.com/docs/phoenix/self-hosting/configuration#environment-variables 。仅用于 Helm chart 未直接暴露的能力。 |
+| auth.accessTokenExpiryMinutes | int | `60` | 访问令牌过期并需要续期前的有效时长，单位为分钟。（PHOENIX_ACCESS_TOKEN_EXPIRY_MINUTES） |
+| auth.admins | string | `""` | 启动时创建为管理员的用户名与邮箱对，以分号分隔。格式："username=email;username2=email2"，例如 "John Doe=john@example.com;Jane Doe=jane@example.com"。这些用户将获得随机密码，首次登录时必须重置。（PHOENIX_ADMINS） |
+| auth.allowedOrigins | list | `[]` | 允许跨域请求 Phoenix API 的 CORS 来源列表。（PHOENIX_ALLOWED_ORIGINS） |
+| auth.bruteForceLoginProtectionMaxAttempts | int | `5` | 临时锁定前允许的最大登录失败次数。仅在启用暴力破解防护时生效，锁定时长为 5 分钟。（PHOENIX_BRUTE_FORCE_LOGIN_PROTECTION_MAX_ATTEMPTS） |
+| auth.cookiesPath | string | `"/"` | 认证 Cookie 的路径。Phoenix 部署在子路径下时需要设置。（PHOENIX_COOKIES_PATH） |
+| auth.createSecret | bool | `true` | 是否创建 Secret 的布尔开关。为 False 且启用认证时，Secret 必须预先存在。 |
+| auth.csrfTrustedOrigins | list | `[]` | CSRF 防护使用的可信来源列表，用于防止跨站请求伪造。（PHOENIX_CSRF_TRUSTED_ORIGINS） |
+| auth.defaultAdminPassword | string | `"admin"` | 首次配置时管理员用户的默认密码。（PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD） |
+| auth.disableBasicAuth | bool | `false` | 禁用基于密码的认证。为 true 时，用户只能通过 OAuth2/OIDC 认证，适用于仅使用 SSO 的部署。（PHOENIX_DISABLE_BASIC_AUTH） |
+| auth.disableBruteForceLoginProtection | bool | `false` | 禁用暴力破解防护。为 false（默认）时，连续登录失败会暂时锁定账户。（PHOENIX_DISABLE_BRUTE_FORCE_LOGIN_PROTECTION） |
+| auth.enableAuth | bool | `true` | 启用 Phoenix 身份认证与授权。（PHOENIX_ENABLE_AUTH） |
+| auth.enableStrongPasswordPolicy | bool | `false` | 启用强密码策略：至少 12 个字符，且包含大写字母、小写字母、数字和特殊字符。（PHOENIX_ENABLE_STRONG_PASSWORD_POLICY） |
+| auth.ldap.allowSignUp | bool | `true` | 首次 LDAP 登录时允许自动创建用户。设为 false 则要求预先配置用户。 |
+| auth.ldap.attrDisplayName | string | `"displayName"` | 包含用户显示名称的 LDAP 属性。 |
+| auth.ldap.attrEmail | string | `"mail"` | 包含用户邮箱地址的 LDAP 属性。有效值："mail"（或其他属性名）表示使用该 LDAP 属性作为邮箱；"null" 表示用于没有邮箱的目录的无邮箱模式。使用无邮箱模式（"null"）时：必须设置 attrUniqueId（按唯一 ID 而非邮箱识别用户）；allowSignUp 必须为 true（首次登录时自动配置用户）；不能使用 auth.admins（应通过 groupRoleMappings 分配管理员）。 |
+| auth.ldap.attrMemberOf | string | `"memberOf"` | 包含组成员关系的 LDAP 属性（默认为 "memberOf"）。未设置 groupSearchFilter 时使用（Active Directory 模式）。典型值为 "memberOf"（AD、启用 memberOf overlay 的 OpenLDAP）。 |
+| auth.ldap.attrUniqueId | string | `""` | 包含不可变唯一标识符的 LDAP 属性。attrEmail 为 "null"（无邮箱模式）时必填。如果用户邮箱可能频繁变化，也建议设置。Active Directory："objectGUID"；OpenLDAP："entryUUID"；389 DS："nsUniqueId"。 |
+| auth.ldap.bindDn | string | `""` | 用于绑定 LDAP 服务的服务账户 DN。例如："CN=svc-phoenix,OU=Service Accounts,DC=corp,DC=com"。 |
+| auth.ldap.bindPassword | string | `""` | 用于绑定 LDAP 服务的服务账户密码。可直接在此设置，也可通过 auth.secret 中的 PHOENIX_LDAP_BIND_PASSWORD 键设置。 |
+| auth.ldap.enabled | bool | `false` | 启用 LDAP 认证。 |
+| auth.ldap.groupRoleMappings | string | `"[]"` | 将 LDAP 组映射到 Phoenix 角色的 JSON 数组。格式：[{"group_dn": "CN=Phoenix Admins,OU=Groups,DC=corp,DC=com", "role": "ADMIN"}]。支持 "ADMIN"、"MEMBER"、"VIEWER"（不区分大小写）。特殊 group_dn 值 "*" 匹配所有用户（默认角色通配符）。 |
+| auth.ldap.groupSearchBaseDns | list | `[]` | 组搜索的基础 DN 列表，设置 groupSearchFilter 时必填。例如：["ou=groups,dc=example,dc=com"]；多个 DN：["ou=groups,dc=corp,dc=com", "ou=teams,dc=corp,dc=com"]。 |
+| auth.ldap.groupSearchFilter | string | `""` | 查找组的 LDAP 筛选器，使用 %s 作为用户标识符占位符。两种模式：AD 模式（不设置，推荐用于 Active Directory）从用户条目读取 memberOf；搜索模式（设置后）搜索包含该用户的组。POSIX 示例："(&(objectClass=posixGroup)(memberUid=%s))"。 |
+| auth.ldap.groupSearchFilterUserAttr | string | `""` | 从用户条目中读取、用于替换 groupSearchFilter 中 %s 的 LDAP 属性。设置后读取用户 LDAP 条目的指定属性；未设置时（默认）直接使用登录用户名。组类型说明：POSIX（memberUid）包含 "jdoe" 这样的用户名，应使用默认值或 "uid"；groupOfNames（member）包含完整 DN，应使用 "distinguishedName"（仅 AD）。注意：OpenLDAP 不将 DN 暴露为属性；OpenLDAP 的 groupOfNames 应改用 memberOf overlay（AD 模式）。 |
+| auth.ldap.host | string | `""` | LDAP 服务主机名，启用时必填。多个主机以逗号分隔以支持故障切换，例如 "ldap.corp.com" 或 "dc1.corp.com,dc2.corp.com,dc3.corp.com"。 |
+| auth.ldap.port | string | `""` | LDAP 服务端口。StartTLS 默认为 389，LDAPS 默认为 636。 |
+| auth.ldap.tlsCaCertFile | string | `""` | TLS 验证使用的自定义 CA 证书文件路径（PEM 格式）。LDAP 服务使用未纳入系统信任库的私有或内部 CA 时使用。 |
+| auth.ldap.tlsClientCertFile | string | `""` | 双向 TLS 认证使用的客户端证书文件路径（PEM 格式），还必须设置 tlsClientKeyFile。 |
+| auth.ldap.tlsClientKeyFile | string | `""` | 双向 TLS 认证使用的客户端私钥文件路径（PEM 格式），还必须设置 tlsClientCertFile。 |
+| auth.ldap.tlsMode | string | `"starttls"` | TLS 连接模式："starttls"、"ldaps" 或 "none"。starttls 在 389 端口从明文升级为 TLS（推荐）；ldaps 在 636 端口从连接建立时就使用 TLS；none 不加密（仅用于测试，凭证明文传输）。 |
+| auth.ldap.tlsVerify | bool | `true` | 验证 TLS 证书。生产环境应始终为 true。 |
+| auth.ldap.userSearchBaseDns | list | `[]` | 用户搜索的基础 DN 列表，启用时必填，按顺序搜索。例如：["OU=Users,DC=corp,DC=com"]；多个 DN：["OU=Employees,DC=corp,DC=com", "OU=Contractors,DC=corp,DC=com"]。 |
+| auth.ldap.userSearchFilter | string | `"(&(objectClass=user)(sAMAccountName=%s))"` | 查找用户的 LDAP 筛选器，使用 %s 作为用户名占位符。Active Directory 默认值："(&(objectClass=user)(sAMAccountName=%s))"；OpenLDAP 示例："(&(objectClass=inetOrgPerson)(uid=%s))"。 |
+| auth.name | string | `"phoenix-secret"` | 包含认证凭证的 Kubernetes Secret 名称。 |
+| auth.oauth2.enabled | bool | `false` | 启用 OAuth2/OIDC 认证。 |
+| auth.oauth2.providers | string | `nil` | 要配置的 OAuth2 身份提供方列表。每项需要 client_id、client_secret（token_endpoint_auth_method="none" 或 "client_assertion_jwt" 时除外）及 oidc_config_url。也可通过 auth.secrets[].valueFrom 定义对应环境变量以使用现有 Secret。变量格式：PHOENIX_OAUTH2_{{ $provider_upper }}_{{ setting }}，例如 PHOENIX_OAUTH2_GOOGLE_CLIENT_SECRET。 |
+| auth.oauth2AuthorizationServer.allowedRedirectHosts | list | `[]` | 允许动态注册 OAuth2 客户端使用的 HTTPS 重定向主机列表。为空且 dynamicClientRegistration 为 "enabled" 时，接受所有 HTTPS 重定向主机；设置后将 HTTPS 重定向限制到指定主机。始终允许回环重定向 URI。例如：["app.example.com"]。（PHOENIX_OAUTH2_ALLOWED_REDIRECT_HOSTS） |
+| auth.oauth2AuthorizationServer.consentOriginCheck | string | `"strict"` | OAuth2 授权同意端点的 Origin 请求头检查模式。有效值："strict"（拒绝来自不可信来源的同意决定）或 "off"。（PHOENIX_OAUTH2_CONSENT_ORIGIN_CHECK） |
+| auth.oauth2AuthorizationServer.dcrRateLimitPerHour | int | `10` | 动态 OAuth2 客户端注册的每 IP 每小时速率限制。（PHOENIX_OAUTH2_DCR_RATE_LIMIT_PER_HOUR） |
+| auth.oauth2AuthorizationServer.dynamicClientRegistration | string | `"enabled"` | 动态客户端注册模式。有效值："disabled"、"local_only"（仅允许回环重定向 URI）或 "enabled"。（PHOENIX_OAUTH2_DYNAMIC_CLIENT_REGISTRATION） |
+| auth.oauth2AuthorizationServer.enabled | bool | `true` | 提供内置 OAuth2 授权服务器。（PHOENIX_ENABLE_OAUTH2_AUTHORIZATION_SERVER） |
+| auth.oauth2AuthorizationServer.grantExpiryDays | int | `90` | 新签发 OAuth2 授权的有效期上限，单位为天。（PHOENIX_OAUTH2_GRANT_EXPIRY_DAYS） |
+| auth.passwordResetTokenExpiryMinutes | int | `60` | 密码重置令牌过期前的有效时长，单位为分钟。（PHOENIX_PASSWORD_RESET_TOKEN_EXPIRY_MINUTES） |
+| auth.refreshTokenExpiryMinutes | int | `43200` | 刷新令牌过期前的有效时长，单位为分钟。（PHOENIX_REFRESH_TOKEN_EXPIRY_MINUTES） |
+| auth.secret[0] | object | `{"key":"PHOENIX_SECRET","value":""}` | 用于加密的 Phoenix 主密钥对应的环境变量名称。 |
+| auth.secret[0].value | string | `""` | 为空时自动生成。 |
+| auth.secret[1] | object | `{"key":"PHOENIX_ADMIN_SECRET","value":""}` | 管理员密钥对应的环境变量名称。 |
+| auth.secret[1].value | string | `""` | 为空时自动生成。 |
+| auth.secret[2] | object | `{"key":"PHOENIX_POSTGRES_PASSWORD","value":"postgres"}` | PostgreSQL 密码对应的环境变量名称。 |
+| auth.secret[2].value | string | `"postgres"` | 使用本 chart 的 PostgreSQL 时，密码必须与 database.postgres.password 一致。 |
+| auth.secret[3] | object | `{"key":"PHOENIX_SMTP_PASSWORD","value":""}` | SMTP 密码对应的环境变量名称。 |
+| auth.secret[3].value | string | `""` | 为空时自动生成。 |
+| auth.secret[4] | object | `{"key":"PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD","value":""}` | 默认管理员密码对应的环境变量名称。 |
+| auth.secret[4].value | string | `""` | 首次配置时管理员用户的默认密码；为空则使用 defaultAdminPassword。 |
+| auth.useSecureCookies | bool | `false` | 启用安全 Cookie（使用 HTTPS 时应为 true）。 |
+| database.allocatedStorageGiB | int | `20` | 数据库持久卷的存储分配量，单位为 GiB。 |
+| database.defaultRetentionPolicyDays | int | `0` | 追踪记录的默认保留天数。设为 0 可禁用自动清理；为正数时，数据库中早于该天数的追踪记录会被自动删除。（PHOENIX_DEFAULT_RETENTION_POLICY_DAYS） |
+| database.postgres.azureScope | string | `""` | 请求 PostgreSQL 访问令牌的 Azure scope URL。为空时，Phoenix 使用 Azure Database for PostgreSQL - Flexible Server 默认 scope（https://ossrdbms-aad.database.windows.net/.default）。Azure Government 等主权云可覆盖为相应地址（https://ossrdbms-aad.database.usgovcloudapi.net/.default）。仅 useAzureManagedIdentity 为 true 时使用。（PHOENIX_POSTGRES_AZURE_SCOPE） |
+| database.postgres.db | string | `"phoenix"` | PostgreSQL 数据库名称。（PHOENIX_POSTGRES_DB） |
+| database.postgres.host | string | `""` | PostgreSQL 主机。postgresql.enabled=true 时默认指向 groundhog2k PostgreSQL 服务。重要：仅在使用外部 PostgreSQL（postgresql.enabled=false 且 database.url 为空）时修改。例如："localhost"、"postgres.example.com"、"your-rds-endpoint.region.rds.amazonaws.com"。（PHOENIX_POSTGRES_HOST） |
+| database.postgres.password | string | `"postgres"` | PostgreSQL 密码（应与 auth.secret."PHOENIX_POSTGRES_PASSWORD" 一致）。 |
+| database.postgres.port | int | `5432` | PostgreSQL 连接端口。（PHOENIX_POSTGRES_PORT） |
+| database.postgres.schema | string | `""` | 使用的 PostgreSQL 模式。为空时 chart 不设置此环境变量，Phoenix 使用默认模式（通常为 public）。（PHOENIX_SQL_DATABASE_SCHEMA） |
+| database.postgres.useAwsIamAuth | bool | `false` | 启用 PostgreSQL 的 AWS RDS IAM 认证。启用后，Phoenix 使用 AWS IAM 凭证生成短期认证令牌，代替静态密码。需要安装 aioboto3：pip install 'arize-phoenix[aws]'。重要：启用时不要设置 database.postgres.password。（PHOENIX_POSTGRES_USE_AWS_IAM_AUTH） |
+| database.postgres.useAzureManagedIdentity | bool | `false` | 启用 PostgreSQL 的 Azure 托管身份认证。启用后，Phoenix 使用 Azure DefaultAzureCredential 获取短期认证令牌，代替静态密码。需要安装 azure-identity：pip install 'arize-phoenix[azure]'。不能与 useAwsIamAuth 同时使用。重要：启用时不要设置 database.postgres.password。（PHOENIX_POSTGRES_USE_AZURE_MANAGED_IDENTITY） |
+| database.postgres.user | string | `"postgres"` | PostgreSQL 用户名。（PHOENIX_POSTGRES_USER） |
+| database.readReplicaUrl | string | `""` | 可选的 PostgreSQL 只读副本 URL，用于只读查询路由。设置后，Phoenix 将只读查询路由至副本，写入仍发送到主库。SQLite 部署忽略此设置。（PHOENIX_SQL_DATABASE_READ_REPLICA_URL） |
+| database.url | string | `""` | 完整数据库连接 URL，设置后覆盖 postgres 配置。重要：仅用于外部数据库（策略 3）。SQLite（策略 1）时必须为空，自动使用持久卷；内置 PostgreSQL（策略 2）时必须为空，由系统自动配置；外部数据库（策略 3）时必须提供完整连接串。外部数据库示例：PostgreSQL 为 "postgresql://username:password@your-rds-endpoint.region.rds.amazonaws.com:5432/phoenix"；SQLite 为 "sqlite:///path/to/database.db"（仅限外部 SQLite 文件，不推荐）。警告：此设置会覆盖所有 database.postgres.* 配置，并禁用内置 PostgreSQL 验证。 |
 | deployment.affinity | object | `{}` |  |
 | deployment.nodeSelector | object | `{}` |  |
-| deployment.podLabels | object | `{}` | Extra labels for the Phoenix pods Required by admission webhooks that select on pod labels, e.g. `azure.workload.identity/use: "true"` for OAuth2 workload identity. |
-| deployment.strategy | object | `{"rollingUpdate":{"maxSurge":"25%","maxUnavailable":"25%"},"type":"RollingUpdate"}` | Deployment strategy |
-| deployment.terminationGracePeriodSeconds | int | `90` | Seconds Kubernetes allows Phoenix to drain in-flight work during shutdown |
-| deployment.tolerations | list | `[]` | Tolerations, nodeSelector and affinity For Pod scheduling strategy on the nodes |
-| extraVolumeMounts | list | `[]` | Extra Volume Mounts |
-| extraVolumes | list | `[]` | Extra Volumes configuration |
-| healthChecks | object | `{"livenessProbe":{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":5},"readinessProbe":{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":5,"successThreshold":1,"timeoutSeconds":3},"startupProbe":{"enabled":true,"failureThreshold":30,"initialDelaySeconds":1,"periodSeconds":1,"successThreshold":1,"timeoutSeconds":1}}` | Health check configuration |
-| healthChecks.livenessProbe | object | `{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":5}` | Liveness probe configuration |
-| healthChecks.livenessProbe.failureThreshold | int | `3` | Number of failures before container is restarted |
-| healthChecks.livenessProbe.initialDelaySeconds | int | `0` | Initial delay before liveness probe starts |
-| healthChecks.livenessProbe.periodSeconds | int | `10` | How often to perform the liveness probe |
-| healthChecks.livenessProbe.successThreshold | int | `1` | Number of consecutive successes for the probe to be considered successful |
-| healthChecks.livenessProbe.timeoutSeconds | int | `5` | Timeout for liveness probe |
-| healthChecks.readinessProbe | object | `{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":5,"successThreshold":1,"timeoutSeconds":3}` | Readiness probe configuration |
-| healthChecks.readinessProbe.failureThreshold | int | `3` | Number of failures before pod is marked unready |
-| healthChecks.readinessProbe.initialDelaySeconds | int | `0` | Initial delay before readiness probe starts |
-| healthChecks.readinessProbe.periodSeconds | int | `5` | How often to perform the readiness probe |
-| healthChecks.readinessProbe.successThreshold | int | `1` | Number of consecutive successes for the probe to be considered successful |
-| healthChecks.readinessProbe.timeoutSeconds | int | `3` | Timeout for readiness probe |
-| healthChecks.startupProbe | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":1,"periodSeconds":1,"successThreshold":1,"timeoutSeconds":1}` | Startup probe configuration |
-| healthChecks.startupProbe.enabled | bool | `true` | Enable startup probe |
-| healthChecks.startupProbe.failureThreshold | int | `30` | Number of failures before container is considered failed to start |
-| healthChecks.startupProbe.initialDelaySeconds | int | `1` | Initial delay before startup probe starts |
-| healthChecks.startupProbe.periodSeconds | int | `1` | How often to perform the startup probe |
-| healthChecks.startupProbe.successThreshold | int | `1` | Number of consecutive successes for the probe to be considered successful |
-| healthChecks.startupProbe.timeoutSeconds | int | `1` | Timeout for startup probe |
-| image.pullPolicy | string | `"IfNotPresent"` | Image pull policy for Phoenix container (Always, IfNotPresent, or Never) |
-| image.registry | string | `"docker.io"` | Docker image registry for Phoenix |
-| image.repository | string | `"arizephoenix/phoenix"` | Docker image repository for Phoenix |
-| image.tag | string | `"version-20.23.0-nonroot"` | Docker image tag/version to deploy |
-| ingress.annotations | object | `{}` | Annotations to add to the ingress resource |
-| ingress.apiPath | string | `"/"` | Path prefix for the Phoenix API |
-| ingress.enabled | bool | `true` | Enable ingress controller for external access |
-| ingress.host | string | `""` | Hostname for ingress |
-| ingress.labels | object | `{}` | Labels to add to the ingress resource |
-| ingress.pathType | string | `"Prefix"` | Ingress path type (Prefix, Exact, or ImplementationSpecific) |
-| ingress.tls.enabled | bool | `false` | Enable TLS/HTTPS for ingress |
-| instrumentation.otlpTraceCollectorGrpcEndpoint | string | `""` | OpenTelemetry collector gRPC endpoint for sending traces (PHOENIX_SERVER_INSTRUMENTATION_OTLP_TRACE_COLLECTOR_GRPC_ENDPOINT) |
-| instrumentation.otlpTraceCollectorHttpEndpoint | string | `""` | OpenTelemetry collector HTTP endpoint for sending traces (PHOENIX_SERVER_INSTRUMENTATION_OTLP_TRACE_COLLECTOR_HTTP_ENDPOINT) |
-| logging.dbLevel | string | `"warning"` | Database logging level (debug, info, warning, error) PHOENIX_DB_LOGGING_LEVEL |
-| logging.level | string | `"info"` | Application logging level (debug, info, warning, error) PHOENIX_LOGGING_LEVEL |
-| logging.logMigrations | bool | `true` | Enable logging of database migration operations (PHOENIX_LOG_MIGRATIONS) |
-| logging.logSql | bool | `false` | Log all SQL statements to stdout for debugging (PHOENIX_LOG_SQL) |
-| logging.mode | string | `"default"` | Logging mode configuration - PHOENIX_LOGGING_MODE (default|structured) |
-| persistence.accessModes | list | `["ReadWriteOnce"]` | Access modes for the persistent volume |
-| persistence.annotations | object | `{}` | Annotations to add to the PVC |
-| persistence.enabled | bool | `false` | Enable persistent storage for Phoenix home directory When enabled, Phoenix uses SQLite for local storage stored in the persistent volume IMPORTANT: Cannot be enabled simultaneously with postgresql.enabled=true NOTE: This setting is ignored when database.url="sqlite:///:memory:" (in-memory database) Choose one persistence strategy:   - SQLite: persistence.enabled=true, postgresql.enabled=false   - SQLite In-memory: persistence.inMemory=true , postgresql.enabled=false   - groundhog2k PostgreSQL: persistence.enabled=false, postgresql.enabled=true   - External DB: persistence.enabled=false, postgresql.enabled=false, database.url configured |
-| persistence.inMemory | bool | `false` | Enable in-memory configuration of sqlite strategy |
-| persistence.labels | object | `{}` | Labels to add to the PVC |
-| persistence.size | string | `"20Gi"` | Size of the persistent volume for Phoenix home directory |
-| persistence.storageClass | string | `""` | Kubernetes storage class for Phoenix home volume |
-| postgresql.enabled | bool | `true` | Enable PostgreSQL deployment. Set to false if you have your own postgres instance (e.g., RDS, CloudSQL) When disabled, you must configure database.url or database.postgres settings to point to your external database IMPORTANT: Cannot be enabled simultaneously with persistence.enabled=true (for SQLite) Choose one persistence strategy:   - groundhog2k PostgreSQL: postgresql.enabled=true, persistence.enabled=false   - SQLite: postgresql.enabled=false, persistence.enabled=true   - External DB: postgresql.enabled=false, persistence.enabled=false, database.url configured |
+| deployment.podLabels | object | `{}` | Phoenix Pod 的额外标签。按 Pod 标签筛选的准入 Webhook 需要这些标签，例如 OAuth2 工作负载身份使用的 `azure.workload.identity/use: "true"`。 |
+| deployment.strategy | object | `{"rollingUpdate":{"maxSurge":"25%","maxUnavailable":"25%"},"type":"RollingUpdate"}` | 部署策略。 |
+| deployment.terminationGracePeriodSeconds | int | `90` | 关闭期间 Kubernetes 允许 Phoenix 等待进行中工作完成的秒数。 |
+| deployment.tolerations | list | `[]` | Pod 在节点上的调度策略，包括 tolerations、nodeSelector 和 affinity。 |
+| extraVolumeMounts | list | `[]` | 额外卷挂载。 |
+| extraVolumes | list | `[]` | 额外卷配置。 |
+| healthChecks | object | `{"livenessProbe":{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":5},"readinessProbe":{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":5,"successThreshold":1,"timeoutSeconds":3},"startupProbe":{"enabled":true,"failureThreshold":30,"initialDelaySeconds":1,"periodSeconds":1,"successThreshold":1,"timeoutSeconds":1}}` | 健康检查配置。 |
+| healthChecks.livenessProbe | object | `{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":5}` | 存活探针配置。 |
+| healthChecks.livenessProbe.failureThreshold | int | `3` | 重启容器前允许的失败次数。 |
+| healthChecks.livenessProbe.initialDelaySeconds | int | `0` | 存活探针开始前的初始延迟。 |
+| healthChecks.livenessProbe.periodSeconds | int | `10` | 执行存活探针的频率。 |
+| healthChecks.livenessProbe.successThreshold | int | `1` | 将探针视为成功所需的连续成功次数。 |
+| healthChecks.livenessProbe.timeoutSeconds | int | `5` | 存活探针超时时间。 |
+| healthChecks.readinessProbe | object | `{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":5,"successThreshold":1,"timeoutSeconds":3}` | 就绪探针配置。 |
+| healthChecks.readinessProbe.failureThreshold | int | `3` | 将 Pod 标记为未就绪前允许的失败次数。 |
+| healthChecks.readinessProbe.initialDelaySeconds | int | `0` | 就绪探针开始前的初始延迟。 |
+| healthChecks.readinessProbe.periodSeconds | int | `5` | 执行就绪探针的频率。 |
+| healthChecks.readinessProbe.successThreshold | int | `1` | 将探针视为成功所需的连续成功次数。 |
+| healthChecks.readinessProbe.timeoutSeconds | int | `3` | 就绪探针超时时间。 |
+| healthChecks.startupProbe | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":1,"periodSeconds":1,"successThreshold":1,"timeoutSeconds":1}` | 启动探针配置。 |
+| healthChecks.startupProbe.enabled | bool | `true` | 启用启动探针。 |
+| healthChecks.startupProbe.failureThreshold | int | `30` | 将容器视为启动失败前允许的失败次数。 |
+| healthChecks.startupProbe.initialDelaySeconds | int | `1` | 启动探针开始前的初始延迟。 |
+| healthChecks.startupProbe.periodSeconds | int | `1` | 执行启动探针的频率。 |
+| healthChecks.startupProbe.successThreshold | int | `1` | 将探针视为成功所需的连续成功次数。 |
+| healthChecks.startupProbe.timeoutSeconds | int | `1` | 启动探针超时时间。 |
+| image.pullPolicy | string | `"IfNotPresent"` | Phoenix 容器的镜像拉取策略（Always、IfNotPresent 或 Never）。 |
+| image.registry | string | `"docker.io"` | Phoenix 的 Docker 镜像注册表。 |
+| image.repository | string | `"arizephoenix/phoenix"` | Phoenix 的 Docker 镜像仓库。 |
+| image.tag | string | `"version-20.23.0-nonroot"` | 要部署的 Docker 镜像标签或版本。 |
+| ingress.annotations | object | `{}` | 添加到 Ingress 资源的注解。 |
+| ingress.apiPath | string | `"/"` | Phoenix API 的路径前缀。 |
+| ingress.enabled | bool | `true` | 启用 Ingress 控制器以允许外部访问。 |
+| ingress.host | string | `""` | Ingress 主机名。 |
+| ingress.labels | object | `{}` | 添加到 Ingress 资源的标签。 |
+| ingress.pathType | string | `"Prefix"` | Ingress 路径类型（Prefix、Exact 或 ImplementationSpecific）。 |
+| ingress.tls.enabled | bool | `false` | 为 Ingress 启用 TLS/HTTPS。 |
+| instrumentation.otlpTraceCollectorGrpcEndpoint | string | `""` | 用于发送追踪记录的 OpenTelemetry 收集器 gRPC 端点。（PHOENIX_SERVER_INSTRUMENTATION_OTLP_TRACE_COLLECTOR_GRPC_ENDPOINT） |
+| instrumentation.otlpTraceCollectorHttpEndpoint | string | `""` | 用于发送追踪记录的 OpenTelemetry 收集器 HTTP 端点。（PHOENIX_SERVER_INSTRUMENTATION_OTLP_TRACE_COLLECTOR_HTTP_ENDPOINT） |
+| logging.dbLevel | string | `"warning"` | 数据库日志级别（debug、info、warning、error）。（PHOENIX_DB_LOGGING_LEVEL） |
+| logging.level | string | `"info"` | 应用日志级别（debug、info、warning、error）。（PHOENIX_LOGGING_LEVEL） |
+| logging.logMigrations | bool | `true` | 启用数据库迁移操作日志。（PHOENIX_LOG_MIGRATIONS） |
+| logging.logSql | bool | `false` | 将所有 SQL 语句记录到标准输出以便调试。（PHOENIX_LOG_SQL） |
+| logging.mode | string | `"default"` | 日志模式配置：default|structured。（PHOENIX_LOGGING_MODE） |
+| persistence.accessModes | list | `["ReadWriteOnce"]` | 持久卷的访问模式。 |
+| persistence.annotations | object | `{}` | 添加到 PVC 的注解。 |
+| persistence.enabled | bool | `false` | 为 Phoenix 主目录启用持久存储。启用时，Phoenix 使用存放在持久卷上的 SQLite 本地存储。重要：不能与 postgresql.enabled=true 同时启用。注意：database.url="sqlite:///:memory:"（内存数据库）时忽略此设置。请选择一种持久化策略：SQLite 使用 persistence.enabled=true、postgresql.enabled=false；SQLite 内存模式使用 persistence.inMemory=true、postgresql.enabled=false；groundhog2k PostgreSQL 使用 persistence.enabled=false、postgresql.enabled=true；外部数据库使用 persistence.enabled=false、postgresql.enabled=false，并配置 database.url。 |
+| persistence.inMemory | bool | `false` | 启用 SQLite 策略的内存模式配置。 |
+| persistence.labels | object | `{}` | 添加到 PVC 的标签。 |
+| persistence.size | string | `"20Gi"` | Phoenix 主目录持久卷的大小。 |
+| persistence.storageClass | string | `""` | Phoenix 主目录卷的 Kubernetes 存储类。 |
+| postgresql.enabled | bool | `true` | 启用 PostgreSQL 部署。已有 PostgreSQL 实例（如 RDS、CloudSQL）时设为 false。禁用时必须配置 database.url 或 database.postgres，使其指向外部数据库。重要：不能与 persistence.enabled=true（SQLite）同时启用。请选择一种策略：groundhog2k PostgreSQL 使用 postgresql.enabled=true、persistence.enabled=false；SQLite 使用 postgresql.enabled=false、persistence.enabled=true；外部数据库使用 postgresql.enabled=false、persistence.enabled=false，并配置 database.url。 |
 | postgresql.image.registry | string | `"docker.io"` |  |
 | postgresql.image.repository | string | `"postgres"` |  |
 | postgresql.image.tag | string | `"16"` |  |
-| postgresql.podSecurityContext | object | `{"fsGroup":999,"supplementalGroups":[999]}` | Security context for PostgreSQL container |
-| postgresql.resources | object | `{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Resource limits |
+| postgresql.podSecurityContext | object | `{"fsGroup":999,"supplementalGroups":[999]}` | PostgreSQL 容器的安全上下文。 |
+| postgresql.resources | object | `{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | 资源限制。 |
 | postgresql.securityContext.allowPrivilegeEscalation | bool | `false` |  |
 | postgresql.securityContext.privileged | bool | `false` |  |
 | postgresql.securityContext.readOnlyRootFilesystem | bool | `true` |  |
 | postgresql.securityContext.runAsGroup | int | `999` |  |
 | postgresql.securityContext.runAsNonRoot | bool | `true` |  |
 | postgresql.securityContext.runAsUser | int | `999` |  |
-| postgresql.service | object | `{"port":5432,"type":"ClusterIP"}` | Service configuration |
-| postgresql.settings | object | `{"superuserPassword":{"value":"postgres"}}` | Database settings |
-| postgresql.storage | object | `{"accessModes":["ReadWriteOnce"],"requestedSize":"20Gi"}` | Storage configuration |
-| postgresql.userDatabase | object | `{"name":{"value":"phoenix"},"password":{"value":"phoenix"},"user":{"value":"phoenix"}}` | User database configuration |
-| replicaCount | int | `1` | Number of Phoenix pod replicas |
-| resources | object | `{"limits":{"cpu":"1000m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"1Gi"}}` | Resource configuration |
-| sandbox.allowedProviders | string | `""` | Comma-separated allowlist of sandbox providers (PHOENIX_ALLOWED_SANDBOX_PROVIDERS) Accepted values: WASM, E2B, DAYTONA, VERCEL, DENO, MODAL, MONTY, DOCKER (case-insensitive) When empty, the chart omits the env var and all providers are allowed. Set to "NONE" to disable all sandbox providers. Example: "WASM,DENO" |
-| securityContext | object | `{"container":{"allowPrivilegeEscalation":false,"capabilities":{"add":[],"drop":["ALL"]},"enabled":false,"privileged":false,"procMount":"Default","readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"windowsOptions":{}},"pod":{"enabled":false,"fsGroup":65532,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"supplementalGroups":[],"sysctls":[],"windowsOptions":{}}}` | Security context configuration |
-| securityContext.container | object | `{"allowPrivilegeEscalation":false,"capabilities":{"add":[],"drop":["ALL"]},"enabled":false,"privileged":false,"procMount":"Default","readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"windowsOptions":{}}` | Container-level security context settings |
-| securityContext.pod | object | `{"enabled":false,"fsGroup":65532,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"supplementalGroups":[],"sysctls":[],"windowsOptions":{}}` | Pod-level security context settings |
-| server.allowExternalResources | bool | `true` | Allows calls to external resources, like Google Fonts in the web interface (PHOENIX_ALLOW_EXTERNAL_RESOURCES) Set to false in air-gapped environments to prevent external requests that can cause UI loading delays |
-| server.allowedProviders | string | `""` | Comma-separated list of model provider names to display in the playground UI (PHOENIX_ALLOWED_PROVIDERS) When unset, all providers are shown. Set to "NONE" to hide all providers. Supported values: OPENAI, ANTHROPIC, AZURE_OPENAI, GOOGLE, DEEPSEEK, XAI, OLLAMA, AWS, CEREBRAS, FIREWORKS, GROQ, MOONSHOT, MINIMAX, PERPLEXITY, TOGETHER, ZAI, META Example: "OPENAI,ANTHROPIC" |
-| server.annotations | object | `{}` | Annotations to add to the Phoenix service |
-| server.enableMcpCodeMode | bool | `true` | Enable code mode for the built-in MCP server, which exposes tools through a code-execution interface (PHOENIX_ENABLE_MCP_CODE_MODE) Only applies when the MCP server is enabled |
-| server.enableMcpServer | bool | `true` | Serve the built-in MCP server (PHOENIX_ENABLE_MCP_SERVER) |
-| server.enablePrometheus | bool | `false` | Enable Prometheus metrics endpoint on port 9090 |
-| server.grpcPort | int | `4317` | Port for OpenTelemetry gRPC collector (PHOENIX_GRPC_PORT) |
-| server.host | string | `"::"` | Host IP to bind Phoenix server (PHOENIX_HOST) |
-| server.hostRootPath | string | `""` | Root path prefix for Phoenix UI and API (PHOENIX_HOST_ROOT_PATH) |
-| server.labels | object | `{}` | Labels to add to the Phoenix service |
-| server.maxSpansQueueSize | int | `20000` | Maximum number of spans to hold in the processing queue before rejecting new requests (PHOENIX_MAX_SPANS_QUEUE_SIZE) This is a heuristic to prevent memory issues when spans accumulate faster than they can be written to the database. Memory usage: ~50KiB per span means 20,000 spans = ~1GiB. Adjust based on available memory and database throughput. |
-| server.port | int | `6006` | Port for Phoenix web UI and HTTP API (PHOENIX_PORT) |
-| server.rootUrl | string | `""` | External root URL for Phoenix (PHOENIX_ROOT_URL) |
-| server.telemetryEnabled | bool | `true` | Enable telemetry for analytics tracking (PHOENIX_TELEMETRY_ENABLED) When set to false, disables all analytics tracking in the Phoenix |
-| server.workingDir | string | `"/data"` | The working directory for saving, loading, and exporting data (PHOENIX_WORKING_DIR) Set to empty string to use container's $HOME directory (not recommended for persistence) Use `/data` as a default for volume mount - enables proper permissions in both strict and normal security contexts IMPORTANT: When persistence.enabled=true, this directory must be writable by the Phoenix container (UID 65532) The fsGroup setting in securityContext.pod ensures proper permissions when enabled |
-| service.annotations | object | `{}` | Annotations to add to the Phoenix service (useful for service mesh configurations) |
-| service.labels | object | `{}` | Labels to add to the Phoenix service |
-| service.type | string | `"NodePort"` | Service type for Phoenix service (ClusterIP, NodePort, LoadBalancer, or ExternalName) Use ClusterIP for service mesh deployments (Istio, Linkerd, etc.) Use NodePort for direct external access without ingress |
-| serviceAccount | object | `{"annotations":{},"create":false,"imagePullSecrets":[],"name":""}` | ServiceAccount configuration |
-| serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount |
-| serviceAccount.create | bool | `false` | Create a ServiceAccount for Phoenix |
-| serviceAccount.imagePullSecrets | list | `[]` | List of Kubernetes secrets to use for pulling images from private registries |
-| serviceAccount.name | string | `""` | Name of the ServiceAccount to use. If not set and create is true, a name is generated using the release name. If not set and create is false, uses default ServiceAccount |
-| smtp.hostname | string | `""` | SMTP server hostname for sending emails (PHOENIX_SMTP_HOSTNAME) |
-| smtp.mailFrom | string | `"noreply@arize.com"` | Email address to use as sender for system emails (PHOENIX_SMTP_MAIL_FROM) |
-| smtp.password | string | `""` | SMTP authentication password (PHOENIX_SMTP_PASSWORD) |
-| smtp.port | int | `587` | SMTP server port (typically 587 for TLS, PHOENIX_SMTP_PORT) |
-| smtp.username | string | `""` | SMTP authentication username (PHOENIX_SMTP_USERNAME) |
-| smtp.validateCerts | bool | `true` | Validate SMTP server TLS certificates (PHOENIX_SMTP_VALIDATE_CERTS) |
-| tls.caFile | string | `""` | Path to CA certificate file for TLS (PHOENIX_TLS_CA_FILE) |
-| tls.certFile | string | `""` | Path to TLS certificate file (PHOENIX_TLS_CERT_FILE) |
-| tls.enabled | bool | `false` | Enable TLS for Phoenix server (PHOENIX_TLS_ENABLED) |
-| tls.enabledForGrpc | bool | `false` | Enable TLS for gRPC endpoints (PHOENIX_TLS_ENABLED_FOR_GRPC) |
-| tls.enabledForHttp | bool | `false` | Enable TLS for HTTP endpoints (PHOENIX_TLS_ENABLED_FOR_HTTP) |
-| tls.keyFile | string | `""` | Path to TLS private key file (PHOENIX_TLS_KEY_FILE) |
-| tls.keyFilePassword | string | `""` | Password for encrypted TLS private key (PHOENIX_TLS_KEY_FILE_PASSWORD) |
-| tls.verifyClient | bool | `false` | Enable client certificate verification for mutual TLS (PHOENIX_TLS_VERIFY_CLIENT) |
+| postgresql.service | object | `{"port":5432,"type":"ClusterIP"}` | 服务配置。 |
+| postgresql.settings | object | `{"superuserPassword":{"value":"postgres"}}` | 数据库设置。 |
+| postgresql.storage | object | `{"accessModes":["ReadWriteOnce"],"requestedSize":"20Gi"}` | 存储配置。 |
+| postgresql.userDatabase | object | `{"name":{"value":"phoenix"},"password":{"value":"phoenix"},"user":{"value":"phoenix"}}` | 用户数据库配置。 |
+| replicaCount | int | `1` | Phoenix Pod 的副本数。 |
+| resources | object | `{"limits":{"cpu":"1000m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"1Gi"}}` | 资源配置。 |
+| sandbox.allowedProviders | string | `""` | 以逗号分隔的沙箱供应商允许列表。支持 WASM、E2B、DAYTONA、VERCEL、DENO、MODAL、MONTY、DOCKER（不区分大小写）。为空时 chart 不设置环境变量，允许所有供应商。设为 "NONE" 可禁用全部沙箱供应商。例如："WASM,DENO"。（PHOENIX_ALLOWED_SANDBOX_PROVIDERS） |
+| securityContext | object | `{"container":{"allowPrivilegeEscalation":false,"capabilities":{"add":[],"drop":["ALL"]},"enabled":false,"privileged":false,"procMount":"Default","readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"windowsOptions":{}},"pod":{"enabled":false,"fsGroup":65532,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"supplementalGroups":[],"sysctls":[],"windowsOptions":{}}}` | 安全上下文配置。 |
+| securityContext.container | object | `{"allowPrivilegeEscalation":false,"capabilities":{"add":[],"drop":["ALL"]},"enabled":false,"privileged":false,"procMount":"Default","readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"windowsOptions":{}}` | 容器级安全上下文设置。 |
+| securityContext.pod | object | `{"enabled":false,"fsGroup":65532,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532,"seLinuxOptions":{},"seccompProfile":{"type":"RuntimeDefault"},"supplementalGroups":[],"sysctls":[],"windowsOptions":{}}` | Pod 级安全上下文设置。 |
+| server.allowExternalResources | bool | `true` | 允许调用外部资源，如 Web 界面中的 Google Fonts。隔离网络环境应设为 false，避免外部请求导致界面加载延迟。（PHOENIX_ALLOW_EXTERNAL_RESOURCES） |
+| server.allowedProviders | string | `""` | 在 Playground 界面显示的模型供应商名称列表，以逗号分隔。未设置时显示全部供应商。设为 "NONE" 可隐藏全部供应商。支持：OPENAI、ANTHROPIC、AZURE_OPENAI、GOOGLE、DEEPSEEK、XAI、OLLAMA、AWS、CEREBRAS、FIREWORKS、GROQ、MOONSHOT、MINIMAX、PERPLEXITY、TOGETHER、ZAI、META。例如："OPENAI,ANTHROPIC"。（PHOENIX_ALLOWED_PROVIDERS） |
+| server.annotations | object | `{}` | 添加到 Phoenix 服务的注解。 |
+| server.enableMcpCodeMode | bool | `true` | 为内置 MCP 服务启用代码模式，通过代码执行接口暴露工具。仅启用 MCP 服务时生效。（PHOENIX_ENABLE_MCP_CODE_MODE） |
+| server.enableMcpServer | bool | `true` | 提供内置 MCP 服务。（PHOENIX_ENABLE_MCP_SERVER） |
+| server.enablePrometheus | bool | `false` | 在 9090 端口启用 Prometheus 指标端点。 |
+| server.grpcPort | int | `4317` | OpenTelemetry gRPC 收集器端口。（PHOENIX_GRPC_PORT） |
+| server.host | string | `"::"` | Phoenix 服务绑定的主机 IP。（PHOENIX_HOST） |
+| server.hostRootPath | string | `""` | Phoenix 界面与 API 的根路径前缀。（PHOENIX_HOST_ROOT_PATH） |
+| server.labels | object | `{}` | 添加到 Phoenix 服务的标签。 |
+| server.maxSpansQueueSize | int | `20000` | 处理队列中可容纳的最大跨度数，超过后拒绝新请求。此启发式限制用于避免跨度积累速度超过写入数据库速度时出现内存问题。每个跨度约占 50KiB，因此 20,000 个跨度约为 1GiB。应根据可用内存和数据库吞吐量调整。（PHOENIX_MAX_SPANS_QUEUE_SIZE） |
+| server.port | int | `6006` | Phoenix Web 界面和 HTTP API 的端口。（PHOENIX_PORT） |
+| server.rootUrl | string | `""` | Phoenix 的外部根 URL。（PHOENIX_ROOT_URL） |
+| server.telemetryEnabled | bool | `true` | 启用用于分析跟踪的遥测。设为 false 时禁用 Phoenix 中全部分析跟踪。（PHOENIX_TELEMETRY_ENABLED） |
+| server.workingDir | string | `"/data"` | 保存、加载和导出数据的工作目录。设为空字符串会使用容器的 $HOME 目录（不建议用于持久化）。卷挂载默认使用 `/data`，以便在严格和普通安全上下文中都有正确权限。重要：persistence.enabled=true 时，此目录必须允许 Phoenix 容器（UID 65532）写入。启用 securityContext.pod 中的 fsGroup 设置可确保权限正确。（PHOENIX_WORKING_DIR） |
+| service.annotations | object | `{}` | 添加到 Phoenix 服务的注解（适用于服务网格配置）。 |
+| service.labels | object | `{}` | 添加到 Phoenix 服务的标签。 |
+| service.type | string | `"NodePort"` | Phoenix 服务类型（ClusterIP、NodePort、LoadBalancer 或 ExternalName）。服务网格部署（Istio、Linkerd 等）使用 ClusterIP；不经过 Ingress 直接向外暴露时使用 NodePort。 |
+| serviceAccount | object | `{"annotations":{},"create":false,"imagePullSecrets":[],"name":""}` | ServiceAccount 配置。 |
+| serviceAccount.annotations | object | `{}` | 添加到 ServiceAccount 的注解。 |
+| serviceAccount.create | bool | `false` | 为 Phoenix 创建 ServiceAccount。 |
+| serviceAccount.imagePullSecrets | list | `[]` | 从私有注册表拉取镜像时使用的 Kubernetes Secret 列表。 |
+| serviceAccount.name | string | `""` | 要使用的 ServiceAccount 名称。未设置且 create 为 true 时，根据发布名称生成名称；未设置且 create 为 false 时，使用默认 ServiceAccount。 |
+| smtp.hostname | string | `""` | 发送邮件使用的 SMTP 服务主机名。（PHOENIX_SMTP_HOSTNAME） |
+| smtp.mailFrom | string | `"noreply@arize.com"` | 系统邮件的发件人地址。（PHOENIX_SMTP_MAIL_FROM） |
+| smtp.password | string | `""` | SMTP 认证密码。（PHOENIX_SMTP_PASSWORD） |
+| smtp.port | int | `587` | SMTP 服务端口（TLS 通常使用 587）。（PHOENIX_SMTP_PORT） |
+| smtp.username | string | `""` | SMTP 认证用户名。（PHOENIX_SMTP_USERNAME） |
+| smtp.validateCerts | bool | `true` | 验证 SMTP 服务的 TLS 证书。（PHOENIX_SMTP_VALIDATE_CERTS） |
+| tls.caFile | string | `""` | TLS CA 证书文件路径。（PHOENIX_TLS_CA_FILE） |
+| tls.certFile | string | `""` | TLS 证书文件路径。（PHOENIX_TLS_CERT_FILE） |
+| tls.enabled | bool | `false` | 为 Phoenix 服务启用 TLS。（PHOENIX_TLS_ENABLED） |
+| tls.enabledForGrpc | bool | `false` | 为 gRPC 端点启用 TLS。（PHOENIX_TLS_ENABLED_FOR_GRPC） |
+| tls.enabledForHttp | bool | `false` | 为 HTTP 端点启用 TLS。（PHOENIX_TLS_ENABLED_FOR_HTTP） |
+| tls.keyFile | string | `""` | TLS 私钥文件路径。（PHOENIX_TLS_KEY_FILE） |
+| tls.keyFilePassword | string | `""` | 加密 TLS 私钥的密码。（PHOENIX_TLS_KEY_FILE_PASSWORD） |
+| tls.verifyClient | bool | `false` | 为双向 TLS 启用客户端证书验证。（PHOENIX_TLS_VERIFY_CLIENT） |
 
 ----------------------------------------------
-Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
+使用 [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2) 根据 chart 元数据自动生成。

@@ -5,4 +5,4 @@ allowed_tools: [Skill, Read, Write]
 runs: 3
 tags: [phoenix-evals]
 ---
-My agent is supposed to emit a single JSON object with exactly these fields: `name` (string), `age` (integer), and `email` (string). I want a Phoenix evaluator that checks whether a given output string is valid JSON and conforms to that schema — exactly those three fields, nothing extra. Put it in `schema_eval.py`.
+我的智能体应输出单个 JSON 对象，且恰好包含以下字段：`name`（字符串）、`age`（整数）和 `email`（字符串）。我需要一个 Phoenix 评估器，检查给定输出字符串是否为有效 JSON 并符合该模式：只能有这三个字段，不允许额外字段。请放在 `schema_eval.py` 中。

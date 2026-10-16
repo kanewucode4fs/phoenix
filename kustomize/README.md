@@ -1,10 +1,10 @@
-This directory contains a set of manifests and overlays that describe our various Kubernetes deployment options.
-These deployments can be invoked from the repository root.
+此目录包含一组资源清单和覆盖配置，用于定义不同的 Kubernetes 部署方案。
+可从仓库根目录执行这些部署。
 
-Examples:
+示例：
 
 ```shell
 kubectl apply -k kustomize/base
 ```
 
-will yield a single node deployment of Phoenix with PostgreSQL
+上述命令会创建一个包含 PostgreSQL 的 Phoenix 单节点部署。

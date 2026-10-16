@@ -1,37 +1,41 @@
-# Llama Researcher
+<a id="llama-researcher"></a>
 
-In this tutorial, we'll create LLama-Researcher using LlamaIndex workflows, inspired by [GPT-Researcher.](https://github.com/assafelovic/gpt-researcher)
+# Llama 研究助手
 
-Credit to [rsrohan99](https://github.com/rsrohan99) for the original implementation.
+本教程将使用 LlamaIndex 工作流创建 LLama-Researcher，灵感来自 [GPT-Researcher](https://github.com/assafelovic/gpt-researcher)。
 
-Stack Used:
+原始实现由 [rsrohan99](https://github.com/rsrohan99) 提供。
 
-- LlamaIndex workflows for orchestration
-- Tavily API as the search engine api
-- Arize Phoenix for tracing and evaluation
+使用的技术栈：
 
-## How to use
+- 使用 LlamaIndex 工作流进行编排
+- 使用 Tavily API 作为搜索引擎 API
+- 使用 Arize Phoenix 进行追踪和评估
 
-- Clone the repo
+<a id="how-to-use"></a>
+
+## 使用方法
+
+- 克隆仓库
 
 ```bash
 git clone https://github.com/Arize-ai/phoenix
 cd examples/llamaindex-workflows-research-agent
 ```
 
-- Install dependencies
+- 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-- Create `.env` file and add `OPENAI_API_KEY`, `TAVILY_API_KEY` and `PHOENIX_API_KEY`
+- 创建 `.env` 文件并添加 `OPENAI_API_KEY`、`TAVILY_API_KEY` 和 `PHOENIX_API_KEY`
 
 ```bash
 cp .env.example .env
 ```
 
-- Run the workflow with the topic to research
+- 指定研究主题并运行工作流
 
 ```bash
  python run.py "topic to research"

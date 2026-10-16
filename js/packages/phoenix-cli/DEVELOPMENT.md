@@ -1,41 +1,55 @@
-# Development Guide
+<a id="development-guide"></a>
 
-This document contains information for developers working on the Phoenix CLI package.
+# 开发指南
 
-## Setup
+本文档提供面向 Phoenix CLI 包开发者的信息。
 
-From the root of the repository:
+<a id="setup"></a>
+
+## 配置
+
+在仓库根目录：
 
 ```bash
 pnpm install
 ```
 
-## Building
+<a id="building"></a>
+
+## 构建
 
 ```bash
 pnpm build
 ```
 
-## Testing
+<a id="testing"></a>
+
+## 测试
 
 ```bash
 pnpm test
 ```
 
-## CLI Design Principles
+<a id="cli-design-principles"></a>
 
-The CLI should follow these principles:
+## CLI 设计原则
 
-1. **Lightweight**: Minimal dependencies and fast startup
-2. **Intuitive**: Commands should be easy to discover and use
-3. **Consistent**: Follow established CLI patterns and conventions
-4. **Extensible**: Easy to add new commands and features
+CLI 应遵循以下原则：
 
-## Architecture
+1. **轻量**：尽量减少依赖，快速启动
+2. **直观**：命令应易于发现和使用
+3. **一致**：遵循成熟的 CLI 模式和约定
+4. **可扩展**：易于添加新命令和功能
 
-The CLI uses the existing `@arizeai/phoenix-client` library for all Phoenix API interactions.
+<a id="architecture"></a>
 
-### Directory Structure
+## 架构
+
+CLI 使用现有 `@arizeai/phoenix-client` 库进行所有 Phoenix API 交互。
+
+<a id="directory-structure"></a>
+
+### 目录结构
 
 ```
 src/
@@ -45,6 +59,8 @@ src/
 └── index.ts        # Library exports
 ```
 
-## Adding Commands
+<a id="adding-commands"></a>
 
-> **TODO:** Add documentation for adding new commands once the command framework is implemented.
+## 添加命令
+
+> **待办：** 命令框架实现后，补充添加新命令的文档。

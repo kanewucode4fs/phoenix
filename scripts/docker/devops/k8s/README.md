@@ -1,17 +1,24 @@
-# K8s Test Setup for ROLE_ATTRIBUTE_PATH
+<a id="k8s-test-setup-for-role_attribute_path"></a>
 
-This setup tests whether `ROLE_ATTRIBUTE_PATH` works with a constant value (e.g., `'MEMBER'`) 
-without requiring `ROLE_MAPPING` in a Kubernetes environment.
+# ROLE_ATTRIBUTE_PATH 的 Kubernetes 测试环境
 
-## Prerequisites
+此配置测试在 Kubernetes 环境中，`ROLE_ATTRIBUTE_PATH` 能否使用常量值（如 `'MEMBER'`），而无需设置 `ROLE_MAPPING`。
 
-- Docker Desktop with Kubernetes enabled
-- kubectl configured to access the cluster
+<a id="prerequisites"></a>
+
+## 前置条件
+
+- 已启用 Kubernetes 的 Docker Desktop
+- 已配置可访问集群的 kubectl
 - Helm 3.x
 
-## Setup
+<a id="setup"></a>
 
-### 1. Verify you're using Docker Desktop (NOT production!)
+## 配置步骤
+
+<a id="1-verify-youre-using-docker-desktop-not-production"></a>
+
+### 1. 确认正在使用 Docker Desktop（不能是生产环境）
 
 ```bash
 # Check current context - MUST be "docker-desktop"
@@ -24,9 +31,11 @@ kubectl config use-context docker-desktop
 kubectl cluster-info
 ```
 
-> **⚠️ WARNING**: Do NOT proceed if your context is pointing to a production cluster!
+> **⚠️ 警告**：如果当前上下文指向生产集群，请勿继续！
 
-### 2. Build the OIDC dev image
+<a id="2-build-the-oidc-dev-image"></a>
+
+### 2. 构建 OIDC 开发镜像
 
 ```bash
 cd scripts/docker/devops
@@ -35,7 +44,9 @@ cd scripts/docker/devops
 docker build -t oidc-dev:local ./oidc-server
 ```
 
-### 3. Deploy Postgres
+<a id="3-deploy-postgres"></a>
+
+### 3. 部署 PostgreSQL
 
 ```bash
 kubectl apply -f k8s/postgres.yml
@@ -44,7 +55,9 @@ kubectl apply -f k8s/postgres.yml
 kubectl wait --for=condition=ready pod -l app=postgres --timeout=60s
 ```
 
-### 4. Deploy Phoenix with OIDC sidecar
+<a id="4-deploy-phoenix-with-oidc-sidecar"></a>
+
+### 4. 部署带 OIDC 边车的 Phoenix
 
 ```bash
 # Apply the OAuth secret (contains ROLE_ATTRIBUTE_PATH='MEMBER' with NO ROLE_MAPPING)
@@ -60,7 +73,9 @@ kubectl patch deployment phoenix --patch-file k8s/phoenix-oidc-sidecar-patch.yml
 kubectl wait --for=condition=ready pod -l app=phoenix --timeout=120s
 ```
 
-### 5. Verify the environment variable
+<a id="5-verify-the-environment-variable"></a>
+
+### 5. 验证环境变量
 
 ```bash
 # Check that the secret value is correctly set
@@ -69,32 +84,38 @@ kubectl get secret phoenix-oauth-test -o jsonpath='{.data.PHOENIX_OAUTH2_DEV_ROL
 # Expected output: 'MEMBER' (with single quotes)
 ```
 
-### 6. Test the OIDC login
+<a id="6-test-the-oidc-login"></a>
+
+### 6. 测试 OIDC 登录
 
 ```bash
 # Port-forward both Phoenix (6006) and OIDC sidecar (9000) from the same pod
 kubectl port-forward deploy/phoenix 6006:6006 9000:9000
 ```
 
-Then:
-1. Open http://localhost:6006 in your browser
-2. Click "Login with OIDC Dev"
-3. You'll be automatically logged in as a test user
-4. Verify the user's role by querying the database:
+然后：
+
+1. 在浏览器中打开 http://localhost:6006
+2. 点击 "Login with OIDC Dev"
+3. 系统会自动以测试用户身份登录
+4. 查询数据库，验证用户角色：
 
 ```bash
 kubectl exec deploy/postgres -- psql -U postgres -d postgres -c \
   "SELECT u.username, u.email, r.name as role FROM users u JOIN user_roles r ON u.user_role_id = r.id WHERE u.oauth2_client_id IS NOT NULL;"
 ```
 
-5. **Expected**: User should have MEMBER role (not VIEWER)
+5. **预期结果**：用户角色应为 MEMBER，而非 VIEWER
 
-## What we're testing
+<a id="what-were-testing"></a>
 
-The key question: Does `ROLE_ATTRIBUTE_PATH='MEMBER'` (a constant JMESPath expression) 
-correctly assign the MEMBER role without needing `ROLE_MAPPING`?
+## 测试目标
 
-## Cleanup
+关键问题：`ROLE_ATTRIBUTE_PATH='MEMBER'`（JMESPath 常量表达式）能否在无需 `ROLE_MAPPING` 的情况下正确分配 MEMBER 角色？
+
+<a id="cleanup"></a>
+
+## 清理
 
 ```bash
 helm uninstall phoenix

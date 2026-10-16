@@ -1,27 +1,35 @@
-# Phoenix Client Reference
+<a id="phoenix-client-reference"></a>
 
-Welcome to the Phoenix Client documentation. This lightweight Python client provides a simple interface for interacting with the Phoenix platform via its REST API, enabling you to manage datasets, run experiments, analyze traces, and collect feedback programmatically.
+# Phoenix Client 参考文档
 
-- **[Datasets](api/datasets)** - Create and manage datasets for experimentation
-- **[Experiments](api/experiments)** - Run experiments and evaluate model performance
-- **[Prompts](api/prompts)** - Manage prompt templates and versions
-- **[Spans](api/spans)** - Access and analyze traces, spans, and annotations
-- **[Sessions](api/sessions)** - Retrieve sessions, list sessions for a project, and annotate multi-turn conversations
-- **[Projects](api/projects)** - Organize your work with project management
+欢迎阅读 Phoenix Client 文档。此轻量 Python 客户端提供通过 REST API 与 Phoenix 平台交互的简单接口，可用编程方式管理数据集、运行实验、分析追踪并收集反馈。
 
-## Installation
+- **[数据集](api/datasets)**：创建和管理实验数据集
+- **[实验](api/experiments)**：运行实验并评估模型性能
+- **[提示词](api/prompts)**：管理提示词模板和版本
+- **[Span](api/spans)**：访问并分析追踪、Span 和标注
+- **[会话](api/sessions)**：获取会话、列出项目会话，并标注多轮对话
+- **[项目](api/projects)**：通过项目管理组织工作
 
-Install the Phoenix Client using pip:
+<a id="installation"></a>
+
+## 安装
+
+通过 pip 安装 Phoenix Client：
 
 ```bash
 pip install arize-phoenix-client
 ```
 
-## Getting Started
+<a id="getting-started"></a>
 
-### Environment Variables
+## 开始使用
 
-Configure the Phoenix Client using environment variables for seamless use across different environments:
+<a id="environment-variables"></a>
+
+### 环境变量
+
+通过环境变量配置 Phoenix Client，以便在不同环境中无缝使用：
 
 ```bash
 # For local Phoenix server (default)
@@ -35,14 +43,13 @@ export PHOENIX_API_KEY="your-api-key"
 export PHOENIX_CLIENT_HEADERS="Authorization=Bearer your-api-key,custom-header=value"
 ```
 
-`PHOENIX_ENDPOINT` is a base URL and is the canonical setting for the client. If
-your app also exports traces, set `PHOENIX_COLLECTOR_ENDPOINT` for the OTel SDK
-— usually to the same value. When only `PHOENIX_COLLECTOR_ENDPOINT` is set, the
-client infers its base URL from it.
+`PHOENIX_ENDPOINT` 是基础 URL，也是客户端的规范配置。若应用也导出追踪，请为 OTel SDK 设置 `PHOENIX_COLLECTOR_ENDPOINT`，通常使用相同值。仅设置 `PHOENIX_COLLECTOR_ENDPOINT` 时，客户端会据此推断基础 URL。
 
-### Client Initialization
+<a id="client-initialization"></a>
 
-The client automatically reads environment variables, or you can override them:
+### 初始化客户端
+
+客户端自动读取环境变量，也可以显式覆盖：
 
 ```python
 from phoenix.client import Client, AsyncClient
@@ -66,13 +73,17 @@ async_client = AsyncClient(base_url="http://localhost:6006")
 async_client = AsyncClient(base_url="https://your-phoenix-instance.com", api_key="your-api-key")
 ```
 
-## Resources
+<a id="resources"></a>
 
-The Phoenix Client organizes functionality into resources that correspond to key Phoenix platform features. Each resource provides specialized methods for managing different types of data:
+## 资源
 
-### Prompts
+Phoenix Client 按对应 Phoenix 平台主要功能的资源组织能力，各资源提供管理不同数据类型的专用方法：
 
-Manage prompt templates and versions:
+<a id="prompts"></a>
+
+### 提示词
+
+管理提示词模板及版本：
 
 ```python
 # Create a new prompt
@@ -113,9 +124,11 @@ resp = oai_client.chat.completions.create(**formatted_prompt)
 print(resp.choices[0].message.content)
 ```
 
-### Spans
+<a id="spans"></a>
 
-Query for spans and annotations from your projects for custom evaluation and annotation workflows.
+### Span
+
+从项目中查询 Span 和标注，用于自定义评估和标注流程。
 
 ```python
 from datetime import datetime, timedelta
@@ -177,9 +190,11 @@ annotations = client.spans.get_span_annotations(
 )
 ```
 
-### Annotations
+<a id="annotations"></a>
 
-Add annotations to spans for evaluation, user feedback, and custom annotation workflows:
+### 标注
+
+为 Span 添加标注，用于评估、用户反馈和自定义标注流程：
 
 ```python
 # Add a single annotation with human feedback
@@ -240,13 +255,17 @@ df = pd.DataFrame(
 client.spans.log_span_annotations_dataframe(dataframe=df)
 ```
 
-### Evaluation Helpers
+<a id="evaluation-helpers"></a>
 
-The Phoenix Client provides helper functions to extract span data in formats optimized for RAG evaluation workflows. These helpers streamline the process of preparing data for evaluation with `phoenix.evals`.
+### 评估辅助函数
 
-#### RAG Retrieval Evaluation
+Phoenix Client 提供辅助函数，以针对 RAG 评估流程优化的格式提取 Span 数据，简化为 `phoenix.evals` 评估准备数据的过程。
 
-Extract retrieved documents from retriever spans for relevance evaluation:
+<a id="rag-retrieval-evaluation"></a>
+
+#### RAG 检索评估
+
+从检索器 Span 提取检索文档，用于相关性评估：
 
 ```python
 from phoenix.client import Client
@@ -281,9 +300,11 @@ relevance_results = await async_evaluate_dataframe(
 relevance_results.head()
 ```
 
-#### RAG Q&A Evaluation
+<a id="rag-qa-evaluation"></a>
 
-Extract Q&A pairs with reference context for faithfulness evaluation:
+#### RAG 问答评估
+
+提取带参考上下文的问答对，用于忠实度评估：
 
 ```python
 from phoenix.client.helpers.spans import get_input_output_context
@@ -310,9 +331,11 @@ if qa_df is not None:
     faithfulness_results.head()
 ```
 
-#### Time-Filtered RAG Spans
+<a id="time-filtered-rag-spans"></a>
 
-Filter spans by time range for evaluation:
+#### 按时间过滤 RAG Span
+
+按时间范围过滤 Span 以进行评估：
 
 ```python
 from datetime import datetime, timedelta
@@ -331,9 +354,11 @@ weekly_qa = get_input_output_context(
 )
 ```
 
-### Datasets
+<a id="datasets"></a>
 
-Manage evaluation datasets and examples for experiments and testing:
+### 数据集
+
+管理评估数据集及示例，用于实验和测试：
 
 ```python
 import pandas as pd
@@ -471,9 +496,11 @@ dataset_dict = dataset.to_dict()
 restored_dataset = Dataset.from_dict(dataset_dict)
 ```
 
-### Experiments
+<a id="experiments"></a>
 
-Run evaluations and experiments on your datasets to test AI application performance:
+### 实验
+
+在数据集上运行评估和实验，测试 AI 应用性能：
 
 ```python
 from phoenix.client.experiments import run_experiment, get_experiment, evaluate_experiment
@@ -551,9 +578,11 @@ experiment = await async_run_experiment(
 )
 ```
 
-### Projects
+<a id="projects"></a>
 
-Manage Phoenix projects that organize your AI application data:
+### 项目
+
+管理用于组织 AI 应用数据的 Phoenix 项目：
 
 ```python
 # List all projects
@@ -586,9 +615,11 @@ updated_project = client.projects.update(
 print(f"Updated project description: {updated_project['description']}")
 ```
 
-### Sessions
+<a id="sessions"></a>
 
-Retrieve and annotate multi-turn conversation sessions:
+### 会话
+
+获取并标注多轮对话会话：
 
 ```python
 # List sessions for a project
@@ -664,7 +695,9 @@ client.sessions.log_session_annotations_dataframe(
 )
 ```
 
-## API Reference
+<a id="api-reference"></a>
+
+## API 参考
 
 ```{toctree}
 :maxdepth: 3
@@ -682,13 +715,17 @@ api/types
 api/exceptions
 ```
 
-## External Links
+<a id="external-links"></a>
 
-- [Main Phoenix Documentation](https://arize.com/docs/phoenix)
-- [Python Reference](https://arize-phoenix.readthedocs.io/)
-- [GitHub Repository](https://github.com/Arize-ai/phoenix)
+## 外部链接
 
-## Indices and tables
+- [Phoenix 主文档](https://arize.com/docs/phoenix)
+- [Python 参考文档](https://arize-phoenix.readthedocs.io/)
+- [GitHub 仓库](https://github.com/Arize-ai/phoenix)
+
+<a id="indices-and-tables"></a>
+
+## 索引与表格
 
 - {ref}`genindex`
 - {ref}`modindex`

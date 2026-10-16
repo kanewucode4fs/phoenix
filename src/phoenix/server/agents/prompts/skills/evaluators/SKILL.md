@@ -1,96 +1,66 @@
 ---
 name: evaluators
 description: >
-  Author or refine a Phoenix evaluator — code or LLM-as-a-judge — that scores a run's output. Trigger when the user wants to create a new evaluator, improve an existing one's logic or rubric, choose labels, or decide what to measure on a dataset or experiment. Do NOT trigger on: (1) manual prompt drafting (use `playground`), (2) running or comparing experiments themselves (use `experiments`), (3) cross-trace failure diagnosis with no evaluator in scope (use `phoenix-error-analysis`).
-summary: Design or refine a code or LLM evaluator — labels, logic or rubric, the field it reads, and representative preview cases.
+  编写或改进 Phoenix 评估器，以代码或 LLM 裁判为一次运行的输出评分。用户希望创建评估器、改进现有逻辑或评分规则、选择标签，或决定在数据集和实验上衡量什么时触发。以下情况不触发：（1）手动编写提示词，使用 `playground`；（2）运行或比较实验本身，使用 `experiments`；（3）不涉及评估器的跨追踪故障诊断，使用 `phoenix-error-analysis`。
+summary: 设计或改进代码或 LLM 评估器，包括标签、逻辑或评分规则、读取字段和代表性预览用例。
 ---
 
-# Evaluators
+<a id="evaluators"></a>
 
-A Phoenix evaluator scores a run: it reads some subset of the run's `input`, `output`, `reference`,
-and `metadata` and returns named annotations — a label, a score, or both. The two artifact kinds —
-a **code evaluator** (a Python or TypeScript function) and an **LLM evaluator** (a judge prompt
-sent to a model) — share the loop and discipline below; judgment structure follows task need and
-environment capability, not artifact kind. The `experiments` skill reads the scores you design
-here; the explanations you enable are its evidence channel when comparing runs.
+# 评估器
 
-## The Authoring Loop
+Phoenix 评估器为一次运行评分：读取运行的 `input`、`output`、`reference`、`metadata` 中所需的部分，并返回具名标注，包含标签、分数或二者。两类产物——**代码评估器**（Python 或 TypeScript 函数）与 **LLM 评估器**（发送给模型的裁判提示词）——遵循以下相同循环和约束。判断结构取决于任务需求和环境能力，而非产物类别。`experiments` 技能读取此处设计的分数；你启用的解释是它比较不同运行时使用的证据渠道。
 
-1. Derive the grading task from the stated purpose — a hypothesis and its evaluator are one design:
-   the hypothesis names the failure mode, the evaluator scores it. Evidence comes from the stated
-   purpose, the dataset's examples, and existing run outputs, not from interrogating the user.
-2. Inventory before creating. Read the dataset's existing evaluators and check input-shape
-   compatibility — an evaluator fits when its declared inputs parse the experiment's output
-   topology. Reuse or attach on a match; create on a gap. A question is warranted only when
-   the stated purpose lacks the failure mode, target output field, or acceptable tradeoff.
-3. Decide the labels. Choose a small, mutually exclusive, collectively exhaustive set — often
-   binary (`correct`/`incorrect`, `pass`/`fail`). Add labels only to distinguish failure modes that
-   matter; every extra label adds boundary ambiguity.
-4. Locate the signal in the run's fields — a top-level key, a chat-style `messages` array,
-   assistant content parts, `tool_calls`, or a `function_call` — by inspecting the actual shape.
-5. Write the judgment: a function that reads the field and returns the label or score, or a judge
-   prompt whose rubric names each label and ties the decision to observable evidence in the fields.
-   Align scores with the optimization direction and enable an explanation to justify the judgment
-   and surface rubric ambiguity.
-6. Calibrate against several representative cases covering the named failure modes — one preview is
-   not calibration. Shape each payload like a real run. When a case mislabels, change one thing —
-   rubric, logic, labels, or case — and fix an unrepresentative case before blaming the logic.
-7. Iterate until the representative cases label correctly and the tradeoff is acceptable.
-   Persistence is a separate save; do not claim the evaluator is created or updated until that save
-   actually completes.
+<a id="the-authoring-loop"></a>
 
-## Reference Provenance
+## 编写循环
 
-The first fork is **reference-based** versus **reference-free**: does the judgment compare the
-output against something stored with the example, or against the input and rubric criteria alone?
-When reference-based, triage what the `reference` actually is before trusting it as an answer key:
+1. 从已说明的目的推导评分任务。假设与评估器应一并设计：假设指明失败模式，评估器为其评分。证据来自既定目的、数据集示例和现有运行输出，不应通过反复盘问用户获取。
+2. 创建前先盘点。读取数据集现有评估器，检查输入结构兼容性：声明的输入能够解析实验输出的拓扑结构，才算匹配。匹配时复用或附加，存在缺口时再创建。只有既定目的缺少失败模式、目标输出字段或可接受取舍时，才有必要提问。
+3. 决定标签。使用规模小、互斥且穷尽情况的集合，通常二元即可（`correct`/`incorrect`、`pass`/`fail`）。只有需要区分重要失败模式时才添加标签，每个额外标签都会增加边界歧义。
+4. 检查实际结构，定位运行字段中的信号：可能是顶层键、聊天式 `messages` 数组、助手内容片段、`tool_calls` 或 `function_call`。
+5. 编写判断：使用读取字段并返回标签或分数的函数，或编写裁判提示词，在评分规则中定义每个标签，并将判断与字段中的可观察证据关联。分数应与优化方向一致，并启用解释，以说明判断依据、暴露规则歧义。
+6. 使用多个覆盖已命名失败模式的代表性用例校准，一次预览不算校准。每个载荷都应与真实运行结构一致。用例误标时，一次只修改一项：评分规则、逻辑、标签或用例。若用例不具代表性，应先修正用例，再质疑逻辑。
+7. 持续迭代，直到代表性用例标签正确，且取舍可接受。持久化需要单独保存；实际保存完成前，不得声称评估器已创建或更新。
 
-- **golden** — a hand-labeled ideal output. Deviation is a defect; strict comparison is warranted.
-- **baseline-snapshot** — current-state outputs culled into the dataset as a comparison point, not
-  ground truth. It anchors did-behavior-change judgments — Pairwise suits it — and losing to it is
-  a signal, not a verdict.
-- **reference-free** — no stored answer key; judge the output against the input and a rubric.
+<a id="reference-provenance"></a>
 
-## Choosing The Judgment Structure
+## 参考数据来源
 
-Discover the environment first: read the capability fingerprint of the sandbox the evaluator will
-run in — which model credentials its environment variables name, whether it has internet access,
-which packages are installed, and any restricted-language runtime notes. Choose by environment capability and task need, not artifact
-kind. The ladder, floor to heaviest:
+首先区分**基于参考**与**无参考**：判断是将输出与示例中保存的内容比较，还是仅依据输入和评分规则？基于参考时，先判断 `reference` 实际是什么，再决定是否可将其作为答案标准：
 
-- **deterministic primitives** — exact-match, contains, regex-match, json-distance,
-  embedding-distance, levenshtein-distance, scikit-learn metrics, and structural `tool_calls`
-  checks. Prefer one whenever the judgment can be computed.
-- **single LLM judge** — one rubric, one model, for reading-comprehension or open-ended quality.
-- **Composite** — sub-checks (code or LLM) blended into one weighted score; per-axis breakdown in
-  the explanation.
-- **LLM Jury** — one judgment polled across several models; weighted votes in the explanation.
-- **Pairwise** — a blind head-to-head of `output` against `reference`, returning a winner or tie.
+- **golden（黄金答案）**：人工标注的理想输出，偏离即为缺陷，应严格比较。
+- **baseline-snapshot（基线快照）**：从当前系统输出中收集到数据集的比较点，不是标准答案。它为“行为是否改变”的判断提供锚点，适合 Pairwise；不如基线是一种信号，而非最终结论。
+- **reference-free（无参考）**：没有保存的答案标准，根据输入和评分规则评判输出。
 
-A credentialed sandbox with LLM access subsumes the LLM-evaluator artifact: a code evaluator there
-can call models, so Composite, LLM Jury, and Pairwise become layered code evaluators recording
-steps and votes in explanation or metadata. Design a suite, not a single check: a **deterministic
-floor** of primitives plus **judged dimensions** for what the floor cannot settle.
+<a id="choosing-the-judgment-structure"></a>
 
-## Matching The Field Topology
+## 选择判断结构
 
-- At runtime, `output` is the new run's output; a dataset-backed evaluator receives the example's
-  output as `reference` — data the run never saw, provenance triaged above. Don't conflate the two.
-- A playground-backed run's `output` always has the fixed LLM-span shape: a `messages` array
-  (`role`, `content`, and `tool_calls` with `function.name`/`function.arguments`) plus a top-level
-  `available_tools`; shape calibration cases accordingly. A dataset example's output keeps the
-  user-defined dataset shape — evidence for where the signal lives, not a guarantee; inspect it
-  rather than assuming a top-level key.
-- Declare only the fields the judgment needs; the simplest evaluator often reads just `output`.
-  Add `reference` for relational checks against the example's expected, golden, or subset data.
-- Prefer reading fields directly and parsing nested or stringified JSON in the logic over a custom
-  input mapping; in relational checks, normalize `output` and `reference` the same way before
-  comparing, or matching values will spuriously diverge.
+先了解环境：读取评估器所运行沙箱的能力信息，包括环境变量指定哪些模型凭证、能否联网、已安装哪些包，以及受限语言运行时说明。按环境能力和任务需要选择，而非按产物类型。由轻到重的层级如下：
 
-## Things To Avoid
+- **确定性基础方法**：精确匹配、包含、正则匹配、JSON 距离、嵌入距离、Levenshtein 距离、scikit-learn 指标，以及结构化 `tool_calls` 检查。只要能够计算，就优先使用。
+- **单个 LLM 裁判**：一个评分规则、一个模型，用于阅读理解或开放式质量判断。
+- **Composite（组合）**：将代码或 LLM 子检查混合为加权分数，在解释中按维度拆解。
+- **LLM Jury（LLM 评审团）**：对同一判断询问多个模型，在解释中记录加权投票。
+- **Pairwise（成对比较）**：对 `output` 和 `reference` 进行盲测对比，返回获胜者或平局。
 
-- Don't edit an existing evaluator without reading its current draft; form a specific hypothesis
-  and make the smallest edit that tests it.
-- Don't change the rubric, logic, labels, and cases all in one step; you lose attribution.
-- Don't reach for a judged structure when a deterministic primitive settles the judgment.
-- Don't claim the evaluator is created or updated; persistence is a separate save.
+具有凭证且可访问 LLM 的沙箱已具备 LLM 评估器所需能力：其中的代码评估器也能调用模型，因此 Composite、LLM Jury 和 Pairwise 可实现为分层代码评估器，将步骤和投票记录到解释或元数据中。应设计一套评估组合，而非单一检查：以基础方法提供**确定性底线**，再用**裁判维度**处理底线无法判断的内容。
+
+<a id="matching-the-field-topology"></a>
+
+## 匹配字段拓扑
+
+- 运行时，`output` 是新运行的输出；基于数据集的评估器通过 `reference` 接收示例输出。这是运行本身未见过的数据，其来源按上文判断。不要混淆二者。
+- 基于 Playground 的运行，其 `output` 始终是固定的 LLM 跨度结构：包含 `messages` 数组（`role`、`content`，以及带 `function.name`/`function.arguments` 的 `tool_calls`），还有顶层 `available_tools`。校准用例应符合该结构。数据集示例输出则保留用户定义的结构，可以提示信号位置，但不能保证结构固定；应检查，而不是假定信号在顶层键中。
+- 只声明判断所需的字段，最简单的评估器通常只读取 `output`。需要与示例的预期、黄金或子集数据进行关系检查时，再添加 `reference`。
+- 优先直接读取字段，并在逻辑中解析嵌套或字符串化 JSON，而非使用自定义输入映射。关系检查中，应先以相同方式规范化 `output` 和 `reference` 再比较，否则相同值可能被误判为不同。
+
+<a id="things-to-avoid"></a>
+
+## 应避免的做法
+
+- 不读取当前草稿就编辑现有评估器。应形成具体假设，以能够验证它的最小改动进行测试。
+- 一次同时修改评分规则、逻辑、标签和用例，导致无法归因。
+- 确定性基础方法已能完成判断时，仍使用模型裁判结构。
+- 在单独保存之前，声称评估器已经创建或更新。

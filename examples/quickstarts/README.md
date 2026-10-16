@@ -1,21 +1,25 @@
-# Quickstart examples
+<a id="quickstart-examples"></a>
 
-The runnable code behind the Get Started guides in the Phoenix docs:
+# 快速入门示例
 
-| Guide | Python | TypeScript |
+以下是 Phoenix 文档中各篇快速入门指南对应的可运行代码：
+
+| 指南 | Python | TypeScript |
 | --- | --- | --- |
-| [Observe](https://arize.com/docs/phoenix/get-started/get-started-tracing) | `python/observe.py` | `typescript/instrumentation.ts`, `typescript/app.ts` |
-| [Evaluate](https://arize.com/docs/phoenix/get-started/get-started-evaluations) | `python/evaluate.py` | `typescript/evaluate.ts` |
-| [Evaluate a Prompt Change in Code](https://arize.com/docs/phoenix/datasets-and-experiments/how-to-experiments/evaluate-a-prompt-change) | `python/experiment.py` | `typescript/experiment.ts` |
+| [观测](https://arize.com/docs/phoenix/get-started/get-started-tracing) | `python/observe.py` | `typescript/instrumentation.ts`, `typescript/app.ts` |
+| [评估](https://arize.com/docs/phoenix/get-started/get-started-evaluations) | `python/evaluate.py` | `typescript/evaluate.ts` |
+| [在代码中评估提示词改动](https://arize.com/docs/phoenix/datasets-and-experiments/how-to-experiments/evaluate-a-prompt-change) | `python/experiment.py` | `typescript/experiment.ts` |
 
-The guides' code blocks are copied from these files by `make sync-docs-snippets`,
-and `make check-docs-snippets` fails CI when they drift. Edit and run the code
-here, then sync. `python3 scripts/sync_docs_snippets.py --help` explains the markers.
+`make sync-docs-snippets` 会将这些文件中的代码复制到指南的代码块中。
+当两者不一致时，`make check-docs-snippets` 会使持续集成（CI）检查失败。
+请先在此处修改并运行代码，再执行同步。标记的用法见 `python3 scripts/sync_docs_snippets.py --help`。
 
-## Run
+<a id="run"></a>
 
-With Phoenix running at `http://localhost:6006` (`uvx arize-phoenix serve`) and
-`OPENAI_API_KEY` exported. The experiment examples need no model key.
+## 运行
+
+先通过 `uvx arize-phoenix serve` 启动 Phoenix，使其运行在 `http://localhost:6006`，
+并设置 `OPENAI_API_KEY` 环境变量。其中的实验示例不需要模型密钥。
 
 ```bash
 cd python && pip install -r requirements.txt

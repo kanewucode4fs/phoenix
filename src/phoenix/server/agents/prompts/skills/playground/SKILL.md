@@ -1,146 +1,79 @@
 ---
 name: playground
-description: Author, edit, or iterate on prompts in the Phoenix prompt playground, including running experiments over a dataset. Load before any playground `ui.*` operation call, including single-shot prompt rewrites.
-summary: Author, edit, run, compare, and improve prompts in the Phoenix playground.
+description: 在 Phoenix 提示词 Playground 中编写、编辑或迭代提示词，包括对数据集运行实验。在调用任何 Playground `ui.*` 操作前加载，包括单次提示词改写。
+summary: 在 Phoenix Playground 中编写、编辑、运行、比较和改进提示词。
 ---
 
-# Prompt Playground
+<a id="prompt-playground"></a>
 
-The prompt playground is a tool for authoring and optimizing prompts. It supports two different
-ways of working: fast manual prompt iteration without a dataset, and dataset-backed prompt
-experimentation with evaluators and experiments. Choose the workflow that matches the user's
-current goal and the UI context they have mounted.
+# 提示词 Playground
 
-The playground actions named below are `ui.*` operations, called from `execute_browser_action` scripts as
-`await ui.<operation>(input)` (for example `await ui.playground.run({})`). Confirm exact input
-shapes with `search_browser_actions` before first use, and prefer one small script that chains related steps
-over many single-call scripts.
+提示词 Playground 用于编写和优化提示词，支持两种工作方式：不使用数据集的快速手动迭代，以及结合评估器和实验的数据集提示词实验。应根据用户当前目标和已挂载的界面上下文选择工作流。
 
-## Workflow: Create And Iterate Without A Dataset
+以下 Playground 动作都是 `ui.*` 操作，在 `execute_browser_action` 脚本中通过 `await ui.<operation>(input)` 调用，例如 `await ui.playground.run({})`。首次使用前，通过 `search_browser_actions` 确认准确输入结构；优先用一个小脚本串联相关步骤，避免拆成多个单次调用脚本。
 
-Use this workflow when the user wants to draft, rewrite, or manually improve a prompt and no
-dataset-backed evaluation loop is in scope.
+<a id="workflow-create-and-iterate-without-a-dataset"></a>
 
-1. Clarify the task the prompt must perform: input variables, expected output shape, audience,
-   constraints, and examples of good or bad behavior when available.
-2. If a playground prompt already exists, call `ui.playground.prompt.read` before proposing
-   changes so you have the current messages, message IDs, labels, and revision.
-3. Draft or revise the prompt so it clearly states the task, required context, output contract, and
-   success criteria. Keep the prompt directly tied to the user's stated goal.
-4. Use `ui.playground.prompt.edit` for changes to the mounted prompt so the user can review the
-   diff before accepting it.
-5. Use `ui.playground.instance.add` when the user wants a fresh comparison instance that starts
-   from the default prompt messages. Use `ui.playground.instance.clone` when comparing alternatives
-   should preserve existing prompt content as the starting point. Discuss variants by their
-   alphabetic labels, but pass numeric instance IDs to operations. After adding, use the returned
-   `addedInstance` snapshot for follow-up edits.
-6. Use `ui.playground.variables.set` when the user provides manual values for prompt template
-   variables.
-7. Use `ui.playground.repetitions.set` before running when the user is concerned about flakes,
-   structured output consistency, tool-call reliability, or whether the prompt is ready to save.
-   LLM outputs are nondeterministic; repetitions build confidence by checking the same task across
-   multiple runs instead of trusting one successful response.
-8. Call `ui.playground.run` only when the user asks to run, try, test, or compare the current
-   prompt. Treat the output as qualitative feedback rather than dataset-backed evidence. One script
-   can run and read in sequence:
+## 工作流：不使用数据集的创建与迭代
+
+用户希望起草、改写或手动改进提示词，且不涉及数据集评估循环时，使用此工作流。
+
+1. 明确提示词要执行的任务：输入变量、预期输出结构、受众、约束，以及已有的正确或错误行为示例。
+2. 如果已有 Playground 提示词，提出修改前先调用 `ui.playground.prompt.read`，获取当前消息、消息 ID、标签和修订版本。
+3. 起草或修改提示词，清楚说明任务、所需上下文、输出契约和成功标准，始终直接围绕用户既定目标。
+4. 修改已挂载提示词时使用 `ui.playground.prompt.edit`，让用户接受前能够查看差异。
+5. 用户希望新增一个从默认提示词消息开始的比较实例时，使用 `ui.playground.instance.add`；比较方案需要保留现有提示词作为起点时，使用 `ui.playground.instance.clone`。讨论方案时使用字母标签，调用操作时传数字实例 ID。添加后，使用返回的 `addedInstance` 快照继续编辑。
+6. 用户提供提示词模板变量的手动值时，使用 `ui.playground.variables.set`。
+7. 用户关心偶发失败、结构化输出一致性、工具调用可靠性，或提示词是否可以保存时，运行前先使用 `ui.playground.repetitions.set`。LLM 输出不确定，应通过多次运行同一任务建立信心，而非只信任一次成功响应。
+8. 只有用户要求运行、尝试、测试或比较当前提示词时，才调用 `ui.playground.run`。应将输出视为定性反馈，而非基于数据集的证据。一个脚本可以按顺序运行并读取：
    `const run = await ui.playground.run({}); if (!run.ok) return run; return await ui.playground.run.readOutput({});`
-9. After the run finishes, call `ui.playground.run.readOutput` to inspect raw output and get the
-   traceId for trace analysis when needed. If the run used multiple repetitions, inspect every
-   repetition before summarizing confidence or recommending that the user save.
-10. Call `ui.playground.prompt.save` only when the user explicitly asks to save or confirms that the
-   current prompt should be persisted. For a first-time save of an unsaved prompt, omit `name`
-   unless the user provided one; the operation will derive a valid Phoenix prompt name from the
-   prompt content.
-   Always pass a save description; it should read like a clear, short git commit message. Treat
-   tags like releases and do not promote tags unless the user asks.
-11. Inspect the output with the user, identify the next concrete improvement, and repeat the edit or
-   comparison loop until the prompt is useful for the task.
+9. 运行结束后调用 `ui.playground.run.readOutput`，检查原始输出，并在需要追踪分析时获取 traceId。执行多次重复时，必须查看每次结果，再总结可信度或建议保存。
+10. 只有用户明确要求保存，或确认应持久化当前提示词时，才调用 `ui.playground.prompt.save`。未保存提示词首次保存时，除非用户提供名称，否则省略 `name`，操作会根据内容生成有效 Phoenix 提示词名称。始终提供保存说明，风格应像清晰简短的 git 提交消息。将标签视为发布，用户未要求时不要提升标签。
+11. 与用户共同检查输出，确定下一项具体改进，重复编辑或比较循环，直到提示词能够有效完成任务。
 
-## Workflow: Iterate Over A Dataset With Evaluators And Experiments
+<a id="workflow-iterate-over-a-dataset-with-evaluators-and-experiments"></a>
 
-Use this workflow when the user wants evidence that a prompt is improving across a dataset, or when
-they are comparing prompt variants using evaluator results. Running a prompt over a dataset is
-implicitly an experiment: consult the `experiments` skill before designing the run, not only after
-results arrive — it owns the iteration methodology end to end (what to stage at creation, how to
-read and compare results, when an evaluator is warranted), and the `evaluators` skill owns designing
-the evaluators that score them. This workflow covers only the playground mechanics of setting up and
-starting a recorded run.
+## 工作流：结合评估器和实验迭代数据集
 
-1. Load the dataset with `ui.playground.dataset.load` if it isn't already loaded. If the user named
-   a dataset but no split and the dataset has splits, name them and ask whether to scope to one or
-   load the whole dataset — then load once.
-2. Make sure the starting prompt is well formed before running it: it should define the task,
-   relevant variables, output format, and any constraints needed for consistent evaluation.
-3. Use `ui.playground.experiment.setRecording` before running when the user wants the next
-   dataset-backed playground run recorded, persisted, or saved as an experiment, or wants to name,
-   describe, or attach metadata (such as a hypothesis or the variable being changed) to the next
-   experiment. Set `recordExperiments` to false only when the user explicitly asks for a temporary,
-   throwaway, unrecorded, or ephemeral run. Call this operation only when the requested recording
-   mode or scaffold fields differ from the advertised `recordExperiments` and
-   `nextExperimentScaffold` values; the staged scaffold applies to that one run and is consumed when
-   it starts. This is separate from `ui.playground.prompt.save`, which saves prompt versions rather
-   than run results.
-4. Use `ui.playground.repetitions.set` before running when the user needs confidence across repeated
-   attempts, especially for flaky behavior, structured outputs, or tool-call correctness.
-5. Run the playground over the dataset. When recording is enabled, each prompt instance run over a
-   dataset is captured as an experiment, with outputs and evaluator annotations available for
-   review.
-6. To read the experiment results and decide whether a change helped, follow the `experiments`
-   skill; to create the next candidate, use `ui.playground.prompt.edit`, `ui.playground.instance.add`,
-   or `ui.playground.instance.clone` (`ui.playground.instance.add` starts from the default prompt
-   messages, `ui.playground.instance.clone` from existing prompt content), then rerun.
-7. Use `ui.playground.prompt.save` to save a prompt as a new version only after the evidence shows
-   an improvement or the user explicitly accepts the tradeoff. For unsaved prompts, the operation
-   can create the Phoenix prompt directly without asking for a name unless the user cares about the
-   exact name.
+用户希望获得提示词在整个数据集上改进的证据，或使用评估器结果比较提示词方案时，使用此工作流。对数据集运行提示词本身就是实验：设计运行前就应参考 `experiments` 技能，不能只在结果返回后参考；它负责完整迭代方法，包括创建时写入什么、如何读取和比较结果、何时需要评估器。`evaluators` 技能负责设计评分评估器。此工作流只涵盖配置并启动记录运行的 Playground 操作机制。
 
-### Reading experiment results
+1. 尚未加载数据集时，使用 `ui.playground.dataset.load`。用户指定了数据集但未指定划分，而数据集存在划分时，列出划分并询问使用其中一个还是整个数据集，之后只加载一次。
+2. 运行前确保起始提示词完善，明确任务、相关变量、输出格式和一致评估所需约束。
+3. 用户希望将下次数据集 Playground 运行记录、持久化或保存为实验，或希望为下次实验命名、描述、附加假设或改动变量等元数据时，运行前使用 `ui.playground.experiment.setRecording`。只有用户明确要求临时、一次性、不记录或短暂运行时，才将 `recordExperiments` 设为 false。仅当请求的记录模式或基本信息字段与公布的 `recordExperiments`、`nextExperimentScaffold` 不同时才调用。暂存的基本信息仅用于下一次运行，开始后即被消耗。此操作不同于 `ui.playground.prompt.save`，后者保存提示词版本，不保存运行结果。
+4. 用户需要多次尝试来建立信心时，尤其涉及偶发失败、结构化输出或工具调用正确性时，运行前使用 `ui.playground.repetitions.set`。
+5. 在数据集上运行 Playground。启用记录时，每个提示词实例在数据集上的运行都会被保存为实验，输出和评估器标注可供审查。
+6. 读取实验结果并判断改动是否有效时，遵循 `experiments` 技能；创建下一个候选方案时，使用 `ui.playground.prompt.edit`、`ui.playground.instance.add` 或 `ui.playground.instance.clone`（`ui.playground.instance.add` 从默认提示词消息开始，`ui.playground.instance.clone` 从现有内容开始），然后重新运行。
+7. 只有证据表明确有改进，或用户明确接受取舍后，才使用 `ui.playground.prompt.save` 保存为新版本。对未保存提示词，除非用户关心准确名称，否则操作可以直接创建 Phoenix 提示词，无需询问名称。
 
-When an instance carries an `experimentId`, read its cost and evaluator scores with `phoenix-gql`:
+<a id="reading-experiment-results"></a>
+
+### 读取实验结果
+
+实例带有 `experimentId` 时，使用 `phoenix-gql` 读取费用和评估器分数：
 
 ```
 phoenix-gql --vars '{"experimentId":"<id>"}' 'query($experimentId: ID!){ node(id:$experimentId){ ...on Experiment { runCount expectedRunCount job{status} costSummary{total{cost tokens}} annotationSummaries{annotationName meanScore count errorCount} } } }'
 ```
 
-An `experimentId` only means the experiment is queryable, not that the run finished — trust the
-summaries as final only when `job.status` is `COMPLETED` or `runCount == expectedRunCount`. To
-compare reruns, re-query earlier experiment IDs from the conversation and diff their summaries.
-Experiments from unrecorded runs are ephemeral and the server sweeps them ~24h after their last
-update; a freshly surfaced `experimentId` is well within that window, but an id re-queried from
-much earlier in a long session may no longer resolve.
+`experimentId` 只表示实验可以查询，不表示运行已结束。只有 `job.status` 为 `COMPLETED`，或 `runCount == expectedRunCount` 时，才能将汇总视为最终结果。比较重新运行的结果时，重新查询对话中的先前实验 ID，比较汇总差异。未记录运行的实验是临时实验，服务会在最后更新约 24 小时后清理；新出现的 `experimentId` 在此窗口内，但长会话中很早以前的 ID 重新查询时可能已无法解析。
 
-## Workflow: Author, Refine, Or Remove A Function Tool
+<a id="workflow-author-refine-or-remove-a-function-tool"></a>
 
-Use this workflow when the user wants the model to be able to call a function/tool from the prompt,
-when they want to refine the signature of an existing one, or when they want to remove a tool.
-Function tools are JSON-Schema function definitions stored on the playground prompt instance
-(alongside messages and model config). They are the things the model can "call" during a run.
+## 工作流：编写、改进或删除函数工具
 
-1. Call `ui.playground.prompt.tools.read` before doing anything else. The result gives you the
-   current tool list, each tool's id and kind, and a `revision` token. Use the existing ids and
-   names to decide whether you should update an existing tool, create a new one, or delete one.
-2. If the user described a function in words, propose a concrete JSON Schema for it. Default to
-   lowercase snake_case parameter names and a `{"type":"object","properties":{...},"required":[...]}`
-   shape unless the user specifies otherwise.
-3. Call `ui.playground.prompt.tools.write` with the latest `revision`. Put every change in a single call: `tools`
-   is an array of creates/updates (omit `id` to create, pass an existing `id` to patch — only the
-   fields you include change), and `deleteToolIds` is a list of ids to remove. Deletes may target
-   `raw` vendor tools too, even though writes can't. The batch is all-or-nothing: if any change is
-   invalid (missing id, a `raw` tool on the write path, or the same id created/updated and deleted)
-   nothing is applied and the error explains which. Deleting the tool that is the forced tool choice
-   is allowed — the choice is reset to auto and reported back; mention that to the user.
-4. After the write, briefly summarize what changed in plain English (which tools were created vs
-   updated) so the user knows what to look for in the tool editor. If you created tools, tell them
-   the new ids.
-5. If the user wants the model to use the new tool in a run, call `ui.playground.run` and then
-   `ui.playground.run.readOutput` to see whether the model actually invoked it.
+用户希望模型能够从提示词调用函数或工具、改进现有签名，或删除工具时，使用此工作流。函数工具是存储在 Playground 提示词实例上的 JSON Schema 函数定义，与消息和模型配置并列，是模型运行中可“调用”的对象。
 
-### Few-shot examples
+1. 开始任何操作前先调用 `ui.playground.prompt.tools.read`。结果提供当前工具列表、各工具 ID 和类型，以及 `revision` 令牌。依据现有 ID 和名称判断应更新、创建还是删除工具。
+2. 用户以自然语言描述函数时，为其提出具体 JSON Schema。除非用户另有指定，参数名称默认使用小写 snake_case，结构采用 `{"type":"object","properties":{...},"required":[...]}`。
+3. 使用最新 `revision` 调用 `ui.playground.prompt.tools.write`，将全部改动放在一次调用中。`tools` 是创建或更新数组：创建时省略 `id`，修改时传入已有 `id`，只修改提供的字段；`deleteToolIds` 是待删除 ID 列表。删除可以针对 `raw` 供应商工具，写入则不能。批次全部成功或全部失败：任何改动无效，例如缺失 ID、写入 `raw` 工具、同一 ID 同时创建或更新并删除，都不会应用任何内容，错误会说明原因。允许删除被强制选择的工具；工具选择会重置为 auto 并在结果中报告，应向用户说明。
+4. 写入后，用简明英语概述改动，说明哪些工具被创建或更新，使用户知道在工具编辑器中查看什么。创建工具时，还应告知新 ID。
+5. 用户希望在运行中使用新工具时，调用 `ui.playground.run`，再调用 `ui.playground.run.readOutput`，确认模型是否实际调用。
 
-These are concrete, runnable input shapes for `ui.playground.prompt.tools.write` — treat them as
-templates, not as fixed prompts. Always pass the latest `revision` returned by
-`ui.playground.prompt.tools.read`; the cleanest idiom is one `execute_browser_action` script that reads and then
-writes:
+<a id="few-shot-examples"></a>
+
+### 少样本示例
+
+以下是 `ui.playground.prompt.tools.write` 的具体可运行输入结构，应作为模板，而非固定提示词。始终传入 `ui.playground.prompt.tools.read` 返回的最新 `revision`；最清晰的方式是在同一个 `execute_browser_action` 脚本中先读再写：
 
 ```js
 const snapshot = await ui.playground.prompt.tools.read({ instanceId: 1 });
@@ -152,7 +85,7 @@ return await ui.playground.prompt.tools.write({
 });
 ```
 
-**Create a brand-new tool.** One entry with no `id`.
+**创建全新工具。** 使用不带 `id` 的一个条目。
 
 ```json
 {
@@ -175,8 +108,7 @@ return await ui.playground.prompt.tools.write({
 }
 ```
 
-**Create several tools at once.** Put every tool in the `tools` array — one call, one revision
-check. Prefer this over issuing one call per tool.
+**一次创建多个工具。** 将所有工具放进 `tools` 数组，一次调用、一次修订检查，优于每个工具单独调用。
 
 ```json
 {
@@ -206,8 +138,7 @@ check. Prefer this over issuing one call per tool.
 }
 ```
 
-**Add a required parameter to an existing tool.** Pass the existing `id` and the full new
-`parameters` schema. Patch semantics — `name` is required even if unchanged.
+**为现有工具添加必填参数。** 传入已有 `id` 和完整的新 `parameters` 模式。采用局部修改语义，即使未改变也必须提供 `name`。
 
 ```json
 {
@@ -230,7 +161,7 @@ check. Prefer this over issuing one call per tool.
 }
 ```
 
-**Create one tool and patch another in the same batch.** Mix entries with and without `id`.
+**同一批次中创建一个工具并修改另一个。** 混合提供和不提供 `id` 的条目。
 
 ```json
 {
@@ -254,8 +185,7 @@ check. Prefer this over issuing one call per tool.
 }
 ```
 
-**Define a tool that returns structured output via a categorical choice.** The model is forced to
-pick one of the enum labels and optionally explain.
+**通过分类选项定义返回结构化输出的工具。** 强制模型选择某个枚举标签，并可选提供解释。
 
 ```json
 {
@@ -285,8 +215,7 @@ pick one of the enum labels and optionally explain.
 }
 ```
 
-**Delete a tool — and optionally swap in a replacement in the same batch.** `deleteToolIds` removes
-by id; combine it with `tools` to delete and add atomically. Deletes may target `raw` vendor tools.
+**删除工具，也可在同一批次替换为新工具。** `deleteToolIds` 按 ID 删除，与 `tools` 组合可原子地删除和添加。删除可针对 `raw` 供应商工具。
 
 ```json
 {
@@ -306,20 +235,12 @@ by id; combine it with `tools` to delete and add atomically. Deletes may target 
 }
 ```
 
-### Things to avoid
+<a id="things-to-avoid"></a>
 
-- Don't call `ui.playground.prompt.tools.write` without calling `ui.playground.prompt.tools.read`
-  first this turn — the `expectedRevision` will be stale and the write will be rejected. Reading and
-  writing in the same `execute_browser_action` script keeps the revision fresh.
-- Don't try to *write* a tool whose `kind` was `raw` in the read snapshot. Vendor passthrough tools
-  (e.g. provider builtins like `web_search`) are not editable through PXI — tell the user to author
-  those in the playground tool editor. A `raw` entry in `tools` rejects the whole batch. (You *can*
-  delete a `raw` tool via `deleteToolIds`, though.)
-- Deleting the tool that is the prompt's forced tool choice (tool_choice = specific function) is
-  allowed — the tool choice is automatically reset to auto (zero-or-more) and the result reports
-  `resetToolChoiceFrom`. Tell the user, since it changes how the model picks tools at run time.
-- Don't invent tool `id`s. An entry's `id` (and every `deleteToolIds` id) comes from a read
-  snapshot, or is omitted for create. You cannot reference an id created earlier in the same batch.
-- Don't issue multiple `ui.playground.prompt.tools.write` calls in a row without re-reading the
-  revision between them. Each successful write or delete changes the revision. Batch the changes
-  into one call.
+### 应避免的做法
+
+- 本轮未先调用 `ui.playground.prompt.tools.read` 就调用 `ui.playground.prompt.tools.write`，会因 `expectedRevision` 过期而被拒绝。同一个 `execute_browser_action` 脚本中先读再写，可保持修订版本最新。
+- 尝试写入读取快照中 `kind` 为 `raw` 的工具。供应商透传工具，如内置 `web_search`，不能通过 PXI 编辑，应告知用户在 Playground 工具编辑器中编写。`tools` 中包含 `raw` 条目会使整批被拒绝，但可以通过 `deleteToolIds` 删除 `raw` 工具。
+- 删除提示词强制选择的工具（tool_choice = specific function）是允许的，工具选择会自动重置为 auto（零次或多次），结果报告 `resetToolChoiceFrom`。必须告知用户，因为这会改变模型运行时的工具选择方式。
+- 虚构工具 `id`。条目中的 `id` 及所有 `deleteToolIds` ID 必须来自读取快照，创建时则省略。不能引用同一批次中较早创建的 ID。
+- 不重新读取修订版本就连续多次调用 `ui.playground.prompt.tools.write`。每次成功写入或删除都会改变修订版本，应将改动合并到一次调用。

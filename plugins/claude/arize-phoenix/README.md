@@ -1,23 +1,29 @@
-# Arize Phoenix plugin for Claude Code
+<a id="arize-phoenix-plugin-for-claude-code"></a>
 
-A [Claude Code plugin](https://code.claude.com/docs/en/plugins) that connects Claude Code to your Phoenix instance. It registers the Phoenix [remote MCP server](https://arize.com/docs/phoenix/integrations/remote-mcp) and ships the public Phoenix skills, so Claude Code can explore traces, run evals, and instrument apps.
+# 面向 Claude Code 的 Arize Phoenix 插件
 
-## What you get
+这是一个 [Claude Code 插件](https://code.claude.com/docs/en/plugins)，用于将 Claude Code 连接到你的 Phoenix 实例。它注册 Phoenix [远程 MCP 服务](https://arize.com/docs/phoenix/integrations/remote-mcp)，并附带公开的 Phoenix 技能，使 Claude Code 能够探索追踪记录、运行评估并为应用接入插桩。
 
-| Component | What it is |
+<a id="what-you-get"></a>
+
+## 提供的能力
+
+| 组件 | 说明 |
 | --------- | ---------- |
-| `phoenix` MCP server | Streamable HTTP to `<PHOENIX_ENDPOINT>/mcp`. Defaults to a local Phoenix at `http://localhost:6006`. Signs in with your Phoenix account in the browser on first use. |
-| `phoenix-cli` skill | Fetch traces, inspect datasets and experiments, query GraphQL with the `px` CLI. |
-| `phoenix-evals` skill | Build and run evaluators. |
-| `phoenix-tracing` skill | Instrument apps with OpenInference. |
+| `phoenix` MCP 服务 | 通过 Streamable HTTP 连接 `<PHOENIX_ENDPOINT>/mcp`。默认连接本地 Phoenix：`http://localhost:6006`。首次使用时在浏览器中登录 Phoenix 账户。 |
+| `phoenix-cli` 技能 | 使用 `px` CLI 获取追踪记录、检查数据集和实验，以及查询 GraphQL。 |
+| `phoenix-evals` 技能 | 构建和运行评估器。 |
+| `phoenix-tracing` 技能 | 使用 OpenInference 为应用接入插桩。 |
 
-The skills are symlinks to the public skills in [`.agents/skills/`](../../../.agents/skills/). Claude Code copies the resolved files when it installs the plugin, so nothing is duplicated in the repository.
+这些技能通过符号链接指向 [`.agents/skills/`](../../../.agents/skills/) 中的公开技能。Claude Code 安装插件时会复制解析后的文件，因此仓库内无需重复保存。
 
-## Configure
+<a id="configure"></a>
 
-The plugin has one setting, **Phoenix endpoint**, which Claude Code asks for when you enable the plugin. Set it to your Phoenix base URL with no trailing slash, for example `https://phoenix.example.com`. Leave the default for a local Phoenix at `http://localhost:6006`. The plugin appends `/mcp`.
+## 配置
 
-To set it non-interactively, pass `--config endpoint=https://phoenix.example.com` to `claude plugin install`. To change it later, run `/plugin configure arize-phoenix@arize-phoenix` inside Claude Code, or edit `pluginConfigs` in your user settings (`~/.claude/settings.json`):
+插件只有一个设置项：**Phoenix 端点**。启用插件时，Claude Code 会询问该值。请填写不带末尾斜杠的 Phoenix 基础 URL，例如 `https://phoenix.example.com`。本地 Phoenix 可保留默认值 `http://localhost:6006`。插件会自动追加 `/mcp`。
+
+非交互安装时，可向 `claude plugin install` 传入 `--config endpoint=https://phoenix.example.com`。之后要修改，可在 Claude Code 中运行 `/plugin configure arize-phoenix@arize-phoenix`，或编辑用户设置（`~/.claude/settings.json`）中的 `pluginConfigs`：
 
 ```json
 {
@@ -29,25 +35,29 @@ To set it non-interactively, pass `--config endpoint=https://phoenix.example.com
 }
 ```
 
-The setting configures the MCP server only. The `px` CLI used by the `phoenix-cli` skill reads `PHOENIX_ENDPOINT` and, if your Phoenix has auth enabled, `PHOENIX_API_KEY` from your shell, so export those too.
+此设置仅配置 MCP 服务。`phoenix-cli` 技能使用的 `px` CLI 会从 shell 读取 `PHOENIX_ENDPOINT`；如果 Phoenix 启用了认证，还会读取 `PHOENIX_API_KEY`，因此也需要导出这些变量。
 
-The MCP server signs in with OAuth in the browser. There is no slot for an API key; for headless use, register the server yourself with `px setup mcp --agent claude --header 'Authorization: Bearer ${PHOENIX_API_KEY}'`.
+MCP 服务通过浏览器中的 OAuth 登录，不提供 API 密钥设置项。无界面使用时，请自行注册服务：`px setup mcp --agent claude --header 'Authorization: Bearer ${PHOENIX_API_KEY}'`。
 
-Requires Phoenix 19.0.0 or later, which serves `/mcp`.
+需要提供 `/mcp` 接口的 Phoenix 19.0.0 或更高版本。
 
-## Install
+<a id="install"></a>
+
+## 安装
 
 ```bash
 claude plugin marketplace add Arize-ai/phoenix
 claude plugin install arize-phoenix@arize-phoenix
 ```
 
-Run `/mcp` inside Claude Code to confirm the `phoenix` server is connected and complete the login.
+在 Claude Code 中运行 `/mcp`，确认 `phoenix` 服务已连接，并完成登录。
 
-For local development, add the marketplace from a checkout instead: `claude plugin marketplace add ./` from the repository root. The trailing slash matters — a bare `.` is rejected as an invalid source.
+本地开发时，可从检出的代码添加插件市场：在仓库根目录运行 `claude plugin marketplace add ./`。末尾斜杠不可省略，单独的 `.` 会被判为无效来源。
 
-Check changes with `claude plugin validate plugins/claude/arize-phoenix`. It warns that the three `skills/` entries are symlinks it did not follow; that warning is expected, since `validate` reads components without following symlinks while a session loading the plugin does follow them. `claude plugin details arize-phoenix@arize-phoenix` on an installed copy confirms the resolved inventory — three skills and one MCP server.
+使用 `claude plugin validate plugins/claude/arize-phoenix` 检查改动。它会警告三个 `skills/` 条目是未被跟随的符号链接；这是预期现象，因为 `validate` 读取组件时不会跟随符号链接，而会话加载插件时会跟随。对已安装副本运行 `claude plugin details arize-phoenix@arize-phoenix`，可确认解析后的清单：三个技能和一个 MCP 服务。
 
-## Evals
+<a id="evals"></a>
 
-Behavioral tests for the plugin live under `evals/` and run with `claude plugin eval .` from this directory. See [Test plugins with evals](https://code.claude.com/docs/en/plugin-evals) for the case format, graders, MCP mocks, and CI usage. Run output under `evals/results/` is gitignored.
+## 评测
+
+插件行为测试位于 `evals/`，可从本目录运行 `claude plugin eval .`。用例格式、评分器、MCP 模拟服务和 CI 用法见[使用评测测试插件](https://code.claude.com/docs/en/plugin-evals)。`evals/results/` 中的运行输出已被 Git 忽略。

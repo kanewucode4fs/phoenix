@@ -1,23 +1,31 @@
-# Testing Conventions
+<a id="testing-conventions"></a>
 
-## Real OTel, Not Mocks
+# 测试约定
 
-Tests use real OTel components with spy span processors. This validates the actual stack mechanism and global state management.
+<a id="real-otel-not-mocks"></a>
 
-MUST NOT mock:
+## 使用真实 OTel，不使用模拟
 
-- `@opentelemetry/api` — that's the thing being tested.
-- `NodeTracerProvider` — use real instances with spy processors.
-- The global state at `globalThis[Symbol.for("opentelemetry.js.api.1")]` — MUST be real.
+测试使用真实 OTel 组件和 Spy Span 处理器，验证实际的栈机制及全局状态管理。
 
-## Cleanup
+**不得**模拟：
 
-Every test that touches global state MUST call `detachGlobalTracerProvider()` in `afterEach`. A leaked mount corrupts subsequent tests.
+- `@opentelemetry/api`：它就是被测对象。
+- `NodeTracerProvider`：使用带 Spy 处理器的真实实例。
+- `globalThis[Symbol.for("opentelemetry.js.api.1")]` 处的全局状态：**必须**是真实状态。
 
-## Writing New Tests
+<a id="cleanup"></a>
 
-1. Create providers with spy processors (not real exporters).
-2. Use `register()` with `global: true` or `attachGlobalTracerProvider()` directly.
-3. Create spans via `trace.getTracer("test").startSpan("name").end()`.
-4. Assert against `spyProcessor.onStart` call counts to verify which provider is active.
-5. Always detach in `afterEach`.
+## 清理
+
+每个涉及全局状态的测试都**必须**在 `afterEach` 中调用 `detachGlobalTracerProvider()`。挂载泄漏会破坏后续测试。
+
+<a id="writing-new-tests"></a>
+
+## 编写新测试
+
+1. 使用 Spy 处理器（非真实导出器）创建提供程序。
+2. 使用 `global: true` 调用 `register()`，或直接调用 `attachGlobalTracerProvider()`。
+3. 通过 `trace.getTracer("test").startSpan("name").end()` 创建 Span。
+4. 断言 `spyProcessor.onStart` 的调用次数，验证当前生效的提供程序。
+5. 始终在 `afterEach` 中分离。

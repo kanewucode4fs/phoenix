@@ -1,190 +1,224 @@
-# LDAP Authentication Design Proposal for Phoenix
+<a id="ldap-authentication-design-proposal-for-phoenix"></a>
 
-> **New to LDAP?** Start with the [LDAP Primer for OIDC Engineers](./ldap-authentication/ldap-primer.md) - explains LDAP fundamentals using OIDC as a reference point.
+# Phoenix LDAP 身份验证设计提案
 
-## Executive Summary
+> **初次接触 LDAP？**先阅读[面向 OIDC 工程师的 LDAP 入门](./ldap-authentication/ldap-primer.md)，以 OIDC 为参照理解 LDAP 基础。
 
-LDAP authentication for Phoenix enabling corporate user adoption. Supports Active Directory/OpenLDAP, group-based role mapping, multi-server failover, and Grafana-compatible configuration.
+<a id="executive-summary"></a>
 
-→ *Full details*: [Architecture Overview](#architecture-overview) | [Security & Risks](#security--risks) | [Implementation Plan](#implementation-plan) | [Grafana Compatibility](./ldap-authentication/grafana-comparison.md)
+## 执行摘要
 
-### The Decision
+为 Phoenix 提供 LDAP 身份验证，支持企业用户采用。涵盖 Active Directory/OpenLDAP、基于组的角色映射、多服务器故障转移和兼容 Grafana 的配置。
 
-Phoenix's `users` table CHECK constraint (`auth_method IN ('LOCAL', 'OAUTH2')`) requires choosing between:
+→ *完整详情*：[架构概览](#architecture-overview) | [安全与风险](#security--risks) | [实现计划](#implementation-plan) | [Grafana 兼容性](./ldap-authentication/grafana-comparison.md)
 
-**Approach 1: Zero-Migration (Adoption-First)**  
-*Choose when: Unblocking corporate users is the immediate priority, code consistency can be deferred*
+<a id="the-decision"></a>
 
-- **Mechanism**: Reuse OAuth2 columns with Unicode marker (`\ue000LDAP(stopgap)`)
-- **Advantage**: Ships immediately, no coordination needed. Validates LDAP implementation with real users before committing to schema changes
-- **Tradeoff**: Cannot use SQLAlchemy polymorphism (no `LDAPUser` class, must use convention-based helpers). Database semantics mismatched (stores as OAuth2, code treats as LDAP) until migration
-- **Reversibility**: Standard Alembic migration to Approach 2 available. Any production insights or edge cases discovered can be addressed during migration ([see migration plan](./ldap-authentication/migration-plan.md))
+### 决策
 
-→ *Technical details*: [Approach 1 Implementation](#approach-1-zero-migration-strategy) | [Database Schema](./ldap-authentication/database-schema.md)
+Phoenix `users` 表的 CHECK 约束（`auth_method IN ('LOCAL', 'OAUTH2')`）要求从以下方案中选择：
 
-**Approach 2: Schema Migration (Architecture-First)**  
-*Choose when: Code consistency from the start outweighs time-to-adoption*
+**方案 1：零迁移（采用优先）**
+  *适用情形：立即满足企业用户是当前优先事项，代码一致性可以延期*
 
-- **Mechanism**: Update CHECK constraint to allow `auth_method='LDAP'` (user identification by email/unique_id unchanged)
-- **Advantage**: Clean schema, full polymorphism, no technical debt, complete OAuth2/LDAP separation
-- **Tradeoff**: Requires database migration before release (self-hosted users must upgrade, timing must be coordinated)
-- **Reversibility**: N/A (this is the target state)
+- **机制**：复用 OAuth2 列，使用 Unicode 标记（`\ue000LDAP(stopgap)`）
+- **优势**：立即发布，无需协调。在承诺数据库结构变更前，使用真实用户验证 LDAP 实现
+- **取舍**：无法使用 SQLAlchemy 多态，没有 `LDAPUser` 类，必须使用约定式辅助函数。迁移前数据库存为 OAuth2，代码视为 LDAP，语义不一致
+- **可逆性**：可通过标准 Alembic 迁移至方案 2。生产中发现的洞察和边界情况均可在迁移时处理（[迁移计划](./ldap-authentication/migration-plan.md)）
 
-→ *Technical details*: [Approach 2 Implementation](#approach-2-schema-migration) | [Database Schema](./ldap-authentication/database-schema.md)
+→ *技术详情*：[方案 1 实现](#approach-1-zero-migration-strategy) | [数据库结构](./ldap-authentication/database-schema.md)
 
-**Both approaches deliver identical**: Functionality, security, performance, user experience.  
-→ *See comparison*: [Full Approach Comparison](#approach-comparison) | [Decision Reversibility Analysis](./ldap-authentication/decision-reversibility.md)
+**方案 2：数据库结构迁移（架构优先）**
+  *适用情形：从开始保持代码一致性比尽快采用更重要*
 
-### Irreversible Commitments
+- **机制**：更新 CHECK 约束，允许 `auth_method='LDAP'`；基于邮箱/unique_id 的用户识别不变
+- **优势**：数据库结构清晰、完整多态、无技术债务、OAuth2/LDAP 完全分离
+- **取舍**：发布前需要数据库迁移，自托管用户必须升级，时间需要协调
+- **可逆性**：不适用，这是目标状态
 
-Four critical decisions are **one-way doors** (cannot be changed without breaking user configurations):
+→ *技术详情*：[方案 2 实现](#approach-2-schema-migration) | [数据库结构](./ldap-authentication/database-schema.md)
 
-1. **Unicode marker format** (`\ue000LDAP(stopgap)`) - stored in production databases  
-   *Safe because*: Collision-proof (Unicode PUA vs OAuth2 ASCII-only spec), cross-database compatible  
-   → *Validation*: [Collision Prevention Analysis](./ldap-authentication/collision-prevention.md) | [Migration to Approach 2](./ldap-authentication/migration-plan.md)
+**两种方案的功能、安全、性能和用户体验完全相同。**
+  → *比较*：[完整方案对比](#approach-comparison) | [决策可逆性分析](./ldap-authentication/decision-reversibility.md)
 
-2. **Environment variable names** (`PHOENIX_LDAP_*`) - public configuration API  
-   *Safe because*: Matches Grafana behavior, follows Phoenix conventions  
-   → *Full specification*: [Configuration Reference](./ldap-authentication/configuration.md)
+<a id="irreversible-commitments"></a>
 
-3. **JSON structure for group mappings** - `group_dn`, `role` field names and role values  
-   *Safe because*: Field name `group_dn` matches Grafana (using `role` instead of `org_role` since Phoenix has no org concept), role values match Phoenix's existing system  
-   → *Complete analysis*: [Decision Reversibility Analysis](./ldap-authentication/decision-reversibility.md)
+### 不可逆承诺
 
-4. **`allow_sign_up` default** (`true`) - security/access control behavior  
-   *Safe because*: Matches Grafana default, explicit opt-out available via `PHOENIX_LDAP_ALLOW_SIGN_UP="false"`  
-   → *Rationale*: Changing default later breaks existing deployments expecting auto-sign-up
+四项关键决策属于**单向门**，更改会破坏用户配置：
 
-**Note**: Additional behavioral contracts (wildcards, case-insensitive matching, fallback logic) documented in [Decision Reversibility Analysis](./ldap-authentication/decision-reversibility.md).
+1. **Unicode 标记格式**（`\ue000LDAP(stopgap)`），存于生产数据库
+     *安全依据*：无冲突，Unicode PUA 与 OAuth2 仅 ASCII 规范互不相交；跨数据库兼容
+     → *验证*：[冲突预防分析](./ldap-authentication/collision-prevention.md) | [迁移至方案 2](./ldap-authentication/migration-plan.md)
 
-**Important**: Choosing Approach 1 vs. 2 is a *two-way door* - Approach 1 allows validating the implementation with production workloads before schema commitment, with migration to Approach 2 available to address any discovered requirements ([Migration Plan](./ldap-authentication/migration-plan.md)).
+2. **环境变量名称**（`PHOENIX_LDAP_*`），公共配置 API
+     *安全依据*：符合 Grafana 行为和 Phoenix 约定
+     → *完整规范*：[配置参考](./ldap-authentication/configuration.md)
 
-### Authentication Framework
+3. **组映射 JSON 结构**，`group_dn`、`role` 字段名及角色值
+     *安全依据*：`group_dn` 字段名与 Grafana 一致；Phoenix 无组织概念，使用 `role` 而非 `org_role`；角色值与 Phoenix 现有系统一致
+     → *完整分析*：[决策可逆性分析](./ldap-authentication/decision-reversibility.md)
 
-Phoenix supports three authentication methods: LOCAL, OAuth2, and LDAP. All valid permutations are supported with proper validation to prevent invalid configurations (e.g., disabling basic auth without configuring alternatives).
+4. **`allow_sign_up` 默认值**（`true`），安全和访问控制行为
+     *安全依据*：与 Grafana 默认值一致，可通过 `PHOENIX_LDAP_ALLOW_SIGN_UP="false"` 显式关闭
+     → *依据*：之后更改默认值会破坏依赖自动注册的现有部署
 
-→ *Implementation details*: [Authentication Method Framework](#authentication-method-framework) | [Frontend Types](#frontend-types-both-approaches)
+**说明**：通配符、不区分大小写匹配、回退逻辑等其他行为契约，记录于[决策可逆性分析](./ldap-authentication/decision-reversibility.md)。
 
-### User Identification
+**重要说明**：方案 1 与方案 2 的选择属于*双向门*。方案 1 可在承诺数据库结构前使用生产负载验证实现，并通过迁移至方案 2 处理新发现的需求（[迁移计划](./ldap-authentication/migration-plan.md)）。
 
-LDAP users are identified by email (default) or immutable unique ID (objectGUID/entryUUID if configured via `PHOENIX_LDAP_ATTR_UNIQUE_ID`). DN is NOT used for identification (DNs change too frequently in enterprise environments).
+<a id="authentication-framework"></a>
 
-→ *Full rationale*: [User Identification Strategy](./ldap-authentication/user-identification-strategy.md)
+### 身份验证框架
 
----
+Phoenix 支持 LOCAL、OAuth2 和 LDAP 三种身份验证方法。通过适当校验支持全部有效组合，防止禁用基本身份验证却未配置替代方式等无效配置。
 
-## Table of Contents
+→ *实现详情*：[身份验证方法框架](#authentication-method-framework) | [前端类型](#frontend-types-both-approaches)
 
-### 🚀 Quick Start (5-10 minutes)
-- [Executive Summary](#executive-summary) - What we're building and why
-- [Approach Comparison](#approach-comparison) - Zero-migration vs. schema migration table
-- [Recommendation](#recommendation) - Which approach to choose
-- [Architecture Overview](#architecture-overview) - High-level design and auth flow
-- [Security & Risks](#security--risks) - Threat model and mitigations (2 pages)
+<a id="user-identification"></a>
 
-### 📋 Implementation Guide (20-30 minutes)
-- [Implementation Plan](#implementation-plan) - Phase-by-phase breakdown
-  - [Phase 0: Grafana Verification](#phase-0-grafana-compatibility-verification-️) *(See [Grafana Comparison](./ldap-authentication/grafana-comparison.md) for full research)*
-  - [Phase 1: Core LDAP Authentication](#phase-1-core-ldap-authentication)
-  - [Phase 2: Testing & Hardening](#phase-2-testing--hardening)
-  - [Phase 3: Frontend & Documentation](#phase-3-frontend--documentation)
+### 用户识别
 
-### 📚 Detailed Reference (Appendices)
+LDAP 用户通过邮箱（默认）或不可变唯一 ID 识别。后者通过 `PHOENIX_LDAP_ATTR_UNIQUE_ID` 配置 objectGUID/entryUUID。不使用 DN 识别，因为企业环境 DN 变化过于频繁。
 
-All appendices have been extracted to separate files. See [ldap-authentication/README.md](./ldap-authentication/README.md) for the complete index.
-
-**Most Frequently Used**:
-- [Configuration Reference](./ldap-authentication/configuration.md) - Environment variables, Phoenix vs. Grafana comparison
-- [Protocol Compliance](./ldap-authentication/protocol-compliance.md) - STARTTLS security, group DN matching, Docker testing
-- [Security Deep-Dive](./ldap-authentication/security.md) - Threat model, LDAP injection prevention
-- [Code Examples](./ldap-authentication/code-examples.md) - LDAPConfig, LDAPAuthenticator, API endpoints
-- [Future Improvements](./ldap-authentication/future-improvements.md) - Post-MVP enhancements (password policy, metrics, nested groups)
+→ *完整依据*：[用户识别策略](./ldap-authentication/user-identification-strategy.md)
 
 ---
 
-### 📖 Reading Paths
+<a id="table-of-contents"></a>
 
-**For Engineering Managers** (5 min):
-1. [Executive Summary](#executive-summary)
-2. [Approach Comparison](#approach-comparison)
-3. [Recommendation](#recommendation)
-4. [Decision Reversibility](./ldap-authentication/decision-reversibility.md)
+## 目录
 
-**For Backend Engineers** (20 min):
-1. [Architecture Overview](#architecture-overview)
-2. [Implementation Plan](#implementation-plan)
-3. [Database Schema](./ldap-authentication/database-schema.md)
-4. [Code Examples](./ldap-authentication/code-examples.md)
-5. [Grafana Research](./ldap-authentication/grafana-comparison.md)
+<a id="-quick-start-5-10-minutes"></a>
 
-**For Security Reviewers** (15 min):
-1. [Security & Risks](#security--risks)
-2. [Security Deep-Dive](./ldap-authentication/security.md)
-3. [Collision Prevention](./ldap-authentication/collision-prevention.md)
+### 🚀 快速开始（5—10 分钟）
+- [执行摘要](#executive-summary) — 构建内容和原因
+- [方案对比](#approach-comparison) — 零迁移与数据库结构迁移表格
+- [建议](#recommendation) — 选择哪种方案
+- [架构概览](#architecture-overview) — 高层设计与身份验证流程
+- [安全与风险](#security--risks) — 威胁模型和防护，2 页
 
-**For Frontend Engineers** (10 min):
-1. [Frontend Types](#frontend-types-both-approaches)
-2. [Frontend Implementation](./ldap-authentication/frontend-implementation.md)
+<a id="-implementation-guide-20-30-minutes"></a>
 
----
+### 📋 实现指南（20—30 分钟）
+- [实现计划](#implementation-plan) — 分阶段说明
+  - [阶段 0：Grafana 验证](#phase-0-grafana-compatibility-verification-️) *完整研究参见 [Grafana 对比](./ldap-authentication/grafana-comparison.md)*
+  - [阶段 1：核心 LDAP 身份验证](#phase-1-core-ldap-authentication)
+  - [阶段 2：测试与加固](#phase-2-testing--hardening)
+  - [阶段 3：前端与文档](#phase-3-frontend--documentation)
 
-### References
+<a id="-detailed-reference-appendices"></a>
 
-- GitHub Issue: https://github.com/Arize-ai/phoenix/issues/10379
-- Grafana LDAP Docs: https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/ldap/
-- Grafana Source Code: https://github.com/grafana/grafana/tree/main/pkg/services/ldap
+### 📚 详细参考（附录）
 
-### Configuration Note
+全部附录已提取为独立文件。完整索引参见 [ldap-authentication/README.md](./ldap-authentication/README.md)。
 
-Phoenix uses environment variables for configuration (consistent with Phoenix patterns), while Grafana uses TOML files. This means:
-- ✅ **Behavior compatibility**: Group matching, role mapping, authentication flow match Grafana exactly
-- ⚠️ **Config format divergence**: Users cannot directly reuse Grafana TOML configs (need to convert to env vars)
-- ⚠️ **Multi-server limitation**: MVP only supports replica servers with identical config (Grafana supports heterogeneous servers)
-- ✅ **Future-proof**: TOML file support can be added later without breaking env var users
+**最常用**：
+- [配置参考](./ldap-authentication/configuration.md) — 环境变量、Phoenix 与 Grafana 对比
+- [协议合规性](./ldap-authentication/protocol-compliance.md) — STARTTLS 安全、组 DN 匹配、Docker 测试
+- [安全详解](./ldap-authentication/security.md) — 威胁模型、LDAP 注入防护
+- [代码示例](./ldap-authentication/code-examples.md) — LDAPConfig、LDAPAuthenticator、API 端点
+- [未来改进](./ldap-authentication/future-improvements.md) — MVP 之后增强，密码策略、指标和嵌套组
 
 ---
 
-## Authentication Method Framework
+<a id="-reading-paths"></a>
 
-Phoenix supports three authentication methods (**LOCAL**, **OAuth2**, **LDAP**) with validation to prevent invalid configurations.
+### 📖 阅读路径
 
-**Key Features**: 9 configuration permutations | Cross-auth security | Smart frontend rendering | Admin provisioning
+**工程经理**，5 分钟：
+1. [执行摘要](#executive-summary)
+2. [方案对比](#approach-comparison)
+3. [建议](#recommendation)
+4. [决策可逆性](./ldap-authentication/decision-reversibility.md)
 
-→ *Full details*: [Authentication Framework (Appendix)](./ldap-authentication/authentication-framework.md)
+**后端工程师**，20 分钟：
+1. [架构概览](#architecture-overview)
+2. [实现计划](#implementation-plan)
+3. [数据库结构](./ldap-authentication/database-schema.md)
+4. [代码示例](./ldap-authentication/code-examples.md)
+5. [Grafana 研究](./ldap-authentication/grafana-comparison.md)
+
+**安全评审者**，15 分钟：
+1. [安全与风险](#security--risks)
+2. [安全详解](./ldap-authentication/security.md)
+3. [冲突预防](./ldap-authentication/collision-prevention.md)
+
+**前端工程师**，10 分钟：
+1. [前端类型](#frontend-types-both-approaches)
+2. [前端实现](./ldap-authentication/frontend-implementation.md)
 
 ---
 
-## LDAP User Identification
+<a id="references"></a>
 
-Phoenix identifies LDAP users by email (default) or immutable unique ID (if `PHOENIX_LDAP_ATTR_UNIQUE_ID` is configured).
+### 参考资料
 
-**Key Design**: Email for most deployments | Unique ID (objectGUID/entryUUID) for email change resilience | DN NOT used (changes too frequently)
+- GitHub Issue：https://github.com/Arize-ai/phoenix/issues/10379
+- Grafana LDAP 文档：https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/ldap/
+- Grafana 源码：https://github.com/grafana/grafana/tree/main/pkg/services/ldap
 
-→ *Full details*: [User Identification Strategy](./ldap-authentication/user-identification-strategy.md)
+<a id="configuration-note"></a>
+
+### 配置说明
+
+Phoenix 使用环境变量配置，与 Phoenix 模式一致；Grafana 使用 TOML 文件。因此：
+- ✅ **行为兼容**：组匹配、角色映射和身份验证流程与 Grafana 完全一致
+- ⚠️ **配置格式不同**：用户不能直接复用 Grafana TOML，需要转换为环境变量
+- ⚠️ **多服务器限制**：MVP 仅支持配置相同的副本，Grafana 支持异构服务器
+- ✅ **面向未来**：之后可添加 TOML 文件支持，不破坏环境变量用户
 
 ---
 
-## Approach Comparison
+<a id="authentication-method-framework"></a>
 
-| Aspect | Approach 1: Adoption-First | Approach 2: Architecture-First |
+## 身份验证方法框架
+
+Phoenix 支持 **LOCAL**、**OAuth2**、**LDAP** 三种身份验证方法，通过校验防止无效配置。
+
+**主要功能**：9 种配置组合 | 跨验证方式安全 | 智能前端渲染 | 管理员配置
+
+→ *完整详情*：[身份验证框架（附录）](./ldap-authentication/authentication-framework.md)
+
+---
+
+<a id="ldap-user-identification"></a>
+
+## LDAP 用户识别
+
+Phoenix 通过邮箱（默认）或不可变唯一 ID 识别 LDAP 用户，后者需配置 `PHOENIX_LDAP_ATTR_UNIQUE_ID`。
+
+**关键设计**：大多数部署使用邮箱 | 使用唯一 ID（objectGUID/entryUUID）应对邮箱变化 | 不使用 DN，因为变化过于频繁
+
+→ *完整详情*：[用户识别策略](./ldap-authentication/user-identification-strategy.md)
+
+---
+
+<a id="approach-comparison"></a>
+
+## 方案对比
+
+| 方面 | 方案 1：采用优先 | 方案 2：架构优先 |
 |--------|---------------------------|------------------------------|
-| **Availability** | ✅ Immediate, unblocks corporate users | ⚠️ Coordination delay |
-| **Schema** | ⚠️ `auth_method='OAUTH2'` for LDAP | ✅ `auth_method='LDAP'` |
-| **Polymorphism** | ❌ No `LDAPUser` class | ✅ Full `LDAPUser` class |
-| **Code Pattern** | ⚠️ Convention-based | ✅ Native ORM |
-| **Security/Performance/Features** | ✅ Identical | ✅ Identical |
-| **Reversibility** | ✅ Migration path to Approach 2* | N/A |
+| **可用性** | ✅ 立即可用，满足企业用户 | ⚠️ 协调导致延迟 |
+| **数据库结构** | ⚠️ LDAP 使用 `auth_method='OAUTH2'` | ✅ `auth_method='LDAP'` |
+| **多态** | ❌ 无 `LDAPUser` 类 | ✅ 完整 `LDAPUser` 类 |
+| **代码模式** | ⚠️ 基于约定 | ✅ 原生 ORM |
+| **安全/性能/功能** | ✅ 相同 | ✅ 相同 |
+| **可逆性** | ✅ 可迁移至方案 2* | 不适用 |
 
-*Standard Alembic migration ([Migration Plan](./ldap-authentication/migration-plan.md))
+*标准 Alembic 迁移（[迁移计划](./ldap-authentication/migration-plan.md)）
 
 ---
 
-### Frontend Types (Both Approaches)
+<a id="frontend-types-both-approaches"></a>
 
-**Question**: Can we add `"LDAP"` to the frontend `AuthMethod` enum?  
-**Answer**: **Yes**, for both approaches!
+### 前端类型（两种方案）
 
-**Approach 1 Strategy**: GraphQL Resolver Translation
+**问题**：可以向前端 `AuthMethod` 枚举添加 `"LDAP"` 吗？
+  **回答**：**可以**，两种方案均支持！
+
+**方案 1 策略**：GraphQL 解析器转换
 ```python
 # GraphQL resolver detects LDAP users and translates for frontend
 @strawberry.field
@@ -207,11 +241,11 @@ if (user.authMethod === "LDAP") {
 }
 ```
 
-**Tradeoff**: Adds one translation layer in backend, but frontend code stays clean.
+**取舍**：后端增加一层转换，但前端代码保持整洁。
 
 ---
 
-**Approach 2 Strategy**: Direct Mapping (No Translation)
+**方案 2 策略**：直接映射，无需转换
 ```python
 # GraphQL resolver directly returns database value
 @strawberry.field
@@ -229,19 +263,21 @@ if (user.authMethod === "LDAP") {
 }
 ```
 
-**Tradeoff**: No translation needed, perfect alignment.
+**取舍**：无需转换，完全一致。
 
 ---
 
-**Recommendation**: Use GraphQL resolver translation in Approach 1 so frontend gets clean types. The one-line translation is worth avoiding frontend workarounds.
+**建议**：方案 1 使用 GraphQL 解析器转换，为前端提供整洁类型。一行转换值得用来避免前端变通处理。
 
 ---
 
-### Approach 1: Zero-Migration Strategy
+<a id="approach-1-zero-migration-strategy"></a>
 
-**Adoption-First Implementation** - Reuse existing columns to unblock corporate users immediately, defer architectural refinement.
+### 方案 1：零迁移策略
 
-**Storage Strategy**:
+**采用优先实现** — 复用现有列，立即满足企业用户，推迟架构完善。
+
+**存储策略**：
 ```
 Existing columns:              New usage:
 - auth_method = 'OAUTH2'   →   Satisfies CHECK constraint
@@ -249,33 +285,35 @@ Existing columns:              New usage:
 - oauth2_user_id = ?       →   Unique ID (if configured) or NULL (email-based)
 ```
 
-**✅ Strengths**:
-- Zero coordination overhead with self-hosted users
-- Removes adoption barriers in corporate environments immediately
-- Full LDAP functionality (security, performance identical to Approach 2)
-- Clear migration path when architectural refinement becomes priority
+**✅ 优势**：
+- 无需与自托管用户协调
+- 立即消除企业环境采用障碍
+- 完整 LDAP 功能，安全和性能与方案 2 相同
+- 架构完善成为优先事项时，迁移路径明确
 
-**⚠️ Known Limitations**:
-- **No SQLAlchemy polymorphism**: Cannot create `LDAPUser` class (shared discriminator with OAuth2)
-- Convention-based detection: `if oauth2_client_id == '\ue000LDAP(stopgap)'`
-- Requires documentation for future maintainers
-- GraphQL resolver needed for frontend type translation
+**⚠️ 已知限制**：
+- **无 SQLAlchemy 多态**：与 OAuth2 共享鉴别字段，无法创建 `LDAPUser` 类
+- 基于约定检测：`if oauth2_client_id == '\ue000LDAP(stopgap)'`
+- 需要为未来维护者提供文档
+- 需要 GraphQL 解析器为前端转换类型
 
-**Best For**: When unblocking corporate users is the immediate priority.
+**最适合**：立即满足企业用户是当前优先事项。
 
 ---
 
-### Approach 2: Schema Migration
+<a id="approach-2-schema-migration"></a>
 
-**Architecture-First Implementation** - Invest in clean schema upfront, optimizing for long-term maintainability.
+### 方案 2：数据库结构迁移
 
-**Schema Changes**:
+**架构优先实现** — 提前投入清晰数据库结构，优化长期可维护性。
+
+**数据库结构变更**：
 ```sql
 ALTER TABLE users ADD COLUMN ldap_username VARCHAR NOT NULL;
 ALTER TABLE users ADD CONSTRAINT CHECK (auth_method IN ('LOCAL', 'OAUTH2', 'LDAP'));
 ```
 
-**Enables Full Polymorphism**:
+**启用完整多态**：
 ```python
 class LDAPUser(User):
     """Type-safe class with native ORM support."""
@@ -289,28 +327,32 @@ if isinstance(user, LDAPUser):
     ...
 ```
 
-**✅ Strengths**:
-- Consistent with existing `LocalUser`/`OAuth2User` patterns
-- Self-documenting schema (`auth_method='LDAP'` is explicit)
-- Zero technical debt
-- No conventions to learn for new engineers
+**✅ 优势**：
+- 与现有 `LocalUser`/`OAuth2User` 模式一致
+- 数据库结构自解释，`auth_method='LDAP'` 含义明确
+- 无技术债务
+- 新工程师无需学习约定
 
-**⚠️ Known Limitations**:
-- Requires coordinating with self-hosted users for migration
-- Upfront architectural commitment before usage data available
+**⚠️ 已知限制**：
+- 迁移需要与自托管用户协调
+- 在获得使用数据前承诺架构
 
-**Best For**: When code consistency outweighs time-to-adoption concerns.
+**最适合**：代码一致性比尽快采用更重要。
 
 ---
 
-## Recommendation
+<a id="recommendation"></a>
 
-**Approach 1**: Zero-migration, adoption-first strategy  
-**Approach 2**: Migration-first, clean architecture from start
+## 建议
 
-### Critical Tradeoff: Polymorphism
+**方案 1**：零迁移、采用优先策略
+  **方案 2**：迁移优先，从开始采用整洁架构
 
-Approach 1 cannot use SQLAlchemy polymorphism (shared `auth_method='OAUTH2'` discriminator):
+<a id="critical-tradeoff-polymorphism"></a>
+
+### 关键取舍：多态
+
+方案 1 无法使用 SQLAlchemy 多态，因为共享 `auth_method='OAUTH2'` 鉴别字段：
 ```python
 # Approach 1: Convention-based
 users = session.query(User).filter(User.oauth2_client_id == "\ue000LDAP(stopgap)")
@@ -319,27 +361,33 @@ users = session.query(User).filter(User.oauth2_client_id == "\ue000LDAP(stopgap)
 ldap_users = session.query(LDAPUser).all()  # Type-safe
 ```
 
-Phoenix uses `LocalUser`/`OAuth2User` polymorphism throughout. Approach 1 temporarily diverges from this pattern.
+Phoenix 广泛使用 `LocalUser`/`OAuth2User` 多态。方案 1 暂时偏离此模式。
 
-### Decision Framework
+<a id="decision-framework"></a>
 
-| Optimize For | Choose | Rationale |
+### 决策框架
+
+| 优化目标 | 选择 | 原因 |
 |--------------|--------|-----------|
-| Immediate availability for corporate users | Approach 1 | Removes adoption barriers in enterprise environments quickly |  
-| Architectural consistency | Approach 2 | Clean codebase from start, full polymorphism |
+| 企业用户立即可用 | 方案 1 | 快速消除企业环境采用障碍 |
+| 架构一致性 | 方案 2 | 从开始保持整洁代码和完整多态 |
 
-**Strategic Flexibility**: Approach 1 → 2 migration is straightforward (standard Alembic, [Migration Plan](./ldap-authentication/migration-plan.md)). This allows deferring the polymorphism investment until adoption patterns clarify architectural priorities.
+**策略灵活性**：方案 1 → 2 迁移直接，使用标准 Alembic，参见[迁移计划](./ldap-authentication/migration-plan.md)。可将多态投入推迟至采用模式明确架构优先级后。
 
-**Recommendation**: Approach 1 for initial release, migrate to Approach 2 when:
-- LDAP usage grows significantly (100+ users)
-- Team prioritizes LDAP-specific feature development (requires polymorphism)
-- Technical debt reduction becomes higher priority than new features
+**建议**：初始发布采用方案 1，以下情况迁移至方案 2：
+- LDAP 使用量显著增长，100 名以上用户
+- 团队优先开发 LDAP 专用功能，需要多态
+- 减少技术债务比新功能更优先
 
 ---
 
-## Architecture Overview
+<a id="architecture-overview"></a>
 
-### System Architecture
+## 架构概览
+
+<a id="system-architecture"></a>
+
+### 系统架构
 
 ```mermaid
 graph TB
@@ -361,37 +409,45 @@ graph TB
     Login -->|10. Navigate to app| User
 ```
 
-### Authentication Flow (Simplified)
+<a id="authentication-flow-simplified"></a>
 
-1. **User submits LDAP username + password**
-2. **Connect to LDAP server** (with TLS)
-3. **Bind with service account** (if configured)
-4. **Search for user** by username
-5. **Authenticate user** (bind with user's credentials)
-6. **Retrieve user attributes** (email, display name)
-7. **Query user's groups** (for role mapping)
-8. **Map LDAP groups → Phoenix roles** (ADMIN, MEMBER, VIEWER)
-9. **Create or update user in database**
-10. **Issue JWT tokens** (access + refresh)
-11. **Return to application**
+### 身份验证流程（简化）
 
-**Fallback**: If LDAP unavailable, existing LOCAL/OAuth2 users can still login.
+1. **用户提交 LDAP 用户名和密码**
+2. **连接 LDAP 服务器**，使用 TLS
+3. **以服务账户绑定**，若已配置
+4. 按用户名**搜索用户**
+5. **验证用户身份**，使用用户凭证绑定
+6. **获取用户属性**，邮箱和显示名称
+7. **查询用户组**，用于角色映射
+8. **LDAP 组映射至 Phoenix 角色**，ADMIN、MEMBER、VIEWER
+9. **在数据库中创建或更新用户**
+10. **签发 JWT token**，访问和刷新 token
+11. **返回应用**
+
+**回退**：LDAP 不可用时，现有 LOCAL/OAuth2 用户仍可登录。
 
 ---
 
-### Key Features
+<a id="key-features"></a>
 
-#### Multiple LDAP Servers (Replica Failover)
+### 主要功能
+
+<a id="multiple-ldap-servers-replica-failover"></a>
+
+#### 多 LDAP 服务器（副本故障转移）
 ```bash
 PHOENIX_LDAP_HOST="dc1.corp.com,dc2.corp.com,dc3.corp.com"
 ```
-- Automatic failover on connection failures
-- Tries servers in order, first success wins
+- 连接失败时自动故障转移
+- 按顺序尝试服务器，首个成功者生效
 
-**MVP Limitation**: All servers must be replicas with identical configuration (same bind DN, search base, group mappings). For heterogeneous LDAP forests with different configurations per server, see [Grafana's TOML approach](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/conf/ldap_multiple.toml). Phoenix can add TOML file support post-MVP for this use case.
-- Load balancing across servers
+**MVP 限制**：所有服务器必须为配置相同的副本，具有相同绑定 DN、搜索基准和组映射。对于每台服务器配置不同的异构 LDAP 林，参见 [Grafana TOML 方案](https://raw.githubusercontent.com/grafana/grafana/84a07be6e4e1acd8f064c3b390c30188d5703afc/conf/ldap_multiple.toml)。Phoenix 可在 MVP 之后添加 TOML 文件支持，以覆盖此场景。
+- 跨服务器负载均衡
 
-#### Group-Based Role Mapping
+<a id="group-based-role-mapping"></a>
+
+#### 基于组的角色映射
 ```bash
 PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='{
   "admin": ["CN=Phoenix Admins,OU=Groups,DC=corp,DC=com"],
@@ -399,404 +455,434 @@ PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='{
   "viewer": ["CN=Phoenix Viewers,OU=Groups,DC=corp,DC=com"]
 }'
 ```
-- Supports both Active Directory (memberOf) and POSIX groups
-- Wildcard mappings: `"*": ["CN=All Users,DC=corp,DC=com"]`
+- 支持 Active Directory（memberOf）和 POSIX 组
+- 通配符映射：`"*": ["CN=All Users,DC=corp,DC=com"]`
 
-#### Flexible Configuration
-- Environment variables (Phoenix style)
-- TLS/SSL support (StartTLS or LDAPS)
-- Customizable attribute mapping
-- Multiple authentication strategies
+<a id="flexible-configuration"></a>
+
+#### 灵活配置
+- 环境变量，Phoenix 风格
+- TLS/SSL 支持，StartTLS 或 LDAPS
+- 可自定义属性映射
+- 多种身份验证策略
 
 ---
 
-## Security & Risks
+<a id="security--risks"></a>
 
-### Security Essentials
+## 安全与风险
 
-| Threat | Mitigation | Implementation Status |
+<a id="security-essentials"></a>
+
+### 安全要点
+
+| 威胁 | 防护 | 实现状态 |
 |--------|-----------|----------------------|
-| **LDAP Injection** | Escape all user inputs, use parameterized filters | ✅ Implemented (ldap3.escape_filter_chars) |
-| **Credential Exposure** | TLS required, credentials never logged | ✅ Implemented (error-only logging, no PII) |
-| **Timing Attacks** | Constant-time comparisons, generic error messages | ✅ Generic errors implemented |
-| **Username Enumeration** | Generic error messages for all failures | ✅ **Enhanced** - all cross-auth errors are generic |
-| **Cross-Auth Hijacking** | Prevent OAuth2 from hijacking LDAP users | ✅ **New** - explicit checks implemented |
-| **Duplicate Accounts** | Prevent LDAP from creating OAuth2 duplicates | ✅ **New** - email collision detection |
-| **Event Loop DoS** | Thread pool isolation for blocking LDAP operations | ✅ Implemented (anyio.to_thread.run_sync) |
-| **Socket Leaks** | Unconditional cleanup in finally blocks | ✅ Implemented (unbind() always called) |
-| **Brute Force** | Rate limiting (10 attempts/minute) | ✅ Implemented via rate limiter |
-| **MITM** | TLS certificate validation enforced | ✅ Configured (requires real LDAP testing) |
+| **LDAP 注入** | 转义所有用户输入，采用参数化过滤器 | ✅ 已实现，ldap3.escape_filter_chars |
+| **凭证暴露** | 强制 TLS，绝不记录凭证 | ✅ 已实现，仅错误日志，无个人身份信息 |
+| **时序攻击** | 常量时间比较、通用错误消息 | ✅ 已实现通用错误 |
+| **用户名枚举** | 全部失败使用通用错误 | ✅ **增强**，全部跨验证方式错误均通用 |
+| **跨验证方式劫持** | 防止 OAuth2 劫持 LDAP 用户 | ✅ **新增**，已实现显式检查 |
+| **重复账户** | 防止 LDAP 创建 OAuth2 重复账户 | ✅ **新增**，邮箱冲突检测 |
+| **事件循环 DoS** | 线程池隔离阻塞 LDAP 操作 | ✅ 已实现，anyio.to_thread.run_sync |
+| **Socket 泄漏** | finally 块中无条件清理 | ✅ 已实现，始终调用 unbind() |
+| **暴力破解** | 限流，每分钟 10 次尝试 | ✅ 已通过限流器实现 |
+| **中间人攻击** | 强制 TLS 证书校验 | ✅ 已配置，需要真实 LDAP 测试 |
 
-**Details**: See [Security Deep-Dive](./ldap-authentication/security.md)
+**详情**：参见[安全详解](./ldap-authentication/security.md)。
 
 ---
 
-### Key Risks & Mitigations
+<a id="key-risks--mitigations"></a>
 
-| Risk | Impact | Likelihood | Mitigation | Status |
+### 主要风险与防护
+
+| 风险 | 影响 | 可能性 | 防护 | 状态 |
 |------|--------|-----------|------------|--------|
-| LDAP server unavailable | Users cannot login | Medium | Fallback to LOCAL/OAuth2, multiple servers | ✅ Implemented |
-| Misconfigured group mappings | Wrong roles assigned | Medium | Validation on startup | ✅ Implemented |
-| Event loop blocking | Service unavailability | Medium | Thread pool isolation, timeouts | ✅ Implemented |
-| Socket leaks on failed auth | File descriptor exhaustion | Medium | Unconditional `unbind()` in finally block | ✅ Implemented |
-| Performance issues | Slow login | Low | Connection timeout, async operations | ✅ Implemented |
-| Username enumeration | Security information leak | Low | Generic error messages | ✅ Implemented |
-| Cross-authentication attacks | Account hijacking | Low | Explicit auth method checks | ✅ Implemented |
-| Regex complexity (CVE-2024-47764) | Performance degradation | Very Low | Use ldap3 (not python-ldap) | ✅ Using ldap3 |
+| LDAP 服务器不可用 | 用户无法登录 | 中 | 回退 LOCAL/OAuth2，多服务器 | ✅ 已实现 |
+| 组映射配置错误 | 角色分配错误 | 中 | 启动时校验 | ✅ 已实现 |
+| 事件循环阻塞 | 服务不可用 | 中 | 线程池隔离、超时 | ✅ 已实现 |
+| 身份验证失败导致 socket 泄漏 | 文件描述符耗尽 | 中 | finally 块无条件 `unbind()` | ✅ 已实现 |
+| 性能问题 | 登录缓慢 | 低 | 连接超时、异步操作 | ✅ 已实现 |
+| 用户名枚举 | 安全信息泄漏 | 低 | 通用错误消息 | ✅ 已实现 |
+| 跨身份验证攻击 | 账户劫持 | 低 | 显式身份验证方法检查 | ✅ 已实现 |
+| 正则复杂度，CVE-2024-47764 | 性能下降 | 极低 | 使用 ldap3，不使用 python-ldap | ✅ 使用 ldap3 |
 
-**Details**: See full threat model in [Security Deep-Dive](./ldap-authentication/security.md)
-
----
-
-### Success Criteria
-
-**Functional**:
-- ✅ Active Directory authentication works end-to-end
-- ✅ OpenLDAP authentication works end-to-end
-- ✅ Group-based role mapping assigns correct Phoenix roles
-- ✅ Multiple LDAP servers with failover functions correctly
-- ✅ Coexists with LOCAL and OAuth2 authentication
-
-**Non-Functional**:
-- ✅ P95 login latency < 2 seconds
-- ✅ No security vulnerabilities (LDAP injection, timing attacks)
-- ✅ Graceful degradation when LDAP unavailable
-- ✅ Comprehensive audit logging
-
-**Code Quality**:
-- ✅ Unit test coverage > 80%
-- ✅ Integration tests with in-process mock LDAP server
-- ✅ Clear error messages for troubleshooting
+**详情**：完整威胁模型参见[安全详解](./ldap-authentication/security.md)。
 
 ---
 
-## Implementation Plan
+<a id="success-criteria"></a>
 
-**Overview**: Implementation divided into three phases: backend, testing, and frontend/documentation.
+### 成功标准
 
-**Current Status** (as of implementation):
-- ✅ **Phase 0**: Grafana Compatibility Verification - COMPLETE
-- ✅ **Phase 1**: Core LDAP Authentication - COMPLETE
-- ✅ **Phase 2**: Testing & Hardening - COMPLETE (22/22 integration tests passing)
-- ✅ **Phase 3**: Frontend & Documentation - COMPLETE
+**功能**：
+- ✅ Active Directory 身份验证端到端可用
+- ✅ OpenLDAP 身份验证端到端可用
+- ✅ 基于组的映射分配正确 Phoenix 角色
+- ✅ 多 LDAP 服务器故障转移正常工作
+- ✅ 与 LOCAL 和 OAuth2 身份验证共存
 
-**Implementation Approach**: **Approach 1 (Zero-Migration)** - Using Unicode marker `\ue000LDAP(stopgap)` in `oauth2_client_id` column.
+**非功能**：
+- ✅ P95 登录延迟小于 2 秒
+- ✅ 无 LDAP 注入、时序攻击等安全漏洞
+- ✅ LDAP 不可用时平滑降级
+- ✅ 全面审计日志
 
-**Frontend Scope Summary**: All UI changes implemented
-- ✅ New component: `LDAPLoginForm.tsx` (end-user login)
-- ✅ New component: `NewUserDialog.tsx` with LDAP tab (admin user creation)
-- ✅ Backend config: `window.Config.ldapEnabled` exposed
-- ✅ GraphQL resolver translation for `AuthMethod.LDAP`
-
----
-
-### Phase 0: Grafana Compatibility Verification ⚠️
-
-**Status**: ✅ **COMPLETE** - All ONE-WAY door decisions have been verified against Grafana source code.
-
-**Quick Summary**:
-- ✅ Verified group role mapping structure adapted from Grafana (`group_dn`, `role`)
-- ✅ Confirmed case-insensitive DN matching, wildcard `"*"` support
-- ✅ Verified role values: "Admin", "Editor", "Viewer" (capitalized)
-- ✅ Analyzed Grafana's two-table design (`user` + `user_auth`) vs Phoenix's single-table discriminator
-- ✅ Documented configuration divergence: Grafana uses TOML files, Phoenix uses env vars
-- ✅ Reviewed LDAP injection prevention, error handling, TLS, background sync
-
-**For full details, see**: [Grafana Source Code Research](./ldap-authentication/grafana-comparison.md)
-
-**Critical Requirements** (adapted from Grafana):
-1. **Group Role Mapping JSON** - Must use `{"group_dn": "...", "role": "..."}` format (Phoenix uses `role`, not Grafana's `org_role`, since Phoenix has no org concept)
-2. **Case-Insensitive Matching** - Use `strings.EqualFold()` for DN comparison
-3. **Wildcard Support** - `"*"` matches all users (checked first)
-4. **Role Values** - Use Phoenix roles directly: "ADMIN", "MEMBER", "VIEWER" (not Grafana's "Admin", "Editor", "Viewer")
-5. **LDAP Injection** - Must escape user input with `ldap.EscapeFilter()`
-6. **Default Timeout** - 10 seconds for connection attempts
-
-**Implementation Note**: Phoenix uses its internal role names directly in the configuration, removing Grafana's role names as an intermediary. This simplifies the implementation and makes the configuration more Phoenix-native while maintaining Grafana's behavior patterns (wildcards, case-insensitive matching, first-match-wins).
-
-**Checklist**:
-- [x] Reviewed Grafana source code (6 files)
-- [x] Documented JSON structure compatibility
-- [x] Verified DN matching logic
-- [x] Analyzed database schema differences
-- [x] Reviewed security patterns (injection, TLS)
-- [x] Documented configuration method divergence
+**代码质量**：
+- ✅ 单元测试覆盖率高于 80%
+- ✅ 使用进程内模拟 LDAP 服务器进行集成测试
+- ✅ 清晰错误消息便于排障
 
 ---
 
-### Phase 1: Core LDAP Authentication ✅ **COMPLETE**
+<a id="implementation-plan"></a>
 
-**Objective**: Implement core LDAP authentication with group-based role mapping
+## 实现计划
 
-**Milestone 1.1: Configuration & Data Models** ✅
-- [x] Add `LDAPConfig` to `src/phoenix/config.py`
-- [x] Add environment variable parsing  
-- [x] Update `AuthSettings` to include LDAP
-- [x] Add validation for required fields
+**概览**：实现分为后端、测试、前端与文档三个阶段。
 
-**Milestone 1.2: LDAP Authenticator** ✅
-- [x] Create `src/phoenix/server/ldap.py`
-- [x] Implement `LDAPAuthenticator` class
-  - [x] Server connection with TLS
-  - [x] Service account bind
-  - [x] User search
-  - [x] User authentication
-  - [x] Attribute retrieval
-  - [x] Group membership query
-- [x] Helper function: `is_ldap_user()` (implemented as `LDAP_CLIENT_ID_MARKER` check)
-- [x] Note: `get_ldap_client_data()` not needed - using simple marker approach
+**当前状态**，截至实现时：
+- ✅ **阶段 0**：Grafana 兼容性验证，已完成
+- ✅ **阶段 1**：核心 LDAP 身份验证，已完成
+- ✅ **阶段 2**：测试与加固，已完成，22/22 项集成测试通过
+- ✅ **阶段 3**：前端与文档，已完成
 
-**Milestone 1.3: API Integration** ✅
-- [x] Add `/auth/ldap/login` endpoint
-- [x] Implement user creation/update logic (integrated in ldap_login endpoint)
-- [x] Add JWT token issuance (using existing token creation)
-- [x] Rate limiting added to `/auth/ldap/login`
-- [ ] Update health check to include LDAP status (deferred - not critical for MVP)
+**实现方案**：**方案 1（零迁移）**，在 `oauth2_client_id` 列使用 Unicode 标记 `\ue000LDAP(stopgap)`。
+
+**前端范围汇总**：所有 UI 变更均已实现
+- ✅ 新组件：`LDAPLoginForm.tsx`，终端用户登录
+- ✅ 新组件：带 LDAP 选项卡的 `NewUserDialog.tsx`，管理员创建用户
+- ✅ 后端配置：公开 `window.Config.ldapEnabled`
+- ✅ GraphQL 解析器转换 `AuthMethod.LDAP`
 
 ---
 
-### Phase 2: Testing & Hardening ✅ **COMPLETE**
+<a id="phase-0-grafana-compatibility-verification-️"></a>
 
-**Milestone 2.1: Unit Tests** ✅
-- [x] Test `LDAPConfig` validation (13 test cases)
-- [x] Test environment variable parsing
-- [x] Test JSON validation for group role mappings
-- [x] Test role validation (ADMIN, MEMBER, VIEWER)
-- [x] Test TLS configuration validation
-- [x] Test group search configuration validation
+### 阶段 0：Grafana 兼容性验证 ⚠️
 
-**Milestone 2.2: Integration Tests** ✅
-- [x] Create in-process mock LDAP server (`tests/integration/_mock_ldap_server.py`)
-  - [x] Active Directory schema support (memberOf attribute)
-  - [x] POSIX/OpenLDAP schema support (group search with member attribute)
-  - [x] **DN validation** - Returns `LDAP_INVALID_DN_SYNTAX` (error code 34) for malformed DNs
-  - [x] **Ambiguous result support** - Can return multiple entries for duplicate usernames
-- [x] Test end-to-end authentication flow (37 passing tests across multiple test files)
-  - **Active Directory Tests** (22 tests in `test_ldap.py`):
-    - [x] Basic authentication (admin, viewer, no groups)
-    - [x] User creation and attribute updates
-    - [x] Role mapping from memberOf attribute
-    - [x] Error handling (invalid credentials, nonexistent users, missing email)
-    - [x] Special characters in usernames (LDAP filter escaping)
-    - [x] Concurrent requests
-    - [x] `allow_sign_up` configuration (true/false, email fallback)
-  - **POSIX Group Search Tests** (6 tests in `test_ldap_posix.py`):
-    - [x] ADMIN role via group search
-    - [x] Multiple group membership with priority
-    - [x] **DN escaping for LDAP injection prevention** (special characters in DN)
-    - [x] Wildcard role assignment (no groups)
-    - [x] Case-insensitive DN matching (RFC 4514 compliance)
-    - [x] Graceful degradation on group search failure
-  - **Cross-Authentication Security** (4 tests):
-    - [x] LOCAL ↔ LDAP isolation
-    - [x] LDAP ↔ OAuth2 isolation
-    - [x] REST API marker validation
-  - **DN Validation & Ambiguous Results** (4 tests in `test_ldap.py::TestLDAPDNValidation`):
-    - [x] Mock server rejects invalid DN syntax
-    - [x] Duplicate username in different OUs rejected (security)
-- [x] Test group matching (memberOf, wildcards, case-insensitive)
-- [x] Test user creation and updates
-- [x] Test role mapping (ADMIN, MEMBER, VIEWER)
-- [x] Test error handling (invalid credentials, nonexistent users, missing fields)
-- [x] Test Phoenix-specific logic (email fallback, group priority, role downgrades)
-- [x] Test special characters in usernames (LDAP filter escaping)
-- [x] Test concurrent requests
-- [x] **Test ambiguous search result rejection** (duplicate usernames across OUs)
-- [ ] Test multi-server failover (deferred - requires multiple mock servers)
-- [x] Test TLS/LDAPS connections (validated via Docker TLS profile with real OpenLDAP + adversarial MITM proxy)
+**状态**：✅ **已完成**，全部单向门决策已对照 Grafana 源码验证。
 
-**Milestone 2.3: Security Hardening** ✅
-- [x] Verify LDAP injection prevention (ldap.py uses ldap3's escape_filter_chars)
-- [x] Test LDAP injection attempts (test_ldap_injection_prevention)
-- [x] Verify generic error messages (no username enumeration)
-  - [x] **Enhanced**: Replaced informative error messages with generic ones to prevent enumeration
-  - [x] LDAP login with existing OAuth2 email: "Invalid username and/or password" (was: 409 with specific message)
-  - [x] OAuth2 login attempt by LDAP user: "Sign in is not allowed." (was: specific LDAP message)
-- [x] Rate limiting configured on `/auth/ldap/login` (auth.py)
-- [x] **Security Enhancement**: Cross-authentication protection implemented
-  - [x] Prevent OIDC from hijacking LDAP users
-    - Detects `LDAP_CLIENT_ID_MARKER` and rejects OAuth2 login
-    - Returns generic "Sign in is not allowed" error
-  - [x] Prevent LDAP from creating duplicate OAuth2 accounts
-    - Checks for existing OAuth2 user with same email
-    - Returns generic "Invalid username and/or password" error (401)
-  - [x] Integration tests for cross-auth security
+**简要汇总**：
+- ✅ 已验证从 Grafana 适配的组角色映射结构（`group_dn`、`role`）
+- ✅ 已确认不区分大小写的 DN 匹配、通配符 `"*"` 支持
+- ✅ 已验证角色值“Admin”“Editor”“Viewer”，首字母大写
+- ✅ 已分析 Grafana 的双表设计（`user` + `user_auth`）与 Phoenix 单表鉴别字段
+- ✅ 已记录配置差异，Grafana 使用 TOML，Phoenix 使用环境变量
+- ✅ 已审阅 LDAP 注入防护、错误处理、TLS 和后台同步
+
+**完整详情参见**：[Grafana 源码研究](./ldap-authentication/grafana-comparison.md)
+
+**关键要求**，适配自 Grafana：
+1. **组角色映射 JSON** — 必须使用 `{"group_dn": "...", "role": "..."}` 格式；Phoenix 无组织概念，使用 `role` 而非 Grafana `org_role`
+2. **不区分大小写匹配** — 使用 `strings.EqualFold()` 比较 DN
+3. **通配符支持** — `"*"` 匹配所有用户，最先检查
+4. **角色值** — 直接使用 Phoenix 角色“ADMIN”“MEMBER”“VIEWER”，而非 Grafana 的“Admin”“Editor”“Viewer”
+5. **LDAP 注入** — 必须通过 `ldap.EscapeFilter()` 转义用户输入
+6. **默认超时** — 连接尝试 10 秒
+
+**实现说明**：Phoenix 在配置中直接使用内部角色名，去掉 Grafana 角色名中间层，简化实现，使配置更符合 Phoenix，同时保持 Grafana 行为模式，包括通配符、不区分大小写匹配和首次匹配优先。
+
+**检查清单**：
+- [x] 审阅 Grafana 源码，6 个文件
+- [x] 记录 JSON 结构兼容性
+- [x] 验证 DN 匹配逻辑
+- [x] 分析数据库结构差异
+- [x] 审阅安全模式，注入和 TLS
+- [x] 记录配置方式差异
+
+---
+
+<a id="phase-1-core-ldap-authentication--complete"></a>
+
+### 阶段 1：核心 LDAP 身份验证 ✅ **已完成**
+
+**目标**：实现带组角色映射的核心 LDAP 身份验证
+
+**里程碑 1.1：配置与数据模型** ✅
+- [x] 在 `src/phoenix/config.py` 添加 `LDAPConfig`
+- [x] 添加环境变量解析
+  - [x] 更新 `AuthSettings` 以包含 LDAP
+- [x] 添加必需字段校验
+
+**里程碑 1.2：LDAP 身份验证器** ✅
+- [x] 创建 `src/phoenix/server/ldap.py`
+- [x] 实现 `LDAPAuthenticator` 类
+  - [x] TLS 服务器连接
+  - [x] 服务账户绑定
+  - [x] 用户搜索
+  - [x] 用户身份验证
+  - [x] 属性获取
+  - [x] 组成员关系查询
+- [x] 辅助函数 `is_ldap_user()`，通过检查 `LDAP_CLIENT_ID_MARKER` 实现
+- [x] 说明：无需 `get_ldap_client_data()`，使用简单标记方案
+
+**里程碑 1.3：API 集成** ✅
+- [x] 添加 `/auth/ldap/login` 端点
+- [x] 实现用户创建和更新逻辑，集成至 ldap_login 端点
+- [x] 添加 JWT token 签发，使用现有 token 创建逻辑
+- [x] 为 `/auth/ldap/login` 添加限流
+- [ ] 更新健康检查以包含 LDAP 状态，延期，非 MVP 关键项
+
+---
+
+<a id="phase-2-testing--hardening--complete"></a>
+
+### 阶段 2：测试与加固 ✅ **已完成**
+
+**里程碑 2.1：单元测试** ✅
+- [x] 测试 `LDAPConfig` 校验，13 项测试用例
+- [x] 测试环境变量解析
+- [x] 测试组角色映射 JSON 校验
+- [x] 测试角色校验，ADMIN、MEMBER、VIEWER
+- [x] 测试 TLS 配置校验
+- [x] 测试组搜索配置校验
+
+**里程碑 2.2：集成测试** ✅
+- [x] 创建进程内模拟 LDAP 服务器（`tests/integration/_mock_ldap_server.py`）
+  - [x] 支持 Active Directory schema，memberOf 属性
+  - [x] 支持 POSIX/OpenLDAP schema，使用 member 属性搜索组
+  - [x] **DN 校验**，格式错误时返回 `LDAP_INVALID_DN_SYNTAX`，错误码 34
+  - [x] **歧义结果支持**，重复用户名可返回多个条目
+- [x] 测试端到端身份验证流程，多个测试文件共 37 项通过
+  - **Active Directory 测试**，`test_ldap.py` 中 22 项：
+    - [x] 基本身份验证，admin、viewer、无组
+    - [x] 用户创建与属性更新
+    - [x] 从 memberOf 属性映射角色
+    - [x] 错误处理，无效凭证、不存在用户、缺少邮箱
+    - [x] 用户名特殊字符，LDAP 过滤器转义
+    - [x] 并发请求
+    - [x] `allow_sign_up` 配置，true/false、邮箱回退
+  - **POSIX 组搜索测试**，`test_ldap_posix.py` 中 6 项：
+    - [x] 通过组搜索分配 ADMIN 角色
+    - [x] 多组成员关系与优先级
+    - [x] **DN 转义防止 LDAP 注入**，DN 特殊字符
+    - [x] 通配符角色分配，无组
+    - [x] 不区分大小写的 DN 匹配，符合 RFC 4514
+    - [x] 组搜索失败时平滑降级
+  - **跨身份验证方式安全**，4 项：
+    - [x] LOCAL ↔ LDAP 隔离
+    - [x] LDAP ↔ OAuth2 隔离
+    - [x] REST API 标记校验
+  - **DN 校验与歧义结果**，`test_ldap.py::TestLDAPDNValidation` 中 4 项：
+    - [x] 模拟服务器拒绝无效 DN 语法
+    - [x] 拒绝不同 OU 中的重复用户名，安全测试
+- [x] 测试组匹配，memberOf、通配符、不区分大小写
+- [x] 测试用户创建和更新
+- [x] 测试角色映射，ADMIN、MEMBER、VIEWER
+- [x] 测试错误处理，无效凭证、不存在用户、缺少字段
+- [x] 测试 Phoenix 特有逻辑，邮箱回退、组优先级、角色降级
+- [x] 测试用户名特殊字符，LDAP 过滤器转义
+- [x] 测试并发请求
+- [x] **测试拒绝歧义搜索结果**，跨 OU 重复用户名
+- [ ] 测试多服务器故障转移，延期，需要多个模拟服务器
+- [x] 测试 TLS/LDAPS 连接，已通过使用真实 OpenLDAP 和对抗性中间人代理的 Docker TLS 配置验证
+
+**里程碑 2.3：安全加固** ✅
+- [x] 验证 LDAP 注入防护，ldap.py 使用 ldap3 的 escape_filter_chars
+- [x] 测试 LDAP 注入尝试，test_ldap_injection_prevention
+- [x] 验证通用错误消息，防止用户名枚举
+  - [x] **增强**：将透露信息的错误消息替换为通用消息，防止枚举
+  - [x] LDAP 使用已有 OAuth2 邮箱登录："Invalid username and/or password"，此前为带具体消息的 409
+  - [x] LDAP 用户尝试 OAuth2 登录："Sign in is not allowed."，此前为 LDAP 专用消息
+- [x] 在 `/auth/ldap/login` 配置限流，auth.py
+- [x] **安全增强**：已实现跨身份验证方式保护
+  - [x] 防止 OIDC 劫持 LDAP 用户
+    - 检测 `LDAP_CLIENT_ID_MARKER` 并拒绝 OAuth2 登录
+    - 返回通用 "Sign in is not allowed" 错误
+  - [x] 防止 LDAP 创建 OAuth2 重复账户
+    - 检查相同邮箱的已有 OAuth2 用户
+    - 返回通用 "Invalid username and/or password" 错误，401
+  - [x] 跨验证方式安全集成测试
     - `test_ldap_user_cannot_login_via_oauth2`
     - `test_ldap_login_rejected_when_oauth2_user_exists`
-- [ ] Timing attack mitigations (basic implementation, could be enhanced)
-- [x] TLS security validation (STARTTLS/LDAPS tested via adversarial MITM proxy with OpenLDAP self-signed certs)
-- [x] **PII Protection in Logs** (privacy/compliance)
-  - [x] Removed usernames from 6 logging statements in `ldap.py`
-  - [x] Removed user DNs from ambiguous search error logging  
-  - [x] Replaced PII with generic messages and configuration hints
-  - [x] Maintains operational troubleshooting capability without exposing identities
+- [ ] 时序攻击防护，基础实现，可增强
+- [x] TLS 安全验证，使用 OpenLDAP 自签名证书和对抗性中间人代理测试 STARTTLS/LDAPS
+- [x] **日志中的个人身份信息保护**，隐私与合规
+  - [x] 从 `ldap.py` 的 6 条日志语句移除用户名
+  - [x] 从歧义搜索错误日志移除用户 DN
+    - [x] 使用通用消息和配置提示替代个人身份信息
+  - [x] 不暴露身份，仍保持运维排障能力
 
-**Milestone 2.4: Docker Development & Testing Environment** ✅
-- [x] Create Docker Compose LDAP profile (`scripts/docker/devops/overrides/ldap.yml`)
-  - [x] Real OpenLDAP server (osixia/openldap:1.5.0)
-  - [x] phpLDAPadmin web interface for LDAP management
-  - [x] Automated seed data loading via ldap-seed container
-  - [x] Phoenix integration with LDAP environment variables
-  - [x] Automated test runner container with Python test suite
-- [x] Create enhanced LDAP seed data (`scripts/docker/devops/ldap-seed.ldif`)
-  - [x] **11 test users** covering all edge cases (was 4 basic users)
-  - [x] **Organizational structure**: ou=users, ou=IT, ou=HR, ou=groups
-  - [x] **Edge case users**:
-    - [x] `nogroups` - User with NO groups (wildcard fallback)
-    - [x] `multigroup` - User in MULTIPLE groups (role precedence)
-    - [x] `nodisplay` - User with MISSING displayName (fallback logic)
-    - [x] `special(user)` - Username with SPECIAL characters (injection prevention)
-    - [x] `josé` - UNICODE username (UTF-8 support)
-    - [x] `duplicate` (IT & HR) - DUPLICATE usernames in different OUs (ambiguous rejection)
-  - [x] **3 groups**: admins, members, viewers with proper memberOf attributes
-- [x] Create rigorous test script (`scripts/docker/devops/scripts/test_ldap_integration.py`)
-  - [x] **14 comprehensive test cases** covering all success criteria
-  - [x] Tests all security controls (injection, anonymous bind, ambiguous results)
-  - [x] Tests all edge cases (no groups, multi-groups, special chars, unicode)
-  - [x] Tests error handling (invalid password, nonexistent user, empty credentials)
-  - [x] Automated execution on Docker Compose startup
-  - [x] **Test Results**: 14/14 PASSED ✅
-  - [x] Integrate into dev.sh workflow
-  - [x] `./dev.sh up --profile ldap` starts full LDAP environment
-  - [x] `docker logs devops-ldap-test` shows test results
-  - [x] LDAP Admin accessible at http://localhost:6443
+**里程碑 2.4：Docker 开发与测试环境** ✅
+- [x] 创建 Docker Compose LDAP 配置（`scripts/docker/devops/overrides/ldap.yml`）
+  - [x] 真实 OpenLDAP 服务器，osixia/openldap:1.5.0
+  - [x] 用于 LDAP 管理的 phpLDAPadmin Web 界面
+  - [x] 通过 ldap-seed 容器自动加载种子数据
+  - [x] 使用 LDAP 环境变量集成 Phoenix
+  - [x] 运行 Python 测试套件的自动测试容器
+- [x] 创建增强 LDAP 种子数据（`scripts/docker/devops/ldap-seed.ldif`）
+  - [x] **11 名测试用户**，覆盖全部边界情况，此前为 4 名基础用户
+  - [x] **组织结构**：ou=users、ou=IT、ou=HR、ou=groups
+  - [x] **边界用户**：
+    - [x] `nogroups` — 无组用户，通配符回退
+    - [x] `multigroup` — 多组用户，角色优先级
+    - [x] `nodisplay` — 缺少 displayName，回退逻辑
+    - [x] `special(user)` — 用户名有特殊字符，注入防护
+    - [x] `josé` — Unicode 用户名，UTF-8 支持
+    - [x] `duplicate`（IT 和 HR）— 不同 OU 中重复用户名，拒绝歧义
+  - [x] **3 个组**：admins、members、viewers，具有正确 memberOf 属性
+- [x] 创建严格测试脚本（`scripts/docker/devops/scripts/test_ldap_integration.py`）
+  - [x] **14 项全面测试**，覆盖全部成功标准
+  - [x] 测试全部安全控制，注入、匿名绑定、歧义结果
+  - [x] 测试全部边界情况，无组、多组、特殊字符、Unicode
+  - [x] 测试错误处理，无效密码、不存在用户、空凭证
+  - [x] Docker Compose 启动时自动执行
+  - [x] **测试结果**：14/14 通过 ✅
+  - [x] 集成至 dev.sh 工作流
+  - [x] `./dev.sh up --profile ldap` 启动完整 LDAP 环境
+  - [x] `docker logs devops-ldap-test` 显示测试结果
+  - [x] LDAP 管理界面位于 http://localhost:6443
 
-**Milestone 2.5: TLS Security Testing & Adversarial Validation** ✅
-- [x] Create Docker Compose TLS profile (`scripts/docker/devops/overrides/ldap-test.yml`)
-  - [x] OpenLDAP with TLS enabled (auto-generated self-signed certificates)
-  - [x] Phoenix STARTTLS instance (port 6007, STARTTLS mode)
-  - [x] Phoenix LDAPS instance (port 6008, LDAPS mode)
-  - [x] Grafana LDAP instance (port 3000, comparison baseline)
-  - [x] Adversarial MITM proxy (port 3389, credential extraction)
-  - [x] Automated test runner executing comprehensive security validation
-- [x] Implement adversarial MITM proxy (`scripts/docker/devops/scripts/ldap_mitm_proxy.py`)
-  - [x] LDAP ASN.1/BER protocol parsing for bind request analysis
-  - [x] Credential extraction from Simple Authentication (RFC 4513 §5.1.1)
-  - [x] StartTLS and TLS handshake detection
-  - [x] Credential verification against real LDAP server
-  - [x] Structured JSON logging for automated analysis
-  - [x] Application identification via reverse DNS
-- [x] Implement comprehensive test suite (`scripts/docker/devops/scripts/test_ldap_tls.py`)
-  - [x] **Phase 1: Baseline** - Direct LDAP connectivity tests (plaintext, STARTTLS, LDAPS)
-  - [x] **Phase 2: Applications** - Phoenix STARTTLS/LDAPS + Grafana STARTTLS via MITM proxy
-  - [x] **Phase 3: Adversarial** - MITM proxy log analysis + credential verification
-  - [x] Exit codes: 0 = all tests passed, 1 = failures detected
-  - [x] **Test Results**: 7/7 PASSED ✅
-- [x] Fix STARTTLS vulnerability in Phoenix (`src/phoenix/server/ldap.py`)
-  - [x] Service account binds use `AUTO_BIND_TLS_BEFORE_BIND` for STARTTLS mode
-  - [x] User password verification calls `start_tls()` before `bind()` for STARTTLS
-  - [x] LDAPS mode unaffected (TLS from start)
-- [x] Validation results documented (`scripts/docker/devops/LDAP-TLS-TESTING.md`)
-  - [x] **Phoenix**: ✅ SECURE - MITM proxy extracted 0 credentials
-  - [x] **Grafana v11.4**: 🚨 VULNERABLE - MITM proxy extracted 2 credentials
-  - [x] Comprehensive architecture diagrams and test flow documentation
-- [x] Integrate into dev.sh workflow
-  - [x] `./dev.sh up --profile ldap-test` starts full TLS test environment
-  - [x] `docker logs devops-ldap-test` shows automated test results
-  - [x] `docker logs devops-ldap-mitm-proxy` shows adversarial analysis
-
----
-
-### Phase 3: Frontend & Documentation ✅ **COMPLETE**
-
-**Milestone 3.1: Frontend Components** ✅ **COMPLETE**
-- [x] Create `LDAPLoginForm.tsx` (username + password form, POSTs to `/auth/ldap/login`)
-- [x] Update `LoginPage.tsx` to include LDAP form with conditional rendering
-- [x] Update `NewUserDialog.tsx` with LDAP tab for admin user creation
-- [x] Update `UsersTable.tsx` to display LDAP users correctly (no changes needed - works automatically)
-- [x] Add `"LDAP"` to GraphQL `AuthMethod` enum
-- [x] Update `window.Config` to include `ldapEnabled` flag
-- [x] Update backend `AppConfig` and `index.html` template to expose `ldapEnabled`
-
-**Implementation Details**:
-- **End-User Login**: `LDAPLoginForm.tsx` accepts username/password, sanitizes input, handles errors (401, 429), shows loading state
-- **Admin User Creation**: `NewUserDialog.tsx` includes tabbed interface (Local/OAuth2/LDAP) with intelligent default tab selection
-- **Separator Logic**: "or" separators correctly shown between Local/LDAP and OAuth2 sections
-- **Config Propagation**: Backend → `window.Config.ldapEnabled` → Frontend conditional rendering
-
-**Milestone 3.2: Documentation** ✅ **COMPLETE**
-- [x] Configuration guide (environment variables) - See [Configuration Reference](./ldap-authentication/configuration.md)
-- [x] Group role mapping examples - See [Configuration Reference](./ldap-authentication/configuration.md)
-- [x] Database schema documentation - See [Database Schema](./ldap-authentication/database-schema.md)
-- [x] Security considerations - See [Security Deep-Dive](./ldap-authentication/security.md)
-- [x] Migration guide (Approach 1 → 2) - See [Migration Plan](./ldap-authentication/migration-plan.md)
-- [x] Grafana compatibility analysis - See [Grafana Comparison](./ldap-authentication/grafana-comparison.md)
-- [ ] Active Directory setup guide (user-facing docs - TBD)
-- [ ] OpenLDAP setup guide (user-facing docs - TBD)
-- [ ] Troubleshooting guide (user-facing docs - TBD)
+**里程碑 2.5：TLS 安全测试与对抗验证** ✅
+- [x] 创建 Docker Compose TLS 配置（`scripts/docker/devops/overrides/ldap-test.yml`）
+  - [x] 启用 TLS 的 OpenLDAP，自动生成自签名证书
+  - [x] Phoenix STARTTLS 实例，端口 6007，STARTTLS 模式
+  - [x] Phoenix LDAPS 实例，端口 6008，LDAPS 模式
+  - [x] Grafana LDAP 实例，端口 3000，比较基准
+  - [x] 对抗性中间人代理，端口 3389，提取凭证
+  - [x] 自动测试运行器执行完整安全验证
+- [x] 实现对抗性中间人代理（`scripts/docker/devops/scripts/ldap_mitm_proxy.py`）
+  - [x] LDAP ASN.1/BER 协议解析，分析绑定请求
+  - [x] 从简单身份验证（RFC 4513 §5.1.1）提取凭证
+  - [x] StartTLS 和 TLS 握手检测
+  - [x] 使用真实 LDAP 服务器验证凭证
+  - [x] 结构化 JSON 日志，供自动分析
+  - [x] 通过反向 DNS 识别应用
+- [x] 实现完整测试套件（`scripts/docker/devops/scripts/test_ldap_tls.py`）
+  - [x] **阶段 1：基线** — 直接 LDAP 连通性测试，明文、STARTTLS、LDAPS
+  - [x] **阶段 2：应用** — Phoenix STARTTLS/LDAPS，以及经中间人代理的 Grafana STARTTLS
+  - [x] **阶段 3：对抗** — 中间人代理日志分析和凭证验证
+  - [x] 退出码：0 表示全部通过，1 表示发现失败
+  - [x] **测试结果**：7/7 通过 ✅
+- [x] 修复 Phoenix STARTTLS 漏洞（`src/phoenix/server/ldap.py`）
+  - [x] STARTTLS 模式服务账户绑定使用 `AUTO_BIND_TLS_BEFORE_BIND`
+  - [x] STARTTLS 用户密码验证在 `bind()` 前调用 `start_tls()`
+  - [x] LDAPS 模式不受影响，从开始即使用 TLS
+- [x] 记录验证结果（`scripts/docker/devops/LDAP-TLS-TESTING.md`）
+  - [x] **Phoenix**：✅ 安全，中间人代理提取 0 个凭证
+  - [x] **Grafana v11.4**：🚨 存在漏洞，中间人代理提取 2 个凭证
+  - [x] 完整架构图和测试流程文档
+- [x] 集成至 dev.sh 工作流
+  - [x] `./dev.sh up --profile ldap-test` 启动完整 TLS 测试环境
+  - [x] `docker logs devops-ldap-test` 显示自动测试结果
+  - [x] `docker logs devops-ldap-mitm-proxy` 显示对抗分析
 
 ---
 
-### Technical Validation Required
+<a id="phase-3-frontend--documentation--complete"></a>
 
-Before production release:
+### 阶段 3：前端与文档 ✅ **已完成**
 
-1. **Spike Phase** (early validation with real LDAP): ✅ **COMPLETE**
-   - [x] Test ldap3 library with real OpenLDAP instance (Docker + 11 test users)
-   - [x] Test group membership queries (memberOf) against real directory
-   - [x] Measure authentication latency in realistic environment (< 2s P95)
-   - [x] Validate configuration patterns work end-to-end (14/14 tests passed)
-   - [x] Validate ambiguous search result handling (duplicate users across OUs)
-   - [x] Verify STARTTLS/LDAPS compatibility with real LDAP server (OpenLDAP with self-signed certs)
-   - [x] **STARTTLS security validated** - Adversarial MITM proxy confirms no plaintext credential transmission
-   - [ ] Test with real Active Directory instance (OpenLDAP validated, AD pending)
-   
-   **Note**: This complements automated integration tests (in-process mock LDAP server in Milestone 2.2). Real OpenLDAP Docker environment validates production scenarios with actual protocol implementation.
+**里程碑 3.1：前端组件** ✅ **已完成**
+- [x] 创建 `LDAPLoginForm.tsx`，用户名和密码表单，POST 至 `/auth/ldap/login`
+- [x] 更新 `LoginPage.tsx`，条件渲染 LDAP 表单
+- [x] 更新 `NewUserDialog.tsx`，添加管理员创建用户的 LDAP 选项卡
+- [x] 更新 `UsersTable.tsx` 正确显示 LDAP 用户，无需变更，自动支持
+- [x] 向 GraphQL `AuthMethod` 枚举添加 `"LDAP"`
+- [x] 更新 `window.Config`，包含 `ldapEnabled` 标志
+- [x] 更新后端 `AppConfig` 和 `index.html` 模板，公开 `ldapEnabled`
 
-2. **Security Review**: ✅ **COMPLETE**
-   - [x] LDAP injection prevention verified (uses ldap3.escape_filter_chars, tested)
-   - [x] Username enumeration prevention verified (generic error messages implemented)
-   - [x] Rate limiting configured (10 attempts/minute on /auth/ldap/login)
-   - [x] Cross-authentication security verified (LDAP↔OAuth2 isolation)
-   - [x] **Ambiguous search result rejection** (non-deterministic auth prevention)
-   - [x] **PII protection** - Removed usernames/DNs from all logs (GDPR/CCPA compliance)
-   - [x] **Anonymous bind prevention** - Explicit empty credential checks (security)
-   - [x] **STARTTLS sequencing validated** - Adversarial MITM proxy with ASN.1/BER parsing confirms TLS upgrade before bind
-   - [x] **DN case-insensitivity** - Normalized storage prevents account duplication/lockout (RFC 4514 compliance)
-   - [x] **TLS mode-aware port defaulting** - LDAPS defaults to 636, STARTTLS defaults to 389
+**实现详情**：
+- **终端用户登录**：`LDAPLoginForm.tsx` 接受用户名和密码、清理输入、处理 401/429 错误并显示加载状态
+- **管理员创建用户**：`NewUserDialog.tsx` 包含 Local/OAuth2/LDAP 选项卡界面，智能选择默认选项卡
+- **分隔符逻辑**：在 Local/LDAP 与 OAuth2 部分之间正确显示“or”分隔符
+- **配置传播**：后端 → `window.Config.ldapEnabled` → 前端条件渲染
 
-3. **Performance Testing**: ⏳ **PENDING**
-   - [ ] P95 login latency < 2 seconds
-   - [ ] Connection pooling effectiveness measured
-   - [ ] Graceful degradation when LDAP unavailable
-   - [ ] Multi-server failover latency acceptable
+**里程碑 3.2：文档** ✅ **已完成**
+- [x] 配置指南，环境变量，参见[配置参考](./ldap-authentication/configuration.md)
+- [x] 组角色映射示例，参见[配置参考](./ldap-authentication/configuration.md)
+- [x] 数据库结构文档，参见[数据库结构](./ldap-authentication/database-schema.md)
+- [x] 安全考虑，参见[安全详解](./ldap-authentication/security.md)
+- [x] 方案 1 → 2 迁移指南，参见[迁移计划](./ldap-authentication/migration-plan.md)
+- [x] Grafana 兼容性分析，参见[Grafana 对比](./ldap-authentication/grafana-comparison.md)
+- [ ] Active Directory 设置指南，面向用户文档，待定
+- [ ] OpenLDAP 设置指南，面向用户文档，待定
+- [ ] 排障指南，面向用户文档，待定
 
 ---
 
-## Appendices
+<a id="technical-validation-required"></a>
 
-Detailed technical references, design decisions, and implementation guides have been extracted to separate files for easier navigation and maintenance.
+### 所需技术验证
 
-### 📚 Complete Appendix Index
+生产发布前：
 
-See **[ldap-authentication/README.md](./ldap-authentication/README.md)** for the full navigation guide.
+1. **探索阶段**，尽早通过真实 LDAP 验证：✅ **已完成**
+   - [x] 使用真实 OpenLDAP 实例测试 ldap3，Docker 与 11 名测试用户
+   - [x] 针对真实目录测试组成员关系查询，memberOf
+   - [x] 在真实环境测量身份验证延迟，P95 小于 2 秒
+   - [x] 验证配置模式端到端可用，14/14 项测试通过
+   - [x] 验证歧义搜索结果处理，跨 OU 重复用户
+   - [x] 验证真实 LDAP 服务器的 STARTTLS/LDAPS 兼容性，OpenLDAP 使用自签名证书
+   - [x] **STARTTLS 安全已验证**，对抗性中间人代理确认无明文凭证传输
+   - [ ] 使用真实 Active Directory 实例测试，OpenLDAP 已验证，AD 待验证
 
-### Quick Reference
+   **说明**：这补充里程碑 2.2 中使用进程内模拟 LDAP 服务器的自动集成测试。真实 OpenLDAP Docker 环境使用实际协议实现验证生产场景。
 
-**Implementation Guides**:
-- [Configuration Reference](./ldap-authentication/configuration.md) - Environment variables, Phoenix vs. Grafana comparison, examples
-- [Code Examples](./ldap-authentication/code-examples.md) - LDAPConfig dataclass, LDAPAuthenticator, API endpoints
-- [Frontend Implementation](./ldap-authentication/frontend-implementation.md) - React components, LoginPage updates
-- [Phoenix Integration](./ldap-authentication/phoenix-integration.md) - AuthSettings integration details
+2. **安全审查**：✅ **已完成**
+   - [x] LDAP 注入防护已验证，使用 ldap3.escape_filter_chars，已测试
+   - [x] 用户名枚举防护已验证，已实现通用错误消息
+   - [x] 已配置限流，/auth/ldap/login 每分钟 10 次尝试
+   - [x] 跨身份验证方式安全已验证，LDAP↔OAuth2 隔离
+   - [x] **拒绝歧义搜索结果**，防止非确定性身份验证
+   - [x] **个人身份信息保护**，从全部日志移除用户名/DN，符合 GDPR/CCPA
+   - [x] **防止匿名绑定**，显式空凭证安全检查
+   - [x] **STARTTLS 顺序已验证**，带 ASN.1/BER 解析的对抗性中间人代理确认先升级 TLS 再绑定
+   - [x] **DN 不区分大小写**，规范存储防止重复账户和无法登录，符合 RFC 4514
+   - [x] **按 TLS 模式默认端口**，LDAPS 默认 636，STARTTLS 默认 389
 
-**Design & Architecture**:
-- [Database Schema](./ldap-authentication/database-schema.md) - Option 1 (zero-migration) vs. Option 2 (dedicated columns)
-- [User Identification Strategy](./ldap-authentication/user-identification-strategy.md) - Email/Unique ID identification
-- [Decision Reversibility](./ldap-authentication/decision-reversibility.md) - One-way vs. two-way door analysis
-- [Migration Plan](./ldap-authentication/migration-plan.md) - Approach 1 → 2 migration guide (if needed)
-
-**Security & Compliance**:
-- [Security Deep-Dive](./ldap-authentication/security.md) - Threat model, injection prevention, TLS, rate limiting
-- [Protocol Compliance](./ldap-authentication/protocol-compliance.md) - OpenLDAP validation, STARTTLS security, group DN matching
-- [Collision Prevention](./ldap-authentication/collision-prevention.md) - Unicode marker safety analysis
-
-**Research & Comparison**:
-- [Grafana Comparison](./ldap-authentication/grafana-comparison.md) - Source code research, compatibility findings
-- [Background Sync (Future)](./ldap-authentication/background-sync-future.md) - Post-MVP enterprise feature design
-
-**Future Roadmap**:
-- [Future Improvements](./ldap-authentication/future-improvements.md) - Password policy, metrics, nested groups, retry logic
+3. **性能测试**：⏳ **待完成**
+   - [ ] P95 登录延迟小于 2 秒
+   - [ ] 衡量连接池有效性
+   - [ ] LDAP 不可用时平滑降级
+   - [ ] 多服务器故障转移延迟可接受
 
 ---
 
-## End of Document
+<a id="appendices"></a>
+
+## 附录
+
+详细技术参考、设计决策和实现指南已提取为独立文件，便于导航和维护。
+
+<a id="-complete-appendix-index"></a>
+
+### 📚 完整附录索引
+
+完整导航指南参见 **[ldap-authentication/README.md](./ldap-authentication/README.md)**。
+
+<a id="quick-reference"></a>
+
+### 快速参考
+
+**实现指南**：
+- [配置参考](./ldap-authentication/configuration.md) — 环境变量、Phoenix 与 Grafana 对比、示例
+- [代码示例](./ldap-authentication/code-examples.md) — LDAPConfig 数据类、LDAPAuthenticator、API 端点
+- [前端实现](./ldap-authentication/frontend-implementation.md) — React 组件、LoginPage 更新
+- [Phoenix 集成](./ldap-authentication/phoenix-integration.md) — AuthSettings 集成详情
+
+**设计与架构**：
+- [数据库结构](./ldap-authentication/database-schema.md) — 方案 1 零迁移，与方案 2 独立列
+- [用户识别策略](./ldap-authentication/user-identification-strategy.md) — 邮箱/唯一 ID 识别
+- [决策可逆性](./ldap-authentication/decision-reversibility.md) — 单向门与双向门分析
+- [迁移计划](./ldap-authentication/migration-plan.md) — 需要时采用的方案 1 → 2 迁移指南
+
+**安全与合规**：
+- [安全详解](./ldap-authentication/security.md) — 威胁模型、注入防护、TLS、限流
+- [协议合规性](./ldap-authentication/protocol-compliance.md) — OpenLDAP 验证、STARTTLS 安全、组 DN 匹配
+- [冲突预防](./ldap-authentication/collision-prevention.md) — Unicode 标记安全分析
+
+**研究与对比**：
+- [Grafana 对比](./ldap-authentication/grafana-comparison.md) — 源码研究、兼容性发现
+- [后台同步（未来）](./ldap-authentication/background-sync-future.md) — MVP 后的企业功能设计
+
+**未来路线图**：
+- [未来改进](./ldap-authentication/future-improvements.md) — 密码策略、指标、嵌套组、重试逻辑
+
+---
+
+<a id="end-of-document"></a>
+
+## 文档结束

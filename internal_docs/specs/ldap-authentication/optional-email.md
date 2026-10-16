@@ -1,35 +1,49 @@
-# Optional Email for LDAP Users
+<a id="optional-email-for-ldap-users"></a>
 
-## Problem Statement
+# LDAP 用户邮箱可选
 
-Some LDAP directories do not populate the `mail` attribute for users. Currently, Phoenix requires email for all users due to a database constraint (`email VARCHAR NOT NULL`). This prevents organizations without email in their LDAP from using Phoenix's LDAP authentication.
+<a id="problem-statement"></a>
 
-**User request:** Support LDAP authentication when `PHOENIX_LDAP_ATTR_EMAIL` is empty or the attribute doesn't exist.
+## 问题说明
 
-## Constraints
+某些 LDAP 目录未为用户填充 `mail` 属性。当前 Phoenix 因数据库约束（`email VARCHAR NOT NULL`）而要求所有用户具有邮箱，导致 LDAP 中没有邮箱的组织无法使用 Phoenix LDAP 身份验证。
 
-1. **Database schema cannot change immediately** - `email` column is `NOT NULL` with a unique index
-2. **Email is used throughout the codebase** - UI display, welcome emails, password reset, admin checks
-3. **Must maintain user lookup integrity** - Need stable identifier for returning users
+**用户需求：**在 `PHOENIX_LDAP_ATTR_EMAIL` 为空或属性不存在时支持 LDAP 身份验证。
 
-## Solution Overview
+<a id="constraints"></a>
 
-### Two-Phase Approach
+## 约束
 
-| Phase | Solution | Timeline |
+1. **数据库结构无法立即更改** — `email` 列具有 `NOT NULL` 约束和唯一索引
+2. **代码库广泛使用邮箱** — UI 显示、欢迎邮件、密码重置和管理员检查
+3. **必须保持用户查找完整性** — 需要稳定标识符识别回访用户
+
+<a id="solution-overview"></a>
+
+## 方案概览
+
+<a id="two-phase-approach"></a>
+
+### 两阶段方案
+
+| 阶段 | 方案 | 时间 |
 |-------|----------|----------|
-| **Phase 1 (Bridge)** | Placeholder email with PUA marker | Now |
-| **Phase 2 (Final)** | Make `email` column nullable | Future |
+| **阶段 1（过渡）** | 带 PUA 标记的占位邮箱 | 现在 |
+| **阶段 2（最终）** | 允许 `email` 列为空 | 未来 |
 
-The bridge solution allows immediate support for email-less LDAP while the eventual solution provides a cleaner long-term approach.
+过渡方案可立即支持无邮箱 LDAP，最终方案则提供更整洁的长期实现。
 
 ---
 
-## Phase 1: Bridge Solution (Placeholder)
+<a id="phase-1-bridge-solution-placeholder"></a>
 
-### Design
+## 阶段 1：过渡方案（占位值）
 
-When `PHOENIX_LDAP_ATTR_EMAIL` is empty, Phoenix generates a **placeholder** to satisfy the `NOT NULL` constraint:
+<a id="design"></a>
+
+### 设计
+
+`PHOENIX_LDAP_ATTR_EMAIL` 为空时，Phoenix 生成**占位值**，满足 `NOT NULL` 约束：
 
 ```python
 from hashlib import md5
@@ -59,27 +73,33 @@ def is_null_email_marker(email: str) -> bool:
     return email.startswith(NULL_EMAIL_MARKER_PREFIX)
 ```
 
-### Why This Format?
+<a id="why-this-format"></a>
 
-| Component | Purpose |
+### 为什么采用此格式？
+
+| 组成 | 用途 |
 |-----------|---------|
-| `\uE000` (PUA) | Invisible marker for programmatic detection |
-| `NULL` | Human-readable indicator that email is absent |
-| `md5(unique_id)` | Deterministic hash (32 hex chars) for uniqueness |
+| `\uE000`（PUA） | 不可见标记，供程序检测 |
+| `NULL` | 人类可读，表示邮箱缺失 |
+| `md5(unique_id)` | 确定性哈希，32 位十六进制字符，确保唯一性 |
 
-### Why Hash Instead of Random?
+<a id="why-hash-instead-of-random"></a>
 
-| Approach | Pros | Cons |
+### 为什么使用哈希而非随机值？
+
+| 方案 | 优点 | 缺点 |
 |----------|------|------|
-| `token_hex(8)` | Simple | Different placeholder on each login attempt |
-| `md5(unique_id)` | **Deterministic**, no race conditions | Requires unique_id (already required) |
+| `token_hex(8)` | 简单 | 每次登录尝试产生不同占位值 |
+| `md5(unique_id)` | **确定性**，无竞态条件 | 需要 unique_id，本身已必需 |
 
-Using a hash means:
-- **Idempotent creation** - Concurrent logins for the same user produce the same placeholder
-- **Stable lookups** - Can look up by placeholder email if needed (edge cases)
-- **No accidental duplicates** - Same unique_id always maps to same placeholder
+使用哈希意味着：
+- **幂等创建** — 同一用户并发登录产生相同占位值
+- **稳定查找** — 边界情况下可按占位邮箱查找
+- **无意外重复** — 相同 unique_id 始终映射至相同占位值
 
-### Configuration
+<a id="configuration"></a>
+
+### 配置
 
 ```bash
 # LDAP with email (default)
@@ -90,14 +110,16 @@ PHOENIX_LDAP_ATTR_EMAIL=
 PHOENIX_LDAP_ATTR_UNIQUE_ID=objectGUID  # Required when email is empty
 ```
 
-**Validation rule:** `PHOENIX_LDAP_ATTR_UNIQUE_ID` is **required** when `PHOENIX_LDAP_ATTR_EMAIL` is empty.
+**校验规则：**`PHOENIX_LDAP_ATTR_EMAIL` 为空时，**必须**设置 `PHOENIX_LDAP_ATTR_UNIQUE_ID`。
 
-### Why Require Unique ID?
+<a id="why-require-unique-id"></a>
 
-The `unique_id` serves two purposes:
+### 为什么必须使用唯一 ID？
 
-1. **User lookup** - Primary identifier for returning users
-2. **Placeholder generation** - Hash input for deterministic placeholder email
+`unique_id` 有两个用途：
+
+1. **用户查找** — 回访用户的主要标识符
+2. **占位值生成** — 确定性占位邮箱的哈希输入
 
 ```python
 # unique_id is used for both:
@@ -105,11 +127,15 @@ user = await _lookup_by_unique_id(session, unique_id)  # Lookup
 placeholder = generate_null_email_marker(unique_id)  # Generation
 ```
 
-Without `unique_id`, we have nothing to hash and no way to identify returning users.
+没有 `unique_id`，既无内容可哈希，也无法识别回访用户。
 
-### Implementation Changes
+<a id="implementation-changes"></a>
 
-#### 1. Configuration (`src/phoenix/config.py`)
+### 实现变更
+
+<a id="1-configuration-srcphoenixconfigpy"></a>
+
+#### 1. 配置（`src/phoenix/config.py`）
 
 ```python
 # Allow empty attr_email
@@ -135,7 +161,9 @@ if not attr_email:
         )
 ```
 
-#### 2. LDAPUserInfo (`src/phoenix/server/ldap.py`)
+<a id="2-ldapuserinfo-srcphoenixserverldappy"></a>
+
+#### 2. LDAPUserInfo（`src/phoenix/server/ldap.py`）
 
 ```python
 class LDAPUserInfo(NamedTuple):
@@ -148,7 +176,9 @@ class LDAPUserInfo(NamedTuple):
     unique_id: str | None = None
 ```
 
-#### 3. Authentication (`src/phoenix/server/ldap.py`)
+<a id="3-authentication-srcphoenixserverldappy"></a>
+
+#### 3. 身份验证（`src/phoenix/server/ldap.py`）
 
 ```python
 # In _authenticate()
@@ -167,7 +197,9 @@ else:
 return LDAPUserInfo(email=email, ...)
 ```
 
-#### 4. User Creation (`src/phoenix/server/api/routers/ldap.py`)
+<a id="4-user-creation-srcphoenixserverapiroutersldappy"></a>
+
+#### 4. 用户创建（`src/phoenix/server/api/routers/ldap.py`）
 
 ```python
 async def get_or_create_ldap_user(
@@ -216,9 +248,11 @@ async def get_or_create_ldap_user(
     return user
 ```
 
-#### 5. Email Sending (`src/phoenix/server/email/sender.py`)
+<a id="5-email-sending-srcphoenixserveremailsenderpy"></a>
 
-Email sending naturally handles null email markers without explicit checks. The `email_validator` library validates email format before sending, and null email markers (which have no `@` symbol) fail validation:
+#### 5. 邮件发送（`src/phoenix/server/email/sender.py`）
+
+邮件发送自然处理空邮箱标记，无需显式检查。`email_validator` 库在发送前校验邮箱格式，而空邮箱标记不含 `@` 符号，因此无法通过校验：
 
 ```python
 async def send_welcome_email(self, email: str, name: str) -> None:
@@ -239,14 +273,16 @@ async def send_password_reset_email(self, email: str, reset_url: str) -> None:
     # ... existing logic ...
 ```
 
-This approach is preferred over explicit `is_null_email_marker()` checks because:
-- It handles all invalid emails, not just null markers
-- Email validation is already required before sending
-- No additional imports or coupling to LDAP-specific code
+此方式优于显式 `is_null_email_marker()` 检查，因为：
+- 处理所有无效邮箱，而不仅是空值标记
+- 发送前本就需要邮箱校验
+- 无额外导入，不与 LDAP 专用代码耦合
 
-#### 6. GraphQL Layer (`src/phoenix/server/api/types/User.py`)
+<a id="6-graphql-layer-srcphoenixserverapitypesuserpy"></a>
 
-The GraphQL resolver filters out null email markers at the API boundary, returning `None` (GraphQL `null`):
+#### 6. GraphQL 层（`src/phoenix/server/api/types/User.py`）
+
+GraphQL 解析器在 API 边界过滤空邮箱标记，返回 `None`，即 GraphQL `null`：
 
 ```python
 from phoenix.server.ldap import is_null_email_marker
@@ -260,11 +296,13 @@ async def email(self, info: Info[Context, None]) -> str | None:
     return val
 ```
 
-This keeps the placeholder detection logic on the backend, so the frontend never sees the marker format. The GraphQL schema declares `email: String` (nullable).
+这样将占位值检测逻辑保留在后端，前端永远看不到标记格式。GraphQL schema 声明 `email: String`，允许为空。
 
-#### 6b. REST API Layer (`src/phoenix/server/api/routers/v1/users.py`)
+<a id="6b-rest-api-layer-srcphoenixserverapiroutersv1userspy"></a>
 
-The REST API returns empty string `""` instead of `null` to maintain backwards compatibility with existing API consumers:
+#### 6b. REST API 层（`src/phoenix/server/api/routers/v1/users.py`）
+
+REST API 返回空字符串 `""` 而非 `null`，以保持与现有 API 使用方的向后兼容：
 
 ```python
 from phoenix.server.ldap import is_null_email_marker
@@ -273,15 +311,17 @@ from phoenix.server.ldap import is_null_email_marker
 email = ("" if is_null_email_marker(user.email) else user.email,)
 ```
 
-**Why `""` instead of `null`?**
-- The REST API has an established contract where `email` is always a string
-- Changing to `null` could break existing integrations that expect a string type
-- Empty string is falsy in most languages, so consumers can check truthiness
-- GraphQL can use `null` because the schema change (`String!` → `String`) is explicit
+**为何返回 `""` 而非 `null`？**
+- REST API 已有契约，`email` 始终是字符串
+- 改为 `null` 可能破坏预期字符串类型的现有集成
+- 大多数语言中空字符串为假值，使用方可检查真假值
+- GraphQL 可使用 `null`，因为 schema 变化（`String!` → `String`）是显式的
 
-#### 7. Frontend
+<a id="7-frontend"></a>
 
-**Server injects config into window object:**
+#### 7. 前端
+
+**服务器向 window 对象注入配置：**
 
 ```tsx
 declare global {
@@ -294,24 +334,26 @@ declare global {
 }
 ```
 
-> **Note:** No `nullEmailMarkerPrefix` is needed in the frontend config. The backend GraphQL layer returns `null` for null email markers, so the frontend simply checks for truthy email values.
+> **说明：**前端配置无需 `nullEmailMarkerPrefix`。后端 GraphQL 层为空邮箱标记返回 `null`，前端只需检查邮箱是否为真值。
 
-#### 8. UI Components
+<a id="8-ui-components"></a>
 
-**Full survey of email usage in frontend:**
+#### 8. UI 组件
 
-| File | Current Usage | Change Needed |
+**前端邮箱使用情况完整调查：**
+
+| 文件 | 当前用途 | 所需变更 |
 |------|---------------|---------------|
-| `UsersCard.tsx` | "Add User" button | Disable when no user creation method is available |
-| `UsersTable.tsx` | Displays email as mailto link | Hide when email is empty |
-| `ViewerProfileCard.tsx` | Shows email in profile card | Hide when email is empty |
-| `UserAPIKeysTable.tsx` | Displays user email in table | Changed to display username instead of email |
-| `LDAPUserForm.tsx` | Email input for creating LDAP users | No change (only rendered when `ldapManualUserCreationEnabled=true`) |
-| `NewUserDialog.tsx` | Creates users with email | Hide LDAP option when `ldapManualUserCreationEnabled=false` |
-| `UserForm.tsx` | Email input for local users | No change (local users have real email) |
-| `OAuthUserForm.tsx` | Email input for OAuth users | No change (OAuth users have real email) |
-| `LoginForm.tsx` | Email for local auth login | No change (placeholder rejected server-side) |
-| `ForgotPasswordForm.tsx` | Email for password reset | No change (LDAP users don't use password reset) |
+| `UsersCard.tsx` | “Add User”按钮 | 没有可用用户创建方法时禁用 |
+| `UsersTable.tsx` | 以 mailto 链接显示邮箱 | 邮箱为空时隐藏 |
+| `ViewerProfileCard.tsx` | 在个人资料卡片显示邮箱 | 邮箱为空时隐藏 |
+| `UserAPIKeysTable.tsx` | 在表格显示用户邮箱 | 改为显示用户名 |
+| `LDAPUserForm.tsx` | 创建 LDAP 用户的邮箱输入 | 无需变更，仅在 `ldapManualUserCreationEnabled=true` 时渲染 |
+| `NewUserDialog.tsx` | 使用邮箱创建用户 | `ldapManualUserCreationEnabled=false` 时隐藏 LDAP 选项 |
+| `UserForm.tsx` | 本地用户邮箱输入 | 无需变更，本地用户有真实邮箱 |
+| `OAuthUserForm.tsx` | OAuth 用户邮箱输入 | 无需变更，OAuth 用户有真实邮箱 |
+| `LoginForm.tsx` | 本地身份验证登录邮箱 | 无需变更，服务端拒绝占位值 |
+| `ForgotPasswordForm.tsx` | 密码重置邮箱 | 无需变更，LDAP 用户不使用密码重置 |
 
 **UsersCard.tsx:**
 ```tsx
@@ -369,21 +411,27 @@ const isDisabled = useMemo(() => {
 
 **LDAPUserForm.tsx:**
 
-No changes needed to this component. The form is only rendered when `ldapManualUserCreationEnabled=true` (controlled by `NewUserDialog.tsx`). The parent component's conditional rendering is sufficient protection.
+此组件无需变更。仅在 `ldapManualUserCreationEnabled=true` 时渲染表单，由 `NewUserDialog.tsx` 控制。父组件条件渲染已提供足够保护。
 
-### Behavior Summary
+<a id="behavior-summary"></a>
 
-| Scenario | `ATTR_EMAIL` | `ATTR_UNIQUE_ID` | Email in DB | Lookup Strategy |
+### 行为汇总
+
+| 场景 | `ATTR_EMAIL` | `ATTR_UNIQUE_ID` | 数据库邮箱 | 查找策略 |
 |----------|--------------|------------------|-------------|-----------------|
-| Standard LDAP | `mail` | *(optional)* | Real email | By unique_id → by email |
-| Enterprise LDAP | `mail` | `objectGUID` | Real email | By unique_id → by email |
-| No-email LDAP | *(empty)* | `objectGUID` | Placeholder | By unique_id only |
+| 标准 LDAP | `mail` | *可选* | 真实邮箱 | 先 unique_id，后邮箱 |
+| 企业 LDAP | `mail` | `objectGUID` | 真实邮箱 | 先 unique_id，后邮箱 |
+| 无邮箱 LDAP | *空* | `objectGUID` | 占位值 | 仅按 unique_id |
 
-### Edge Cases and Considerations
+<a id="edge-cases-and-considerations"></a>
 
-#### 1. Case Normalization of Unique ID
+### 边界情况与考虑
 
-UUIDs can arrive in different cases. **Normalize to lowercase before hashing** to ensure consistent placeholders:
+<a id="1-case-normalization-of-unique-id"></a>
+
+#### 1. 唯一 ID 大小写规范化
+
+UUID 可能采用不同大小写。**哈希前先规范化为小写**，确保占位值一致：
 
 ```python
 def generate_null_email_marker(unique_id: str) -> str:
@@ -391,15 +439,17 @@ def generate_null_email_marker(unique_id: str) -> str:
     return f"{NULL_EMAIL_MARKER_PREFIX}{md5(normalized.encode()).hexdigest()}"
 ```
 
-#### 2. Configuration Changes Mid-Flight
+<a id="2-configuration-changes-mid-flight"></a>
 
-| Scenario | Behavior |
+#### 2. 运行期间变更配置
+
+| 场景 | 行为 |
 |----------|----------|
-| Start with `ATTR_EMAIL=mail`, switch to `ATTR_EMAIL=` | Existing users keep real email. New users get placeholder. |
-| Start with `ATTR_EMAIL=`, switch to `ATTR_EMAIL=mail` | On next login, **update placeholder → real email** |
-| User has placeholder, LDAP now has email | Update to real email (placeholder → real is always allowed) |
+| 从 `ATTR_EMAIL=mail` 切换为 `ATTR_EMAIL=` | 已有用户保留真实邮箱，新用户使用占位值。 |
+| 从 `ATTR_EMAIL=` 切换为 `ATTR_EMAIL=mail` | 下次登录时，**占位值更新为真实邮箱**。 |
+| 用户已有占位值，LDAP 现在有邮箱 | 更新为真实邮箱，始终允许占位值升级为真实邮箱。 |
 
-**Code handles this naturally:**
+**代码自然处理此情况：**
 
 ```python
 if user:
@@ -408,29 +458,31 @@ if user:
     return user
 ```
 
-No explicit `is_null_email_marker()` check needed—a null marker string is never equal to a real email string, so `user.email != email` handles both upgrade and sync cases.
+无需显式 `is_null_email_marker()` 检查；空值标记字符串永远不等于真实邮箱字符串，因此 `user.email != email` 可处理升级和同步两种情况。
 
-#### 3. Admin Pre-Provisioning (`PHOENIX_ADMINS`)
+<a id="3-admin-pre-provisioning-phoenix_admins"></a>
 
-**Current flow (with real emails):**
-1. Admin sets `PHOENIX_ADMINS=alice=alice@corp.com`
-2. Facilitator creates `LDAPUser(email="alice@corp.com", username="alice", unique_id=None)`
-3. On first login: lookup by unique_id (not found) → fallback to email → match! → populate unique_id
+#### 3. 管理员预配置（`PHOENIX_ADMINS`）
 
-**Problem with placeholder emails:**
-- Admin can't provide real email (LDAP doesn't have it)
-- Admin can't generate placeholder (doesn't know `unique_id` ahead of time)
-- Pre-provisioning by email is impossible
+**当前流程（真实邮箱）：**
+1. 管理员设置 `PHOENIX_ADMINS=alice=alice@corp.com`
+2. Facilitator 创建 `LDAPUser(email="alice@corp.com", username="alice", unique_id=None)`
+3. 首次登录：按 unique_id 查找未找到 → 回退邮箱 → 匹配成功 → 填充 unique_id
 
-**Options:**
+**占位邮箱的问题：**
+- 管理员无法提供真实邮箱，LDAP 中不存在
+- 管理员无法生成占位值，因为事先不知道 `unique_id`
+- 无法按邮箱预配置
 
-| Option | Approach | Complexity | Trade-off |
+**选项：**
+
+| 选项 | 方案 | 复杂度 | 取舍 |
 |--------|----------|------------|-----------|
-| **A. Disallow** | Fail startup if `PHOENIX_ADMINS` + placeholder mode | Low | Users get roles from LDAP group mapping on first login |
-| **B. Username matching** | Pre-provision by username, match on first login | Medium | Username collision risk |
-| **C. Unique ID format** | `PHOENIX_ADMINS=username=unique_id` in placeholder mode | Medium | Requires admin to query LDAP first |
+| **A. 禁止** | `PHOENIX_ADMINS` 与占位模式同时使用时启动失败 | 低 | 用户首次登录从 LDAP 组映射获取角色 |
+| **B. 用户名匹配** | 按用户名预配置，首次登录时匹配 | 中 | 用户名冲突风险 |
+| **C. 唯一 ID 格式** | 占位模式使用 `PHOENIX_ADMINS=username=unique_id` | 中 | 管理员需先查询 LDAP |
 
-**Phase 1 Recommendation: Option A (Disallow)**
+**阶段 1 建议：选项 A（禁止）**
 
 ```python
 # In config validation
@@ -442,14 +494,16 @@ if not attr_email:  # Placeholder mode
         )
 ```
 
-**Rationale:**
-- Simplest and safest for initial implementation
-- Auto-provisioning (`allow_sign_up=True`) is already required in placeholder mode
-- LDAP role mapping assigns roles automatically (including ADMIN) based on group membership
+**依据：**
+- 初始实现最简单、安全
+- 占位模式已要求自动配置（`allow_sign_up=True`）
+- LDAP 角色映射根据组成员关系自动分配角色，包括 ADMIN
 
-#### 4. `ALLOW_SIGN_UP=False` is Disallowed (Phase 1)
+<a id="4-allow_sign_upfalse-is-disallowed-phase-1"></a>
 
-When `PHOENIX_LDAP_ATTR_EMAIL` is empty (placeholder mode), `PHOENIX_LDAP_ALLOW_SIGN_UP=False` is **not allowed** in Phase 1. This is enforced at startup:
+#### 4. 阶段 1 不允许 `ALLOW_SIGN_UP=False`
+
+`PHOENIX_LDAP_ATTR_EMAIL` 为空（占位模式）时，阶段 1 **不允许** `PHOENIX_LDAP_ALLOW_SIGN_UP=False`，启动时强制校验：
 
 ```python
 def validate_ldap_config():
@@ -460,20 +514,22 @@ def validate_ldap_config():
         )
 ```
 
-**Rationale:**
-- Placeholder emails are generated from `unique_id` on first login
-- Pre-provisioning users without knowing their `unique_id` is impractical
-- Auto-provisioning is the natural flow for LDAP authentication
+**依据：**
+- 占位邮箱在首次登录时根据 `unique_id` 生成
+- 不知道 `unique_id` 时预配置用户不现实
+- 自动配置是 LDAP 身份验证的自然流程
 
-##### Future: Supporting `ALLOW_SIGN_UP=False`
+<a id="future-supporting-allow_sign_upfalse"></a>
 
-Some organizations require explicit user provisioning (no auto-signup). Here are approaches to support this in the future:
+##### 未来：支持 `ALLOW_SIGN_UP=False`
 
-> **Note:** This section is about **pre-provisioning general users** who should have Phoenix access. For **admin role assignment** in no-email mode, use `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS` instead of `PHOENIX_ADMINS`. Group role mappings assign roles (including ADMIN) based on LDAP group membership at login time.
+某些组织要求明确配置用户，不允许自动注册。未来可通过以下方案支持：
 
-**Option 1: Unique ID-Based Pre-Provisioning**
+> **说明：**本节讨论应获得 Phoenix 访问权的**普通用户预配置**。无邮箱模式的**管理员角色分配**使用 `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS`，而非 `PHOENIX_ADMINS`。组角色映射在登录时根据 LDAP 组成员关系分配角色，包括 ADMIN。
 
-**Concept:** Admin queries LDAP for user's `unique_id`, pre-provisions with computed placeholder.
+**方案 1：基于唯一 ID 预配置**
+
+**概念：**管理员查询用户的 `unique_id`，用计算出的占位值预配置。
 
 ```bash
 # New format when placeholder mode
@@ -481,7 +537,7 @@ PHOENIX_ADMINS=alice:550E8400-E29B-41D4-A716-446655440000;bob:7C9E6679-7425-40DE
 #             ^username:unique_id
 ```
 
-**Implementation:**
+**实现：**
 ```python
 def parse_admins_placeholder_mode(env_value: str) -> dict[str, str]:
     """Parse username:unique_id pairs, return {placeholder_email: username}."""
@@ -493,21 +549,21 @@ def parse_admins_placeholder_mode(env_value: str) -> dict[str, str]:
     return result
 ```
 
-**First login flow:**
-1. User authenticates via LDAP
-2. Lookup by unique_id → finds pre-provisioned user (matched by placeholder email derived from same unique_id)
-3. Login succeeds
+**首次登录流程：**
+1. 用户通过 LDAP 身份验证
+2. 按 unique_id 查找，找到预配置用户；其占位邮箱由相同 unique_id 派生并匹配
+3. 登录成功
 
-**Pros:**
-- Deterministic - same unique_id always produces same placeholder
-- No username collision risk
-- Admin has full control over who can access
+**优点：**
+- 确定性，相同 unique_id 始终生成相同占位值
+- 没有用户名冲突风险
+- 管理员完全控制谁能访问
 
-**Cons:**
-- Admin must query LDAP to get unique_ids (extra step)
-- unique_id format varies (GUID vs UUID vs string)
+**缺点：**
+- 管理员必须查询 LDAP 获取 unique_id，增加步骤
+- unique_id 格式不同，例如 GUID、UUID 或字符串
 
-**Admin workflow:**
+**管理员工作流：**
 ```bash
 # Query LDAP for user's objectGUID
 ldapsearch -H ldap://dc.corp.com -b "dc=corp,dc=com" "(sAMAccountName=alice)" objectGUID
@@ -516,16 +572,16 @@ ldapsearch -H ldap://dc.corp.com -b "dc=corp,dc=com" "(sAMAccountName=alice)" ob
 PHOENIX_ADMINS=alice:550e8400-e29b-41d4-a716-446655440000
 ```
 
-**Option 2: Username-Based Matching with Collision Prevention**
+**方案 2：带冲突预防的用户名匹配**
 
-**Concept:** Pre-provision by username only, match on first login by username.
+**概念：**仅按用户名预配置，首次登录按用户名匹配。
 
 ```bash
 # Username-only format
 PHOENIX_ADMINS=alice;bob;charlie
 ```
 
-**Implementation:**
+**实现：**
 ```python
 def pre_provision_ldap_user_by_username(username: str) -> models.User:
     """Create LDAP user with temporary placeholder, no unique_id."""
@@ -539,14 +595,14 @@ def pre_provision_ldap_user_by_username(username: str) -> models.User:
     )
 ```
 
-**First login flow:**
-1. User authenticates via LDAP (username=alice, unique_id=UUID-A)
-2. Lookup by unique_id → not found
-3. Lookup by email (placeholder from unique_id) → not found
-4. **New:** Lookup by username among LDAP users with no unique_id → found!
-5. Validate: user is LDAP user AND has no unique_id (pre-provisioned)
-6. Update: set unique_id, replace temp placeholder with real placeholder
-7. Login succeeds
+**首次登录流程：**
+1. 用户通过 LDAP 身份验证，username=alice、unique_id=UUID-A
+2. 按 unique_id 查找，未找到
+3. 按邮箱，即 unique_id 派生占位值查找，未找到
+4. **新增：**在没有 unique_id 的 LDAP 用户中按用户名查找，找到！
+5. 校验：用户为 LDAP 用户且没有 unique_id，表示已预配置
+6. 更新：设置 unique_id，将临时占位值替换为真实占位值
+7. 登录成功
 
 ```python
 # In get_or_create_ldap_user
@@ -564,23 +620,23 @@ if not user and not ldap_config.allow_sign_up:
         user.email = generate_null_email_marker(unique_id)
 ```
 
-**Pros:**
-- Simple admin workflow (just usernames)
-- No need to query LDAP for unique_ids
+**优点：**
+- 管理员工作流简单，仅需用户名
+- 无需查询 LDAP 获取 unique_id
 
-**Cons:**
-- Username collision risk if displayName differs from sAMAccountName
-- Race condition if two users with same username try first login simultaneously
-- Security: username-based matching is weaker than unique_id matching
+**缺点：**
+- displayName 与 sAMAccountName 不同时，存在用户名冲突风险
+- 同名用户同时首次登录会产生竞态条件
+- 安全性：按用户名匹配弱于按 unique_id 匹配
 
-**Mitigations:**
-- Only match pre-provisioned users (oauth2_user_id IS NULL)
-- Log warning if username match occurs
-- Consider requiring exact username match (case-sensitive)
+**防护：**
+- 仅匹配预配置用户，oauth2_user_id IS NULL
+- 用户名匹配发生时记录警告
+- 考虑要求精确用户名匹配，区分大小写
 
-**Option 3: Admin API with LDAP Lookup**
+**方案 3：带 LDAP 查询的管理员 API**
 
-**Concept:** Admin API that queries LDAP directly to provision users.
+**概念：**管理员 API 直接查询 LDAP 以配置用户。
 
 ```
 POST /api/v1/admin/ldap/provision
@@ -590,155 +646,183 @@ POST /api/v1/admin/ldap/provision
 }
 ```
 
-**Server-side flow:**
-1. API authenticates as service account to LDAP
-2. Queries LDAP for user by username
-3. Gets unique_id from LDAP response
-4. Creates user with computed placeholder email
-5. Returns created user
+**服务端流程：**
+1. API 使用服务账户向 LDAP 身份验证
+2. 按用户名查询 LDAP
+3. 从 LDAP 响应获取 unique_id
+4. 使用计算出的占位邮箱创建用户
+5. 返回创建的用户
 
-**Pros:**
-- Best UX for admins (just provide username)
-- Server handles LDAP lookup (no manual unique_id copying)
-- Full validation (user must exist in LDAP)
+**优点：**
+- 管理员体验最佳，仅需提供用户名
+- 服务器处理 LDAP 查询，无需手动复制 unique_id
+- 完整校验，用户必须存在于 LDAP
 
-**Cons:**
-- Requires LDAP service account with read permissions
-- More complex API implementation
-- Network dependency on LDAP at provisioning time
+**缺点：**
+- 需要具有读取权限的 LDAP 服务账户
+- API 实现更复杂
+- 配置时依赖 LDAP 网络
 
-**Comparison Matrix**
+**比较矩阵**
 
-| Aspect | Option 1: Unique ID | Option 2: Username | Option 3: Admin API |
+| 方面 | 方案 1：唯一 ID | 方案 2：用户名 | 方案 3：管理员 API |
 |--------|---------------------|--------------------|--------------------|
-| Admin effort | High (query LDAP) | Low (just usernames) | Low (API call) |
-| Implementation | Low | Medium | High |
-| Security | High | Medium | High |
-| LDAP dependency | At admin time | None | At provision time |
-| Collision risk | None | Username collision | None |
-| Phase 1 compatible | Yes | Yes | No (needs new API) |
+| 管理员工作量 | 高，查询 LDAP | 低，仅需用户名 | 低，API 调用 |
+| 实现 | 低 | 中 | 高 |
+| 安全性 | 高 | 中 | 高 |
+| LDAP 依赖 | 管理员操作时 | 无 | 配置时 |
+| 冲突风险 | 无 | 用户名冲突 | 无 |
+| 兼容阶段 1 | 是 | 是 | 否，需要新 API |
 
-**Recommendation for Future**
+**未来建议**
 
-**Short-term (if needed soon):** Option 1 (Unique ID-based)
-- Can be added to existing `PHOENIX_ADMINS` parsing
-- No new APIs needed
-- Highest security
+**短期（如近期需要）：**方案 1，基于唯一 ID
+- 可添加至现有 `PHOENIX_ADMINS` 解析
+- 无需新 API
+- 安全性最高
 
-**Long-term:** Option 3 (Admin API)
-- Best admin experience
-- Full validation against LDAP
-- Can be combined with a "Provision from LDAP" UI button
+**长期：**方案 3，管理员 API
+- 管理员体验最佳
+- 与 LDAP 完整校验
+- 可结合“从 LDAP 配置”UI 按钮
 
-#### 5. Search and Filtering
+<a id="5-search-and-filtering"></a>
 
-- Searching users by email will **not find** users with placeholders
-- This is acceptable - placeholder emails are not meaningful
-- Consider adding a filter for "users without email" in the UI
+#### 5. 搜索与过滤
 
-#### 6. Export/Import
+- 按邮箱搜索用户**不会找到**使用占位值的用户
+- 可以接受，因为占位邮箱没有意义
+- 考虑在 UI 添加“无邮箱用户”过滤器
 
-If users are exported (e.g., to CSV):
-- GraphQL API returns `null` for null email markers, so exports via the API will show empty/null email
-- REST API returns empty string `""` for null email markers (to avoid breaking the existing API contract)
-- Direct database exports would show the raw placeholder (`\ue000NULL(stopgap)...`)
-- On import via API, email validation would reject null email marker format (no `@` symbol)
+<a id="6-exportimport"></a>
 
-#### 7. MD5 Collision Risk
+#### 6. 导出与导入
 
-- MD5 produces 128-bit hashes
-- For UUIDs (also 128-bit), collision probability is ~1 in 2^64 for birthday attack
-- With thousands of users, collision is astronomically unlikely
-- If it somehow occurs, the unique constraint on email would catch it at insert time
+导出用户时，例如 CSV：
+- GraphQL API 为空邮箱标记返回 `null`，因此 API 导出显示空或 null 邮箱
+- REST API 为空邮箱标记返回空字符串 `""`，避免破坏现有 API 契约
+- 直接数据库导出会显示原始占位值（`\ue000NULL(stopgap)...`）
+- 通过 API 导入时，邮箱校验会拒绝空邮箱标记格式，因为没有 `@` 符号
 
-#### 8. Audit Logs
+<a id="7-md5-collision-risk"></a>
 
-- Don't log placeholder emails (they're noise)
-- Log `username` and `unique_id` instead for LDAP users
+#### 7. MD5 冲突风险
 
-### Security Considerations
+- MD5 生成 128 位哈希
+- 对同为 128 位的 UUID，生日攻击冲突概率约为 2^64 分之一
+- 数千用户规模下，冲突概率极低
+- 若真的发生，邮箱唯一约束会在插入时捕获
 
-#### 1. Unique ID is Mandatory
+<a id="8-audit-logs"></a>
 
-Placeholder emails require `unique_id` for deterministic generation and user lookup. This is enforced at startup.
+#### 8. 审计日志
 
-#### 2. PUA Character Safety
+- 不记录占位邮箱，它们只是噪声
+- LDAP 用户改为记录 `username` 和 `unique_id`
 
-- `\uE000` is a valid Unicode character, safe in PostgreSQL UTF-8
-- Cannot collide with real email addresses (no valid email starts with PUA)
-- May be stripped by some external systems (logs, exports) - use helper functions
+<a id="security-considerations"></a>
 
-#### 3. No Email Operations
+### 安全考虑
 
-Users with placeholder emails cannot:
-- Receive welcome emails
-- Use password reset (LDAP users don't need it anyway)
-- Be contacted via email
+<a id="1-unique-id-is-mandatory"></a>
 
-#### 4. Login and API Endpoints Naturally Reject Null Email Markers
+#### 1. 唯一 ID 必填
 
-**Risk:** User attempts to log in or create account using a null email marker.
+占位邮箱需要 `unique_id` 进行确定性生成和用户查找，启动时强制校验。
 
-**Mitigation:** No explicit check needed. The standard email validation regex (`EMAIL_PATTERN`) requires an `@` symbol:
+<a id="2-pua-character-safety"></a>
+
+#### 2. PUA 字符安全
+
+- `\uE000` 是有效 Unicode 字符，在 PostgreSQL UTF-8 中安全
+- 不会与真实邮箱冲突，有效邮箱不会以 PUA 开头
+- 某些外部系统如日志、导出可能剥离它，需使用辅助函数
+
+<a id="3-no-email-operations"></a>
+
+#### 3. 不支持邮件操作
+
+使用占位邮箱的用户无法：
+- 接收欢迎邮件
+- 使用密码重置，LDAP 用户本来就不需要
+- 通过邮箱被联系
+
+<a id="4-login-and-api-endpoints-naturally-reject-null-email-markers"></a>
+
+#### 4. 登录和 API 端点自然拒绝空邮箱标记
+
+**风险：**用户尝试使用空邮箱标记登录或创建账户。
+
+**防护：**无需显式检查。标准邮箱校验正则（`EMAIL_PATTERN`）要求存在 `@` 符号：
 
 ```python
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+[.][^@\s]+\Z")
 ```
 
-Null email markers (`\ue000NULL(stopgap)abc123...`) have no `@` symbol, so they're automatically rejected by existing email format validation. This applies to:
-- Local login endpoint (email/password auth)
-- REST API user creation (`POST /v1/users`)
-- GraphQL user creation (`createUser` mutation)
+空邮箱标记（`\ue000NULL(stopgap)abc123...`）不含 `@` 符号，因此会被现有邮箱格式校验自动拒绝，适用于：
+- 本地登录端点，邮箱/密码身份验证
+- REST API 用户创建（`POST /v1/users`）
+- GraphQL 用户创建（`createUser` 变更）
 
-LDAP users authenticate via LDAP bind, not email/password, so the local login rejection is just defense-in-depth.
+LDAP 用户通过 LDAP 绑定身份验证，而非邮箱/密码，因此本地登录拒绝仅属于纵深防御。
 
-#### 5. MD5 Hash Does Not Reveal Unique ID
+<a id="5-md5-hash-does-not-reveal-unique-id"></a>
 
-- MD5 is a one-way hash - cannot reverse to get unique_id
-- However, if attacker **knows** a user's unique_id (e.g., from LDAP access), they can compute the expected placeholder email and confirm user exists in Phoenix
-- **Risk level:** Low - unique_ids are not typically secret, and this only confirms existence
+#### 5. MD5 哈希不暴露唯一 ID
 
-#### 6. Malicious LDAP Email Injection
+- MD5 是单向哈希，无法逆向获得 unique_id
+- 但若攻击者**知道**用户 unique_id，例如能访问 LDAP，便可计算预期占位邮箱，确认用户是否存在于 Phoenix
+- **风险级别：**低，unique_id 通常不是秘密，且仅确认存在性
 
-**Risk:** LDAP admin sets a user's email to start with `\uE000` to make it appear placeholder.
+<a id="6-malicious-ldap-email-injection"></a>
 
-**Impact:** 
-- User's email would be hidden in UI (treated as placeholder)
-- User couldn't receive Phoenix emails
+#### 6. 恶意 LDAP 邮箱注入
 
-**Risk level:** Low - requires LDAP admin access, impact is limited to UX
+**风险：**LDAP 管理员将用户邮箱设为以 `\uE000` 开头，使其看似占位值。
 
-#### 7. PUA Stripping Attack
+**影响：**
+- 用户邮箱在 UI 隐藏，被视为占位值
+- 用户无法接收 Phoenix 邮件
 
-**Risk:** If a system strips PUA characters during direct database export/import:
-- `\ue000NULL(stopgap)7f3d...` becomes `NULL7f3d...`
-- This could be imported as a "real" email
+**风险级别：**低，需要 LDAP 管理员权限，影响限于用户体验
 
-**Mitigation:**
-- GraphQL API exports empty string for placeholders (PUA never exposed to frontend)
-- Direct DB imports should validate email format (reject strings starting with "NULL" + hex)
-- Standard email validation rejects both formats (no `@` symbol)
+<a id="7-pua-stripping-attack"></a>
 
-#### 8. API User Creation Security
+#### 7. PUA 剥离攻击
 
-**Risk:** Admin creates LDAP user via API without knowing unique_id.
+**风险：**系统在直接数据库导出或导入时剥离 PUA 字符：
+- `\ue000NULL(stopgap)7f3d...` 变成 `NULL7f3d...`
+- 可能作为“真实”邮箱被导入
 
-**Scenarios:**
-1. Admin provides real email → stored as-is
-2. Admin provides no email → must fail or use temporary placeholder
+**防护：**
+- GraphQL API 对占位值导出空字符串，PUA 从不暴露给前端
+- 直接数据库导入应校验邮箱格式，拒绝以“NULL”加十六进制开头的字符串
+- 标准邮箱校验拒绝两种格式，因为均无 `@` 符号
 
-**Recommendation:** For API-created LDAP users without email:
-- Option A: Require email (admin must know it)
-- Option B: Generate temporary random placeholder, replace on first LDAP login
-- Option C: Require unique_id at creation time
+<a id="8-api-user-creation-security"></a>
 
-Current recommendation: **Option A** - simplest, avoids complexity of temporary placeholders.
+#### 8. API 用户创建安全
 
-#### 9. Multi-LDAP Server Collision (Future)
+**风险：**管理员不知道 unique_id，却通过 API 创建 LDAP 用户。
 
-**Risk:** If Phoenix supports multiple LDAP servers, same unique_id from different servers produces same placeholder email.
+**场景：**
+1. 管理员提供真实邮箱 → 原样存储
+2. 管理员未提供邮箱 → 必须失败或使用临时占位值
 
-**Mitigation (future):** Include server identifier in hash:
+**建议：**对于通过 API 创建、没有邮箱的 LDAP 用户：
+- 方案 A：要求邮箱，管理员必须知道
+- 方案 B：生成临时随机占位值，在首次 LDAP 登录时替换
+- 方案 C：创建时要求 unique_id
+
+当前建议：**方案 A**，最简单，避免临时占位值的复杂度。
+
+<a id="9-multi-ldap-server-collision-future"></a>
+
+#### 9. 多 LDAP 服务器冲突（未来）
+
+**风险：**若 Phoenix 支持多个 LDAP 服务器，不同服务器的相同 unique_id 会生成相同占位邮箱。
+
+**防护（未来）：**在哈希中包含服务器标识符：
 
 ```python
 def generate_null_email_marker(unique_id: str, server_id: str) -> str:
@@ -746,22 +830,28 @@ def generate_null_email_marker(unique_id: str, server_id: str) -> str:
     return f"{NULL_EMAIL_MARKER_PREFIX}{md5(normalized.encode()).hexdigest()}"
 ```
 
-#### 10. Timing Attack on User Existence
+<a id="10-timing-attack-on-user-existence"></a>
 
-**Risk:** Attacker probes whether users exist by measuring response time differences.
+#### 10. 用户存在性时序攻击
 
-**Analysis:** 
-- Placeholder email check is `O(1)` string prefix comparison
-- Same code path regardless of placeholder vs real
-- No additional timing leak introduced
+**风险：**攻击者通过测量响应时间差异探测用户是否存在。
 
-**Risk level:** None (no new attack surface)
+**分析：**
+- 占位邮箱检查为 `O(1)` 字符串前缀比较
+- 占位值和真实邮箱采用相同代码路径
+- 不会引入额外时序泄漏
+
+**风险级别：**无，没有新增攻击面
 
 ---
 
-## Phase 2: Eventual Solution (Nullable Email)
+<a id="phase-2-eventual-solution-nullable-email"></a>
 
-### Database Migration
+## 阶段 2：最终方案（邮箱可为空）
+
+<a id="database-migration"></a>
+
+### 数据库迁移
 
 ```sql
 -- Step 1: Allow NULL
@@ -775,27 +865,33 @@ CREATE UNIQUE INDEX ix_users_email ON users (email) WHERE email IS NOT NULL;
 UPDATE users SET email = NULL WHERE email LIKE E'\uE000%';
 ```
 
-### Code Changes
+<a id="code-changes"></a>
 
-1. **Model:** `email: Mapped[Optional[str]]`
-2. **GraphQL:** `email: Optional[str]` (remove the `is_null_email_marker()` check, return `None` directly)
-3. **REST API:** `email: Optional[str] = None`
-4. **Frontend:** Handle `null` instead of empty string (minimal change - both are falsy)
-5. **Remove:** `is_null_email_marker()` helper from backend (no longer needed)
+### 代码变更
 
-### Effort Estimate
+1. **模型：**`email: Mapped[Optional[str]]`
+2. **GraphQL：**`email: Optional[str]`，移除 `is_null_email_marker()` 检查，直接返回 `None`
+3. **REST API：**`email: Optional[str] = None`
+4. **前端：**处理 `null` 而非空字符串，变化很小，两者均为假值
+5. **移除：**后端 `is_null_email_marker()` 辅助函数，不再需要
 
-| Task | Effort |
+<a id="effort-estimate"></a>
+
+### 工作量估计
+
+| 任务 | 工作量 |
 |------|--------|
-| Database migration | 1 day |
-| Backend type changes | 2 hours |
-| Frontend null handling | 4 hours |
-| Tests | 4 hours |
-| **Total** | **2-3 days** |
+| 数据库迁移 | 1 天 |
+| 后端类型变更 | 2 小时 |
+| 前端空值处理 | 4 小时 |
+| 测试 | 4 小时 |
+| **合计** | **2—3 天** |
 
 ---
 
-## Migration Path
+<a id="migration-path"></a>
+
+## 迁移路径
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -823,45 +919,53 @@ UPDATE users SET email = NULL WHERE email LIKE E'\uE000%';
 
 ---
 
-## Implementation Checklist
+<a id="implementation-checklist"></a>
 
-### Phase 1 (Bridge)
+## 实现检查清单
 
-- [x] Add `NULL_EMAIL_MARKER_PREFIX` constant
-- [x] Add `generate_null_email_marker()` function
-- [x] Add `is_null_email_marker()` helper
-- [x] Update `LDAPConfig` validation:
-  - [x] Require `unique_id` when `email` is empty
-  - [x] Require `allow_sign_up=True` when `email` is empty
-  - [x] Disallow `PHOENIX_ADMINS` when `email` is empty
-- [x] Update `LDAPUserInfo.email` type to `str | None`
-- [x] Update `_authenticate()` to handle missing email attribute
-- [x] Update `get_or_create_ldap_user()` for placeholder generation
-- [x] Update GraphQL `User.email` resolver to return `None` for null email markers
-- [x] Inject `ldapManualUserCreationEnabled` into `window.Config`
-- [x] Update `UsersCard.tsx` to disable "Add User" button when no creation method available
-- [x] Update `UsersTable.tsx` to hide empty emails
-- [x] Update `ViewerProfileCard.tsx` to hide empty emails
-- [x] Update `UserAPIKeysTable.tsx` to display username instead of email
-- [x] Update `NewUserDialog.tsx` to hide LDAP option when manual creation disabled
-- [x] Email sender naturally skips placeholder emails (via email validation)
-- [x] Verify email validation rejects null markers (handled by EMAIL_PATTERN - no `@` symbol)
-- [x] Add unit tests for null email marker helpers
-- [x] Add integration tests for LDAP without email
-- [x] Update documentation
+<a id="phase-1-bridge"></a>
 
-### Phase 2 (Future)
+### 阶段 1（过渡）
 
-- [ ] Create database migration
-- [ ] Update SQLAlchemy model
-- [ ] Update REST API models
-- [ ] Remove `is_null_email_marker()` helper from backend
-- [ ] Migrate existing placeholder emails to `NULL`
-- [ ] Update tests
+- [x] 添加 `NULL_EMAIL_MARKER_PREFIX` 常量
+- [x] 添加 `generate_null_email_marker()` 函数
+- [x] 添加 `is_null_email_marker()` 辅助函数
+- [x] 更新 `LDAPConfig` 校验：
+  - [x] `email` 为空时要求 `unique_id`
+  - [x] `email` 为空时要求 `allow_sign_up=True`
+  - [x] `email` 为空时禁止 `PHOENIX_ADMINS`
+- [x] 将 `LDAPUserInfo.email` 类型更新为 `str | None`
+- [x] 更新 `_authenticate()` 以处理缺失邮箱属性
+- [x] 更新 `get_or_create_ldap_user()` 以生成占位值
+- [x] 更新 GraphQL `User.email` 解析器，为空邮箱标记返回 `None`
+- [x] 向 `window.Config` 注入 `ldapManualUserCreationEnabled`
+- [x] 更新 `UsersCard.tsx`，没有创建方法时禁用“Add User”按钮
+- [x] 更新 `UsersTable.tsx`，隐藏空邮箱
+- [x] 更新 `ViewerProfileCard.tsx`，隐藏空邮箱
+- [x] 更新 `UserAPIKeysTable.tsx`，显示用户名而非邮箱
+- [x] 更新 `NewUserDialog.tsx`，禁用手动创建时隐藏 LDAP 选项
+- [x] 邮件发送器自然跳过占位邮箱，通过邮箱校验实现
+- [x] 验证邮箱校验拒绝空值标记，由 EMAIL_PATTERN 处理，因无 `@` 符号
+- [x] 为空邮箱标记辅助函数添加单元测试
+- [x] 为无邮箱 LDAP 添加集成测试
+- [x] 更新文档
+
+<a id="phase-2-future"></a>
+
+### 阶段 2（未来）
+
+- [ ] 创建数据库迁移
+- [ ] 更新 SQLAlchemy 模型
+- [ ] 更新 REST API 模型
+- [ ] 移除后端 `is_null_email_marker()` 辅助函数
+- [ ] 将已有占位邮箱迁移为 `NULL`
+- [ ] 更新测试
 
 ---
 
-## References
+<a id="references"></a>
 
-- [User Identification Strategy](./user-identification-strategy.md) - How Phoenix identifies LDAP users
-- [README](./README.md) - LDAP authentication overview
+## 参考资料
+
+- [用户识别策略](./user-identification-strategy.md) — Phoenix 如何识别 LDAP 用户
+- [README](./README.md) — LDAP 身份验证概览

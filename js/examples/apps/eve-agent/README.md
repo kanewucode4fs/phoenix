@@ -1,26 +1,22 @@
-# Vercel Eve Agent Tracing
+<a id="vercel-eve-agent-tracing"></a>
 
-A minimal [Vercel Eve](https://eve.dev/) agent traced with
-`@arizeai/phoenix-otel`. Eve auto-discovers
-[`agent/instrumentation.ts`](./agent/instrumentation.ts) at server startup;
-its `register()` call handles the provider and global wiring, with an
-OpenInference span processor passed via `spanProcessors` that keeps only AI
-spans (Eve's workflow-engine internals are filtered out). Every turn then
-lands in Phoenix as one clean trace: the `ai.eve.turn` root, each model step,
-and the [`get_weather`](./agent/tools/get_weather.ts) tool call.
+# Vercel Eve Agent 追踪
 
-See the [Vercel Eve integration docs](https://arize.com/docs/phoenix/integrations/typescript/vercel/eve-tracing)
-for a full walkthrough of reading Eve traces in Phoenix.
+使用 `@arizeai/phoenix-otel` 追踪的最简 [Vercel Eve](https://eve.dev/) Agent。Eve 在服务器启动时自动发现 [`agent/instrumentation.ts`](./agent/instrumentation.ts)；其中的 `register()` 调用负责配置提供程序及全局连接，并通过 `spanProcessors` 传入 OpenInference Span 处理器，仅保留 AI Span（过滤 Eve 工作流引擎内部 Span）。每一轮随后作为一条清晰的追踪写入 Phoenix：包括根 Span `ai.eve.turn`、各模型步骤及 [`get_weather`](./agent/tools/get_weather.ts) 工具调用。
 
-## Prerequisites
+在 Phoenix 中阅读 Eve 追踪的完整教程见 [Vercel Eve 集成文档](https://arize.com/docs/phoenix/integrations/typescript/vercel/eve-tracing)。
 
-- Node.js >= 24 (required by Eve's CLI)
-- A running Phoenix instance (defaults to `http://localhost:6006`)
-- `OPENAI_API_KEY` set in your environment (the agent uses a direct
-  `@ai-sdk/openai` model; swap [`agent/agent.ts`](./agent/agent.ts) to a
-  gateway model id to use the Vercel AI Gateway)
+<a id="prerequisites"></a>
 
-## Run
+## 前置条件
+
+- Node.js >= 24 （Eve CLI 要求）
+- 运行中的 Phoenix 实例（默认 `http://localhost:6006`）
+- 环境中已设置 `OPENAI_API_KEY`（Agent 直接使用 `@ai-sdk/openai` 模型；若要使用 Vercel AI Gateway，请在 [`agent/agent.ts`](./agent/agent.ts) 中改用网关模型 ID）
+
+<a id="run"></a>
+
+## 运行
 
 ```shell
 # From the js/ directory
@@ -32,9 +28,7 @@ export OPENAI_API_KEY=sk-...
 pnpm --filter eve-agent dev
 ```
 
-`eve dev` opens an interactive terminal UI and serves the agent's HTTP channel
-on `http://127.0.0.1:2000` — send a message like "What's the weather in
-Brooklyn?" in the terminal UI, or over HTTP:
+`eve dev` 打开交互式终端 UI，并在 `http://127.0.0.1:2000` 提供 Agent 的 HTTP 通道。在终端 UI 中发送“布鲁克林天气如何？”之类的消息，或通过 HTTP 发送：
 
 ```shell
 curl -X POST http://127.0.0.1:2000/eve/v1/session \
@@ -42,14 +36,15 @@ curl -X POST http://127.0.0.1:2000/eve/v1/session \
   -d '{"message":"What is the weather in Brooklyn?"}'
 ```
 
-Open [http://localhost:6006](http://localhost:6006) to see the trace in the
-`eve-agent` project.
+打开 [http://localhost:6006](http://localhost:6006)，在 `eve-agent` 项目中查看追踪。
 
-## Configuration
+<a id="configuration"></a>
 
-| Environment variable         | Description                          | Default                 |
+## 配置
+
+| 环境变量         | 说明                          | 默认值                 |
 | ---------------------------- | ------------------------------------ | ----------------------- |
-| `OPENAI_API_KEY`             | OpenAI API key                       | required                |
-| `PHOENIX_COLLECTOR_ENDPOINT` | Phoenix OTLP endpoint                | `http://localhost:6006` |
-| `PHOENIX_API_KEY`            | Phoenix API key (if auth is enabled) | none                    |
-| `PHOENIX_PROJECT_NAME`       | Phoenix project to send traces to    | the agent name          |
+| `OPENAI_API_KEY`             | OpenAI API 密钥                       | 必填                |
+| `PHOENIX_COLLECTOR_ENDPOINT` | Phoenix OTLP 端点                | `http://localhost:6006` |
+| `PHOENIX_API_KEY`            | Phoenix API 密钥（启用身份验证时） | 无                    |
+| `PHOENIX_PROJECT_NAME`       | 接收追踪的 Phoenix 项目    | Agent 名称          |

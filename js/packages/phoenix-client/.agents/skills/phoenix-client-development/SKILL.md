@@ -1,6 +1,6 @@
 ---
 name: phoenix-client-development
-description: "Development guide for the @arizeai/phoenix-client TypeScript SDK — run and resume experiments, manage OpenTelemetry tracer providers with stack-based attach/detach, and write vitest unit and integration tests. Use when adding features to phoenix-client, debugging experiment lifecycle or provider cleanup, modifying dataset/prompt/session/span APIs, or writing tests for the js/packages/phoenix-client/ directory."
+description: "@arizeai/phoenix-client TypeScript SDK 开发指南：运行和恢复实验，通过基于栈的挂载/分离管理 OpenTelemetry 追踪提供程序，编写 vitest 单元测试和集成测试。用于为 phoenix-client 新增功能、调试实验生命周期或提供程序清理、修改数据集/提示词/会话/Span API，或为 js/packages/phoenix-client/ 目录编写测试时。"
 license: Apache-2.0
 metadata:
   author: oss@arize.com
@@ -9,26 +9,32 @@ metadata:
   internal: true
 ---
 
-# Phoenix Client Development
+<a id="phoenix-client-development"></a>
 
-TypeScript SDK for Phoenix AI observability: datasets, experiments, prompts, sessions, spans, traces.
+# Phoenix Client 开发
 
-Read existing code in the directory you're working in before writing new code.
+Phoenix AI 可观测性的 TypeScript SDK：数据集、实验、提示词、会话、Span 和追踪。
 
-## Rule Files
+编写新代码前，先阅读当前工作目录中的现有代码。
 
-| Rule file              | When to read                                              |
+<a id="rule-files"></a>
+
+## 规则文件
+
+| 规则文件              | 阅读时机                                              |
 | ---------------------- | --------------------------------------------------------- |
-| `rules/experiments.md` | Experiment execution, task runners, evaluator wiring      |
-| `rules/prompts.md`     | Prompt helpers, selector shapes, server version gating    |
-| `rules/tracing.md`     | OpenTelemetry tracer providers, span export, global state |
-| `rules/testing.md`     | Unit tests, integration tests, test fixtures              |
+| `rules/experiments.md` | 实验执行、任务运行器、评估器连接      |
+| `rules/prompts.md`     | 提示词辅助函数、选择器结构、服务器版本限制    |
+| `rules/tracing.md`     | OpenTelemetry 追踪提供程序、Span 导出、全局状态 |
+| `rules/testing.md`     | 单元测试、集成测试、测试数据              |
 
-## Build and Test
+<a id="build-and-test"></a>
+
+## 构建与测试
 
 ```bash
 cd js/
 pnpm --filter phoenix-client test
 ```
 
-Tests use **vitest**. Test files live in `test/` named `*.test.ts`.
+测试使用 **vitest**。测试文件位于 `test/`，命名为 `*.test.ts`。

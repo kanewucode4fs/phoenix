@@ -1,13 +1,19 @@
-# Phoenix Evals Design Guidelines
+<a id="phoenix-evals-design-guidelines"></a>
 
-## Code Style
+# Phoenix Evals 设计指南
 
-- Use clear, descriptive function names
-- Provide comprehensive docstrings for all public APIs
-- Follow numpy docstring format
-- Include type hints
+<a id="code-style"></a>
 
-## Docstring Format
+## 代码风格
+
+- 使用清晰、具有描述性的函数名
+- 为所有公共 API 提供完整文档字符串
+- 遵循 numpy 文档字符串格式
+- 包含类型提示
+
+<a id="docstring-format"></a>
+
+## 文档字符串格式
 
 ```python
 def function_name(param1: Type1, param2: Type2) -> ReturnType:
@@ -34,9 +40,11 @@ def function_name(param1: Type1, param2: Type2) -> ReturnType:
     """
 ```
 
-## Workflow
+<a id="workflow"></a>
 
-1. Design evaluator interfaces clearly
-2. Add comprehensive docstrings
-3. Include usage examples
-4. Test with various LLM providers
+## 工作流程
+
+1. 清晰设计评估器接口
+2. 添加完整文档字符串
+3. 包含使用示例
+4. 使用多种 LLM 提供商测试

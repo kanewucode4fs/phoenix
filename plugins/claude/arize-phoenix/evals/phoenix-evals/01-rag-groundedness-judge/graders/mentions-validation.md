@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user asked for an evaluator that judges whether a RAG answer is grounded in the retrieved context.
+用户要求提供一个评估器，用于判断 RAG 答案是否有检索上下文的依据。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The response tells the user to validate the judge against human-labeled examples (measuring agreement, accuracy, or TPR/TNR) before trusting it, rather than presenting the evaluator as ready to trust unchecked. A single sentence recommending validation is enough.
+判断条件：回复要求用户先使用人工标注的示例验证裁判模型（测量一致性、准确率或 TPR/TNR），再信任它，而不是将评估器呈现为无需检查就可直接信任的工具。只需一句建议进行验证的话即可。

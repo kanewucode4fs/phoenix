@@ -1,24 +1,32 @@
-# Phoenix Client Design Guidelines
+<a id="phoenix-client-design-guidelines"></a>
 
-## Code Style
+# Phoenix Client 设计指南
 
-- Follow resource-based API patterns
-- Use type hints for all public methods
-- Keep client methods simple and focused
-- Delegate complex logic to helper modules
+<a id="code-style"></a>
 
-## Canonical Examples
+## 代码风格
 
-See existing resource modules in `src/phoenix/client/resources/`:
+- 遵循基于资源的 API 模式
+- 为所有公共方法使用类型提示
+- 保持客户端方法简单且职责集中
+- 将复杂逻辑委托给辅助模块
 
-- `datasets/` - Dataset operations
-- `spans/` - Span queries and annotations
-- `experiments/` - Experiment management
+<a id="canonical-examples"></a>
 
-## Workflow
+## 规范示例
 
-1. Define resources in `resources/` directory
-2. Add types in `types/` directory
-3. Create helpers in `helpers/` for complex logic
-4. Keep API surface minimal and intuitive
-5. Add comprehensive docstrings
+参考 `src/phoenix/client/resources/` 中的现有资源模块：
+
+- `datasets/` - 数据集操作
+- `spans/` - Span 查询和标注
+- `experiments/` - 实验管理
+
+<a id="workflow"></a>
+
+## 工作流程
+
+1. 在 `resources/` 目录定义资源
+2. 在 `types/` 目录添加类型
+3. 在 `helpers/` 中为复杂逻辑创建辅助函数
+4. 保持 API 接口精简直观
+5. 添加完整文档字符串

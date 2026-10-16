@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user pasted a Phoenix trace with a single OK LLM span. The model had `load_skill` (with `pdf-export` listed), `get_report`, and `send_email` available, but made no tool call and answered from general knowledge with browser print-dialog advice.
+用户粘贴了一条仅包含一个 OK 状态 LLM 跨度的 Phoenix 追踪记录。模型可以调用 `load_skill`（其中列出了 `pdf-export`）、`get_report` 和 `send_email`，却没有调用任何工具，而是凭通用知识回答，建议用户使用浏览器的打印对话框。
 
-Grade exactly one claim. PASS if the claim below holds for the response, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The response gives at least one runnable `px` CLI command that approximates how often this happens. Any reasonable approach passes: a `px api graphql` query for traces whose input mentions "pdf" or "export" with no `load_skill` span; `px span list` (LLM or AGENT spans) piped through `jq` to find first-turn spans that had `load_skill` available but made no tool call; or comparing `px trace list` inputs against `px span list --name load_skill`. Prose without a command fails.
+判断条件：回复至少提供一个可运行的 `px` CLI 命令，近似测量这种情况发生的频率。合理方法都可以：用 `px api graphql` 查询输入提及“pdf”或“export”但没有 `load_skill` 跨度的追踪记录；将 `px span list`（LLM 或 AGENT 跨度）通过管道传给 `jq`，找出首轮中可调用 `load_skill` 却没有调用任何工具的跨度；或将 `px trace list` 的输入与 `px span list --name load_skill` 作比较。只有说明而没有命令则失败。

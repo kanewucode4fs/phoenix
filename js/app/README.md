@@ -1,30 +1,36 @@
-# Arize Phoenix App
+<a id="arize-phoenix-app"></a>
 
-The Phoenix application is a web application built to enable rapid troubleshooting and EDA of model inferences and LLM applications. It is hosted by the Phoenix server and consumes the GraphQL API served by the Python runtime.
+# Arize Phoenix 应用
 
-## Installation
+Phoenix 应用是一个 Web 应用，用于快速排查模型推断和 LLM 应用的问题，并开展探索性数据分析（EDA）。它由 Phoenix 服务器托管，使用 Python 运行时提供的 GraphQL API。
 
-The app is a package (`phoenix-ui`) in the pnpm workspace rooted at [`js/`](../), and depends on the workspace packages `@arizeai/phoenix-client` and `@arizeai/phoenix-evals` via `workspace:*`.
+<a id="installation"></a>
 
-To build and develop the web application, you must first install the dependencies via `pnpm` (performant node package manager). Once [installed](https://pnpm.io/installation), install the dependencies using the following command (from this directory or the workspace root `js/`):
+## 安装
+
+本应用是以 [`js/`](../) 为根目录的 pnpm 工作区中的一个包（`phoenix-ui`），通过 `workspace:*` 依赖工作区包 `@arizeai/phoenix-client` 和 `@arizeai/phoenix-evals`。
+
+构建和开发 Web 应用前，必须通过 `pnpm`（高性能 Node 包管理器）安装依赖。[安装 pnpm](https://pnpm.io/installation) 后，在当前目录或工作区根目录 `js/` 运行以下命令安装依赖：
 
 ```shell
 pnpm install --frozen-lockfile
 ```
 
-NB: The `--frozen-lockfile` flag forces `pnpm` to install the exact versions specified in `js/pnpm-lock.yaml` and will not re-build the lockfile.
+注意：`--frozen-lockfile` 标志强制 `pnpm` 安装 `js/pnpm-lock.yaml` 中指定的确切版本，不会重新生成锁文件。
 
-Then build the workspace packages the app depends on:
+然后构建应用依赖的工作区包：
 
 ```shell
 pnpm run build:deps
 ```
 
-## Develop
+<a id="develop"></a>
 
-To develop the UI, you must run the `app` in conjunction with the backend server. You can start the application in development mode via the following:
+## 开发
 
-**Important:** Before running the development server for the first time, you need to build the app:
+开发 UI 时，必须将 `app` 与后端服务器一起运行。可通过以下命令以开发模式启动应用：
+
+**重要：** 首次运行开发服务器前，需要先构建应用：
 
 ```shell
 pnpm run build
@@ -34,53 +40,63 @@ pnpm run build
 pnpm run dev
 ```
 
-Before running the script above you should configure your running environment by creating a `.env` file besides the `.env.example` file in the root of this project. You can find an example of the `.env` file in the `.env.example` file.
+运行上述脚本前，应在本项目根目录的 `.env.example` 旁创建 `.env` 文件以配置运行环境。`.env.example` 提供了 `.env` 文件示例。
 
-Depending on what flows you are trying to build features for, you may want to adjust the scripts block within the [package.json](./package.json) file so that the server is serving the appropriate fixture data.
+根据所开发功能涉及的流程，可调整 [package.json](./package.json) 中的 scripts 部分，使服务器提供适当的测试数据。
 
-## Production
+<a id="production"></a>
 
-The phoenix UI is packaged into a bundle that is served by the python back-end. To simulate this you can run:
+## 生产环境
+
+Phoenix UI 会打包为由 Python 后端提供的资源包。可运行以下命令模拟该模式：
 
 ```shell
 pnpm run prod
 ```
 
-### Environment Variables
+<a id="environment-variables"></a>
 
-The following environment variables can be configured in your `.env` file:
+### 环境变量
 
-- **`PHOENIX_ENABLE_SOURCE_MAP`**: This enables source maps during Vite builds. It's useful for when you want a production build but still have debug capabilities for the JS bundles.
+可在 `.env` 文件中配置以下环境变量：
 
-### Authentication
+- **`PHOENIX_ENABLE_SOURCE_MAP`**: 在 Vite 构建期间启用 source map，适用于需要生产构建，同时仍希望调试 JS 资源包的场景。
 
-For local development, you have two options for authentication:
+<a id="authentication"></a>
 
-1. **Bypass Authentication:**
-   - Edit your `.env` file and set:
+### 身份验证
+
+本地开发有两种身份验证方式：
+
+1. **跳过身份验证：**
+   - 编辑 `.env` 文件并设置：
      ```
      PHOENIX_ENABLE_AUTH=False
      ```
-   - This will disable authentication and allow you to access the app without logging in.
+   - 这会禁用身份验证，允许无需登录即可访问应用。
 
-2. **Default Credentials:**
-   - If authentication is enabled, you can log in with the default credentials:
-     - **Email:** `admin@localhost`
-     - **Password:** `admin`
+2. **默认凭证：**
+   - 如果启用了身份验证，可使用默认凭证登录：
+     - **邮箱：** `admin@localhost`
+     - **密码：** `admin`
 
-## Build
+<a id="build"></a>
 
-The app is written in `typescript` and leverages [esbuild](https://esbuild.github.io/) as well as the [relay-compiler](https://relay.dev/docs/guides/compiler/) to compile highly efficient `graphql` queries. Because of this, the build script involves:
+## 构建
 
-1. Building the `javascript` and `css` assets using `esbuild`
-2. Building the compiled graphql queries using the `relay-compiler`
-3. Building the static assets, e.g. scaffolding the server static serving directory
+应用使用 `typescript` 编写，并通过 [esbuild](https://esbuild.github.io/) 和 [relay-compiler](https://relay.dev/docs/guides/compiler/) 编译高效的 `graphql` 查询。因此，构建脚本包括：
 
-The web build ensures that the UI as well as the data-fetching layer is fully type safe with regards to the GraphQL schema. The type safety of the application is statically validated via the typescript CI pipeline.
+1. 使用 `esbuild` 构建 `javascript` 和 `css` 资源
+2. 使用 `relay-compiler` 构建编译后的 graphql 查询
+3. 构建静态资源，例如初始化服务器的静态资源目录
 
-## Test
+Web 构建确保 UI 和数据获取层相对于 GraphQL 模式均完全类型安全。应用的类型安全通过 typescript CI 流水线进行静态验证。
 
-The Phoenix app is statically analyzed for type safety via `typescript`, statically analyzed for best practices via [oxlint](https://oxc.rs/docs/guide/usage/linter) (with [type-aware linting](https://oxc.rs/docs/guide/usage/linter/type-aware) via `oxlint-tsgolint`, enabled through the `typeAware` option in `.oxlintrc.json`), and the formatting is enforced via the `oxfmt` code formatter. React Compiler rules are configured as errors, so every new compiler diagnostic fails both local linting and CI. Existing React Compiler bailouts are suppressed at their current callsites; do not suppress new findings without documenting why the affected code must remain uncompiled. For unit testing, the app leverages [vitest](https://vitest.dev/) as a unit testing framework. Lastly, for integration tests (e.g. end-to-end or e2e), [playwright](https://playwright.dev) is used. The following `pnpm` commands correspond to the above safeguards.
+<a id="test"></a>
+
+## 测试
+
+Phoenix 应用通过 `typescript` 静态分析类型安全，通过 [oxlint](https://oxc.rs/docs/guide/usage/linter) 静态检查最佳实践（利用 `oxlint-tsgolint` 进行[类型感知代码检查](https://oxc.rs/docs/guide/usage/linter/type-aware)，通过 `.oxlintrc.json` 的 `typeAware` 选项启用），并通过 `oxfmt` 强制格式化。React Compiler 规则被配置为错误，因此每个新增编译器诊断都会使本地代码检查和 CI 失败。现有 React Compiler 无法编译的情况已在相应调用处抑制；若未记录受影响代码必须保持未编译状态的原因，不得抑制新问题。单元测试使用 [vitest](https://vitest.dev/) 框架；集成测试（例如端到端或 e2e）使用 [playwright](https://playwright.dev)。以下 `pnpm` 命令对应上述检查。
 
 ```shell
 pnpm run typecheck
@@ -90,11 +106,13 @@ pnpm test
 pnpm run test:e2e
 ```
 
-NB: Formatting is also enforced via [pre-commit](https://pre-commit.com/) hooks.
+注意：也通过 [pre-commit](https://pre-commit.com/) 钩子强制执行格式化。
 
-### Integration Tests
+<a id="integration-tests"></a>
 
-The integration tests run against the phoenix server built in "production" mode. Meaning you will have to have phoenix installed in your local python environment.
+### 集成测试
+
+集成测试针对以“生产”模式构建的 Phoenix 服务器运行，因此需在本地 Python 环境中安装 Phoenix。
 
 ```shell
 # from the root of the repository
@@ -105,24 +123,28 @@ pnpm run build
 pnpm run test:e2e
 ```
 
-## Architecture
+<a id="architecture"></a>
 
-The Phoenix app is a [react](https://react.dev) application built on top of a [graphql](https://graphql.org) API. The data-fetching for the API is managed via [react-relay](https://relay.dev/), an opinionated data fetching and storage library. The API contract between the server and the app is managed via a `schema.graphql` file stored at the root of this directory. The schema is generated via server build scripts. Similarly the queries against the schema are compiled via the `relay-compiler`. `relay` allows the application to colocate the data requirements of components with the components itself, enabling maximal efficiency and clarity as to how data flows through the system.
+## 架构
 
-Within the [react](https://react.dev) app, there is additional `state` and `context` that is managed via `react`'s built-in hooks. In addition to `react`'s built-in state management, [zustand](https://github.com/pmndrs/zustand) is also leveraged as central store to manage the large amount of state for the point-cloud visualization. `zustand` provides a highly scalable way to manage a large amount of state across components without paying a performance penalty when sub-parts of the state changes due to user interaction.
+Phoenix 应用是在 [graphql](https://graphql.org) API 之上构建的 [react](https://react.dev) 应用。API 数据获取由 [react-relay](https://relay.dev/) 管理，这是一个具有明确设计约定的数据获取和存储库。服务器与应用之间的 API 契约由当前目录根部的 `schema.graphql` 文件管理，该模式通过服务器构建脚本生成。针对该模式的查询同样通过 `relay-compiler` 编译。`relay` 允许将组件的数据需求与组件本身放在一起，使系统数据流尽可能高效、清晰。
 
-The phoenix app is a client-side only SPA (single-page application), meaning that it entirely manages the routing of the pages via [react-router](https://reactrouter.com/en/main). `react-router` is leveraged to provide nested routing (e.g. rendering different parts of the UI based on the path) and is also utilized to load data as routes change (see [loaders](https://reactrouter.com/en/main/route/loader)).
+在 [react](https://react.dev) 应用内，还通过 `react` 内置 Hook 管理额外的 `state` 和 `context`。除 `react` 内置状态管理外，还使用 [zustand](https://github.com/pmndrs/zustand) 作为中心存储，管理点云可视化的大量状态。`zustand` 提供可扩展的跨组件状态管理方式，用户交互引起局部状态变化时不会带来性能损失。
 
-Phoenix uses `react-aria-components` for it's components. Arize also maintains `@arizeai/point-cloud` a 3D visualization library built on top of [threejs](https://threejs.org/) and [react-three-fiber](https://docs.pmnd.rs/react-three-fiber/getting-started/introduction).
+Phoenix 应用是纯客户端 SPA（单页应用），通过 [react-router](https://reactrouter.com/en/main) 完全管理页面路由。`react-router` 提供嵌套路由（如根据路径渲染 UI 的不同部分），也用于在路由变化时加载数据（参见[加载器](https://reactrouter.com/en/main/route/loader)）。
 
-## Dev Tools
+Phoenix 使用 `react-aria-components` 构建组件。Arize 还维护 `@arizeai/point-cloud`，这是基于 [threejs](https://threejs.org/) 和 [react-three-fiber](https://docs.pmnd.rs/react-three-fiber/getting-started/introduction) 构建的 3D 可视化库。
 
-The following browser extensions are recommended for developing the Phoenix app:
+<a id="dev-tools"></a>
 
-- **[Redux DevTools](https://chromewebstore.google.com/detail/redux-devtools/lmhkpmbekcpmknklioeibfkpmmfibljd?hl=en&pli=1)** - For debugging application state changes. Works with any state management architecture, including Zustand which is used in Phoenix for managing playground state and more.
+## 开发工具
 
-- **[React Developer Tools](https://react.dev/learn/react-developer-tools)** - For inspecting React components, editing props and state, and identifying performance problems. Essential for debugging performance issues and react compiler optimizations.
+开发 Phoenix 应用时，推荐以下浏览器扩展：
 
-- **[GraphQL Network Inspector](https://chromewebstore.google.com/detail/graphql-network-inspector/ndlbedplllcgconngcnfmkadhokfaaln)** - For inspecting GraphQL requests, including support for query batching. Useful for debugging the GraphQL API interactions between the Phoenix app and server.
+- **[Redux DevTools](https://chromewebstore.google.com/detail/redux-devtools/lmhkpmbekcpmknklioeibfkpmmfibljd?hl=en&pli=1)** - 用于调试应用状态变化。适用于任何状态管理架构，包括 Phoenix 用于管理 Playground 等状态的 Zustand。
 
-- **[Relay Developer Tools](https://chromewebstore.google.com/detail/relay-developer-tools/ncedobpgnmkhcmnnkcimnobpfepidadl)** - For inspecting data in the Relay store and how data changes over time in response to GraphQL queries and mutations. Essential for debugging the React Relay data-fetching layer used throughout Phoenix.
+- **[React Developer Tools](https://react.dev/learn/react-developer-tools)** - 用于检查 React 组件、编辑 props 和状态，以及发现性能问题，是调试性能问题和 React Compiler 优化的重要工具。
+
+- **[GraphQL Network Inspector](https://chromewebstore.google.com/detail/graphql-network-inspector/ndlbedplllcgconngcnfmkadhokfaaln)** - 用于检查 GraphQL 请求，支持查询批处理，有助于调试 Phoenix 应用与服务器之间的 GraphQL API 交互。
+
+- **[Relay Developer Tools](https://chromewebstore.google.com/detail/relay-developer-tools/ncedobpgnmkhcmnnkcimnobpfepidadl)** - 用于检查 Relay 存储中的数据，以及数据如何随 GraphQL 查询和变更而变化，是调试 Phoenix 广泛使用的 React Relay 数据获取层的重要工具。

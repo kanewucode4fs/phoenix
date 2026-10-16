@@ -1,20 +1,26 @@
-# Mock LLM Server
+<a id="mock-llm-server"></a>
 
-A TypeScript mock server that simulates **OpenAI**, **Anthropic**, and **Google GenAI (Gemini)** APIs for testing streaming, rate limiting, and tool calls. Includes a **real-time dashboard** for monitoring and controlling the server.
+# LLM 模拟服务
 
-## Features
+一个 TypeScript 模拟服务，用于模拟 **OpenAI**、**Anthropic** 和 **Google GenAI（Gemini）** API，测试流式输出、限流和工具调用。包含用于监控和控制服务的**实时仪表盘**。
 
-- **OpenAI Chat Completions API** - Full compatibility with the official OpenAI SDK
-- **OpenAI Responses API** - Newer API with event-based streaming
-- **Anthropic Messages API** - Full compatibility with the official Anthropic SDK
-- **Google GenAI (Gemini) API** - Full compatibility with the official @google/genai SDK
-- **Streaming support** - SSE streaming with configurable chunk size and delay
-- **Tool calls** - Generates fake tool call/use responses based on provided JSON Schema
-- **Rate limiting** - Configurable rate limiting with multiple modes
-- **Real-time Dashboard** - Monitor connections, adjust latency, toggle rate limiting on-the-fly
-- **Error Injection** - Simulate server errors, auth errors, timeouts, and bad requests
+<a id="features"></a>
 
-## Quick Start
+## 功能
+
+- **OpenAI Chat Completions API**：完全兼容官方 OpenAI SDK
+- **OpenAI Responses API**：较新的 API，支持基于事件的流式输出
+- **Anthropic Messages API**：完全兼容官方 Anthropic SDK
+- **Google GenAI（Gemini）API**：完全兼容官方 @google/genai SDK
+- **流式支持**：SSE 流式输出，可配置分块大小和延迟
+- **工具调用**：根据提供的 JSON Schema 生成模拟工具调用或使用响应
+- **限流**：支持多种可配置限流模式
+- **实时仪表盘**：监控连接、调整延迟、动态开关限流
+- **错误注入**：模拟服务端错误、认证错误、超时和错误请求
+
+<a id="quick-start"></a>
+
+## 快速开始
 
 ```bash
 # Install dependencies
@@ -30,31 +36,35 @@ pnpm dev
 pnpm start
 ```
 
-The server runs on `http://localhost:57593` by default.
+服务默认运行在 `http://localhost:57593`。
 
-## Dashboard
+<a id="dashboard"></a>
 
-Access the real-time monitoring dashboard at `http://localhost:57593/dashboard`
+## 仪表盘
 
-**Features:**
+实时监控仪表盘地址：`http://localhost:57593/dashboard`。
 
-- **Connection Monitor** - Active connections per endpoint
-- **Request Rate Chart** - Live requests/sec graph
-- **Latency Controls** - Adjust streaming delays, jitter, chunk size
-- **Rate Limiting** - Toggle on/off, select strategy (fixed-window, token-bucket, etc.)
-- **Error Injection** - Set error rate and types (500, 401, 403, 400, timeout)
-- **Event Log** - Real-time stream of all events
+**功能：**
 
-**API Endpoints:**
+- **连接监控**：各端点的活跃连接数
+- **请求速率图**：每秒请求数实时曲线
+- **延迟控制**：调整流式延迟、抖动和分块大小
+- **限流**：开关限流并选择策略，如 fixed-window、token-bucket
+- **错误注入**：设置错误率和类型（500、401、403、400、超时）
+- **事件日志**：实时展示全部事件
 
-- `GET /api/config` - Current configuration
-- `PATCH /api/config/global` - Update global config
-- `PATCH /api/config/endpoints/:endpoint` - Per-endpoint config
-- `GET /api/metrics` - Current metrics snapshot
-- `POST /api/rate-limit/reset` - Reset rate limit counters
-- `WebSocket /ws` - Real-time metrics and events
+**API 端点：**
 
-## Usage with OpenAI SDK
+- `GET /api/config`：当前配置
+- `PATCH /api/config/global`：更新全局配置
+- `PATCH /api/config/endpoints/:endpoint`：端点级配置
+- `GET /api/metrics`：当前指标快照
+- `POST /api/rate-limit/reset`：重置限流计数器
+- `WebSocket /ws`：实时指标与事件
+
+<a id="usage-with-openai-sdk"></a>
+
+## 配合 OpenAI SDK 使用
 
 ```python
 from openai import OpenAI
@@ -79,7 +89,9 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="")
 ```
 
-### Tool Calls
+<a id="tool-calls"></a>
+
+### 工具调用
 
 ```python
 response = client.chat.completions.create(
@@ -110,9 +122,11 @@ print(tool_call.function.name)  # "get_weather"
 print(tool_call.function.arguments)  # '{"location": "San Francisco", "unit": "celsius"}'
 ```
 
-## Usage with Anthropic SDK
+<a id="usage-with-anthropic-sdk"></a>
 
-Note: The Anthropic SDK automatically adds `/v1` to the base URL, so use the root URL.
+## 配合 Anthropic SDK 使用
+
+注意：Anthropic SDK 会自动向基础 URL 追加 `/v1`，因此应使用根 URL。
 
 ```python
 from anthropic import Anthropic
@@ -140,7 +154,9 @@ with client.messages.stream(
         print(text, end="")
 ```
 
-### Anthropic Tool Use
+<a id="anthropic-tool-use"></a>
+
+### Anthropic 工具使用
 
 ```python
 response = client.messages.create(
@@ -170,7 +186,9 @@ for block in response.content:
         print(block.input)  # {"location": "San Francisco", "unit": "celsius"}
 ```
 
-## Usage with Google GenAI SDK
+<a id="usage-with-google-genai-sdk"></a>
+
+## 配合 Google GenAI SDK 使用
 
 ```typescript
 import { GoogleGenAI } from "@google/genai";
@@ -200,7 +218,9 @@ for await (const chunk of stream) {
 }
 ```
 
-### Gemini Function Calling
+<a id="gemini-function-calling"></a>
+
+### Gemini 函数调用
 
 ```typescript
 const response = await ai.models.generateContent({
@@ -235,112 +255,134 @@ if (response.functionCalls) {
 }
 ```
 
-## Configuration
+<a id="configuration"></a>
 
-Configure via environment variables:
+## 配置
 
-| Variable                        | Description                                                              | Default   |
-| ------------------------------- | ------------------------------------------------------------------------ | --------- |
-| `PORT`                          | Server port                                                              | `57593`   |
-| `RATE_LIMIT_ENABLED`            | Enable rate limiting                                                     | `false`   |
-| `RATE_LIMIT_MODE`               | `always`, `random`, or `after_n`                                         | `after_n` |
-| `RATE_LIMIT_AFTER_N`            | Fail after N requests (when mode=after_n)                                | `5`       |
-| `RATE_LIMIT_RANDOM_PROBABILITY` | Probability of 429 (when mode=random)                                    | `0.3`     |
-| `RATE_LIMIT_REQUESTS`           | Max requests per window                                                  | `10`      |
-| `RATE_LIMIT_WINDOW_MS`          | Rate limit window in ms                                                  | `60000`   |
-| `STREAM_INITIAL_DELAY_MS`       | Initial delay before first chunk (time to first token)                   | `100`     |
-| `STREAM_DELAY_MS`               | Base delay between stream chunks                                         | `10`      |
-| `STREAM_JITTER_MS`              | Random jitter added to delay (0 to N ms)                                 | `10`      |
-| `STREAM_CHUNK_SIZE`             | Characters per stream chunk                                              | `10`      |
-| `TOOL_CALL_PROBABILITY`         | Probability of tool call when tools provided                             | `0.75`    |
-| `DEFAULT_RESPONSE`              | Static response text (if unset, 50% from response pool, 50% lorem ipsum) | (dynamic) |
+通过环境变量配置：
 
-### Example: Test Rate Limiting
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `PORT` | 服务端口 | `57593` |
+| `RATE_LIMIT_ENABLED` | 启用限流 | `false` |
+| `RATE_LIMIT_MODE` | `always`、`random` 或 `after_n` | `after_n` |
+| `RATE_LIMIT_AFTER_N` | N 次请求后失败，适用于 mode=after_n | `5` |
+| `RATE_LIMIT_RANDOM_PROBABILITY` | 返回 429 的概率，适用于 mode=random | `0.3` |
+| `RATE_LIMIT_REQUESTS` | 每个窗口的最大请求数 | `10` |
+| `RATE_LIMIT_WINDOW_MS` | 限流窗口，单位为毫秒 | `60000` |
+| `STREAM_INITIAL_DELAY_MS` | 首个分块前的初始延迟，即首令牌时间 | `100` |
+| `STREAM_DELAY_MS` | 流式分块之间的基础延迟 | `10` |
+| `STREAM_JITTER_MS` | 延迟上额外增加的随机抖动，范围为 0 到 N 毫秒 | `10` |
+| `STREAM_CHUNK_SIZE` | 每个流式分块的字符数 | `10` |
+| `TOOL_CALL_PROBABILITY` | 提供工具时触发工具调用的概率 | `0.75` |
+| `DEFAULT_RESPONSE` | 固定响应文本；未设置时，50% 来自响应池，50% 为 lorem ipsum 占位文本 | 动态生成 |
+
+<a id="example-test-rate-limiting"></a>
+
+### 示例：测试限流
 
 ```bash
 # Start with rate limiting enabled, fail after 3 requests
 RATE_LIMIT_ENABLED=true RATE_LIMIT_MODE=after_n RATE_LIMIT_AFTER_N=3 pnpm start
 ```
 
-### Example: Fast Streaming
+<a id="example-fast-streaming"></a>
+
+### 示例：快速流式输出
 
 ```bash
 # Very fast streaming with small chunks
 STREAM_DELAY_MS=10 STREAM_CHUNK_SIZE=5 pnpm start
 ```
 
-### Example: Always Make Tool Calls
+<a id="example-always-make-tool-calls"></a>
+
+### 示例：始终调用工具
 
 ```bash
 TOOL_CALL_PROBABILITY=1.0 pnpm start
 ```
 
-## API Endpoints
+<a id="api-endpoints"></a>
 
-### OpenAI-Compatible
+## API 端点
 
-| Endpoint                    | Description                                        |
-| --------------------------- | -------------------------------------------------- |
-| `POST /v1/chat/completions` | Chat Completions API (streaming and non-streaming) |
-| `POST /v1/responses`        | Responses API (streaming and non-streaming)        |
-| `GET /v1/models`            | List available models                              |
+<a id="openai-compatible"></a>
 
-### Anthropic-Compatible
+### 兼容 OpenAI
 
-| Endpoint            | Description                                |
-| ------------------- | ------------------------------------------ |
-| `POST /v1/messages` | Messages API (streaming and non-streaming) |
+| 端点 | 说明 |
+| --- | --- |
+| `POST /v1/chat/completions` | Chat Completions API，支持流式和非流式 |
+| `POST /v1/responses` | Responses API，支持流式和非流式 |
+| `GET /v1/models` | 列出可用模型 |
 
-### Google GenAI (Gemini)-Compatible
+<a id="anthropic-compatible"></a>
 
-| Endpoint                                           | Description                         |
-| -------------------------------------------------- | ----------------------------------- |
-| `POST /v1beta/models/:model:generateContent`       | Generate content (non-streaming)    |
-| `POST /v1beta/models/:model:streamGenerateContent` | Generate content (streaming)        |
-| `POST /v1/models/:model:generateContent`           | Generate content v1 (non-streaming) |
-| `POST /v1/models/:model:streamGenerateContent`     | Generate content v1 (streaming)     |
+### 兼容 Anthropic
 
-### Admin & Monitoring
+| 端点 | 说明 |
+| --- | --- |
+| `POST /v1/messages` | Messages API，支持流式和非流式 |
 
-| Endpoint                                 | Description                      |
-| ---------------------------------------- | -------------------------------- |
-| `GET /health`                            | Health check                     |
-| `GET /api/config`                        | View current configuration       |
-| `PATCH /api/config/global`               | Update global configuration      |
-| `GET /api/config/endpoints`              | List all endpoints with config   |
-| `PATCH /api/config/endpoints/:endpoint`  | Update endpoint-specific config  |
-| `DELETE /api/config/endpoints/:endpoint` | Clear endpoint overrides         |
-| `POST /api/config/reset`                 | Reset to initial configuration   |
-| `GET /api/metrics`                       | Current metrics snapshot         |
-| `GET /api/metrics/latency/:endpoint`     | Latency percentiles for endpoint |
-| `POST /api/metrics/reset`                | Reset all metrics                |
-| `POST /api/rate-limit/reset`             | Reset all rate limiter states    |
-| `POST /api/rate-limit/reset/:endpoint`   | Reset rate limiter for endpoint  |
-| `GET /api/rate-limit/strategies`         | List available strategies        |
-| `GET /api/detailed-metrics`              | Full detailed metrics snapshot   |
-| `GET /api/detailed-metrics/export/json`  | Export metrics as JSON           |
-| `GET /api/detailed-metrics/export/csv`   | Export time series as CSV        |
-| `GET /api/failure-modes`                 | List available failure modes     |
-| `WebSocket /ws`                          | Real-time metrics and events     |
+<a id="google-genai-gemini-compatible"></a>
 
-## Rate Limiting Strategies
+### 兼容 Google GenAI（Gemini）
 
-The server supports multiple rate limiting strategies per endpoint:
+| 端点 | 说明 |
+| --- | --- |
+| `POST /v1beta/models/:model:generateContent` | 生成内容，非流式 |
+| `POST /v1beta/models/:model:streamGenerateContent` | 生成内容，流式 |
+| `POST /v1/models/:model:generateContent` | v1 生成内容，非流式 |
+| `POST /v1/models/:model:streamGenerateContent` | v1 生成内容，流式 |
 
-| Strategy         | Description                                                                  |
-| ---------------- | ---------------------------------------------------------------------------- |
-| `none`           | Rate limiting disabled                                                       |
-| `fixed-window`   | Classic fixed time window counter                                            |
-| `sliding-window` | Rolling window for smoother limiting                                         |
-| `token-bucket`   | Allows bursts up to bucket capacity                                          |
-| `leaky-bucket`   | Processes requests at a fixed rate                                           |
-| `after-n`        | First N requests succeed, then all return 429 (good for testing retry logic) |
-| `random`         | Each request has a configurable probability of 429                           |
-| `always`         | Every request returns 429                                                    |
+<a id="admin--monitoring"></a>
 
-## Responses API Usage
+### 管理与监控
 
-The Responses API uses a different format from Chat Completions:
+| 端点 | 说明 |
+| --- | --- |
+| `GET /health` | 健康检查 |
+| `GET /api/config` | 查看当前配置 |
+| `PATCH /api/config/global` | 更新全局配置 |
+| `GET /api/config/endpoints` | 列出所有端点及配置 |
+| `PATCH /api/config/endpoints/:endpoint` | 更新指定端点配置 |
+| `DELETE /api/config/endpoints/:endpoint` | 清除端点覆盖配置 |
+| `POST /api/config/reset` | 重置为初始配置 |
+| `GET /api/metrics` | 当前指标快照 |
+| `GET /api/metrics/latency/:endpoint` | 指定端点的延迟百分位数 |
+| `POST /api/metrics/reset` | 重置全部指标 |
+| `POST /api/rate-limit/reset` | 重置全部限流器状态 |
+| `POST /api/rate-limit/reset/:endpoint` | 重置指定端点限流器 |
+| `GET /api/rate-limit/strategies` | 列出可用策略 |
+| `GET /api/detailed-metrics` | 完整详细指标快照 |
+| `GET /api/detailed-metrics/export/json` | 将指标导出为 JSON |
+| `GET /api/detailed-metrics/export/csv` | 将时间序列导出为 CSV |
+| `GET /api/failure-modes` | 列出可用失败模式 |
+| `WebSocket /ws` | 实时指标与事件 |
+
+<a id="rate-limiting-strategies"></a>
+
+## 限流策略
+
+服务支持为每个端点分别配置多种限流策略：
+
+| 策略 | 说明 |
+| --- | --- |
+| `none` | 禁用限流 |
+| `fixed-window` | 经典固定时间窗口计数器 |
+| `sliding-window` | 通过滑动窗口平滑限流 |
+| `token-bucket` | 允许不超过桶容量的突发流量 |
+| `leaky-bucket` | 以固定速率处理请求 |
+| `after-n` | 前 N 次请求成功，之后全部返回 429，适用于测试重试逻辑 |
+| `random` | 每个请求以可配置概率返回 429 |
+| `always` | 每个请求都返回 429 |
+
+<a id="responses-api-usage"></a>
+
+## Responses API 用法
+
+Responses API 的格式不同于 Chat Completions：
 
 ```python
 import httpx2
@@ -358,9 +400,11 @@ response = httpx2.post(
 print(response.json())
 ```
 
-### Streaming (Responses API)
+<a id="streaming-responses-api"></a>
 
-The Responses API uses event-based streaming with named events:
+### 流式输出（Responses API）
+
+Responses API 使用带名称事件的流式输出：
 
 ```python
 import httpx2
@@ -376,9 +420,11 @@ with httpx2.stream(
         # Events: response.created, response.output_text.delta, response.completed, etc.
 ```
 
-## Anthropic Streaming Details
+<a id="anthropic-streaming-details"></a>
 
-The Anthropic Messages API uses a different streaming format with named events:
+## Anthropic 流式输出详情
+
+Anthropic Messages API 使用另一种带名称事件的流式格式：
 
 ```python
 from anthropic import Anthropic
@@ -401,16 +447,18 @@ with client.messages.stream(
             print(f"\nStop reason: {event.delta.stop_reason}")
 ```
 
-Event sequence:
+事件顺序：
 
-1. `message_start` - Initial message object with empty content
-2. `content_block_start` - Start of each content block (text or tool_use)
-3. `content_block_delta` - Incremental content (text_delta or input_json_delta)
-4. `content_block_stop` - End of content block
-5. `message_delta` - Final stop_reason and usage
-6. `message_stop` - Stream complete
+1. `message_start`：初始消息对象，内容为空
+2. `content_block_start`：每个内容块的开始，类型为 text 或 tool_use
+3. `content_block_delta`：增量内容，类型为 text_delta 或 input_json_delta
+4. `content_block_stop`：内容块结束
+5. `message_delta`：最终 stop_reason 和 usage
+6. `message_stop`：流结束
 
-## Project Structure
+<a id="project-structure"></a>
+
+## 项目结构
 
 ```
 mock-llm-server/

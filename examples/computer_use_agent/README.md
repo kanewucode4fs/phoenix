@@ -1,86 +1,98 @@
-# Computer Use Agent Examples  
+<a id="computer-use-agent-examples"></a>
+# Computer Use Agent 示例
 
-## Overview  
+<a id="overview"></a>
+## 概述
 
-This repository contains examples for building a **Computer Use (Operator) Agent** using **LangGraph** and **Anthropic**. The agent leverages Anthropic's **beta APIs** to perform various computer-related tasks, including executing Bash commands, editing files, and performing system operations.  
+本仓库包含使用 **LangGraph** 和 **Anthropic** 构建 **Computer Use（计算机操作）Agent** 的示例。Agent 使用 Anthropic 的 **Beta API** 执行各种计算机相关任务，包括执行 Bash 命令、编辑文件和进行系统操作。
 
-**⚠️ Important:** Since the agent can execute system-level operations, it is recommended to run it inside a **virtual machine (VM)** for safety. To facilitate this, we provide **Docker files** to set up an **Ubuntu virtual machine** and **noVNC** for accessing the VM via a web browser.  
+**⚠️ 重要提示：** Agent 能够执行系统级操作，因此出于安全考虑，建议在**虚拟机（VM）**中运行。为此，我们提供了 **Docker 文件**，用于配置 **Ubuntu 虚拟机**和 **noVNC**，以便通过浏览器访问虚拟机。
 
-**💡 Note:** All the tools used in this example are **Ubuntu compatible**.  
-
----  
-
-## Features  
-- **UI:** Built with Gradio app
-- **Computer Use Agent Workflow:** Built using **LangGraph**
-- **Anthropic Model Integration:** Uses **Anthropic's Computer Use beta models**
-- **Prebuilt Tools:** Includes tools for **Bash execution, file editing, and system operations**
-- **Instrumentation with Phoenix:**  Auto-instrumentation with OpenInference decorators to fully instrument the agent
-- **End-to-end tracing:** Track agent performance using Phoenix
-
+**💡 说明：** 本示例使用的所有工具均**兼容 Ubuntu**。
 
 ---  
 
-## Requirements  
+<a id="features"></a>
+## 功能
+- **界面：** 使用 Gradio 应用构建。
+- **Computer Use Agent 工作流：** 使用 **LangGraph** 构建。
+- **Anthropic 模型集成：** 使用 **Anthropic 的 Computer Use Beta 模型**。
+- **预置工具：** 包含用于 **Bash 执行、文件编辑和系统操作**的工具。
+- **Phoenix 插桩：** 使用 OpenInference 装饰器自动插桩，全面追踪 Agent。
+- **端到端追踪：** 使用 Phoenix 跟踪 Agent 性能。
 
-- **Anthropic API Key**  
-- **Python 3.x**  
-- **LangGraph library**  
-- **Phoenix for instrumentation**  
-- **Gradio for UI**
----  
-
-## Installation  
-
-💡 **No need to install dependencies manually!** The required libraries are already included in the **Docker image**.  
-Just Run the docker image with docker command, open a web browser and access the Ubuntu environment using **noVNC**.
 
 ---  
 
-## Usage  
+<a id="requirements"></a>
+## 环境要求
 
-### 1. Start the Virtual Machine Using Docker  
-First, build the Docker image:  
+- **Anthropic API 密钥**
+- **Python 3.x**
+- **LangGraph 库**
+- **Phoenix，用于插桩**
+- **Gradio，用于界面**
+---  
+
+<a id="installation"></a>
+## 安装
+
+💡 **无需手动安装依赖！** 所需库已包含在 **Docker 镜像**中。
+只需使用 Docker 命令运行镜像，然后打开浏览器，通过 **noVNC** 访问 Ubuntu 环境。
+
+---  
+
+<a id="usage"></a>
+## 使用方法
+
+<a id="1-start-the-virtual-machine-using-docker"></a>
+### 1. 使用 Docker 启动虚拟机
+首先构建 Docker 镜像：
 ```sh  
 docker build -t computer-use-agent:1.0 .  
 ```  
-Run the container:  
+运行容器：
 ```sh  
 docker run -v $HOME/.anthropic:/home/computeruse/.anthropic \  
            -p 5900:5900 -p 7860:7860 -p 6080:6080 -p 8080:8080 \  
            -it computer-use-agent:1.0  
 ```  
 
-### 2. Access the Virtual Machine  
-Once the container is running, access the Ubuntu environment using **noVNC**:  
+<a id="2-access-the-virtual-machine"></a>
+### 2. 访问虚拟机
+容器运行后，使用 **noVNC** 访问 Ubuntu 环境：
 
-- Open a web browser and visit:  
+- 打开浏览器并访问：
   ```  
   http://localhost:8080  
   ```  
 
-### 3. Input all the required configurations in the webpage
+<a id="3-input-all-the-required-configurations-in-the-webpage"></a>
+### 3. 在网页中输入全部必需配置
 
-* **Anthropic API Key**
-* **Phoenix API Key**
-* **Phoenix Collector Endpoint**
-* **Phoenix Project Name**
+* **Anthropic API 密钥**
+* **Phoenix API 密钥**
+* **Phoenix 采集器端点**
+* **Phoenix 项目名称**
 
-### 4. Run the Agent
-- Provide input commands, and the agent will execute them inside the **Ubuntu virtual machine**.  
-- Monitor system actions via the **VNC interface**.  
-
----  
-
-## File Structure  
-- **`app.py`** – Main script for running the agent.
-- **`agent.py`** – Agent script.  
-- **`tools/`** – Contains utilities for computer, bash, edit file tools.  
-- **`requirements.txt`** – List of required dependencies (**already included in the Docker image**).  
+<a id="4-run-the-agent"></a>
+### 4. 运行 Agent
+- 输入命令后，Agent 会在 **Ubuntu 虚拟机**中执行。
+- 通过 **VNC 界面**监控系统操作。
 
 ---  
 
-## Notes  
+<a id="file-structure"></a>
+## 文件结构
+- **`app.py`**：运行 Agent 的主脚本。
+- **`agent.py`**：Agent 脚本。
+- **`tools/`**：包含计算机操作、Bash 和文件编辑工具的辅助功能。
+- **`requirements.txt`**：所需依赖清单（**已包含在 Docker 镜像中**）。
 
-- Ensure you run the agent inside a **virtual machine** to prevent unintended system modifications.  
-- **All tools used in this model are Ubuntu compatible.**
+---  
+
+<a id="notes"></a>
+## 注意事项
+
+- 请确保在**虚拟机**中运行 Agent，以防意外修改系统。
+- **此模型使用的所有工具均兼容 Ubuntu。**

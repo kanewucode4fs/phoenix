@@ -1,175 +1,120 @@
-# Session Filter DSL
+<a id="session-filter-dsl"></a>
 
-> This spec (with its conformance tests) is the authority on what the language accepts. The
-> **user-facing** grammar reference is the public
-> [Filter Expressions](https://arize.com/docs/phoenix/tracing/how-to-tracing/filter-expressions)
-> doc — a curated derivative of this spec, not a second authority. Keep them in sync when the
-> accepted grammar changes.
+# 会话过滤 DSL
 
-Phoenix groups traces into sessions by `session_id`. A trace records one exchange — an input
-and the response produced for it — so a session reads as a conversation. The session filter
-DSL lets a user or an agent select sessions with a small Python expression, e.g.:
+> 本规范及其一致性测试是判断语言接受哪些形式的权威依据。**面向用户**的语法参考是公开的[过滤表达式](https://arize.com/docs/phoenix/tracing/how-to-tracing/filter-expressions)文档，它是本规范经整理的派生文档，并非第二个权威来源。接受的语法变化时，应保持两者同步。
+
+Phoenix 按 `session_id` 将追踪分组为会话。一条追踪记录一次交互，即输入及为其生成的响应，因此会话呈现为一段对话。会话过滤 DSL 允许用户或 Agent 使用简短的 Python 表达式选择会话，例如：
 
 ```python
 num_traces > 5 and any(span.status_code == "ERROR" for span in spans)
 ```
 
-It is the session-level sibling of the span filter language used on the spans view. Today it
-drives the sessions table (filtering, counts, and the filter bar). It is also the filter
-vocabulary that session-level project evaluators (see [online-evals.md](./online-evals.md))
-will use to scope which sessions get evaluated.
+它是 Span 视图所用过滤语言的会话级同类语言。目前驱动会话表格的过滤、计数和过滤栏，也是会话级项目评估器（见 [online-evals.md](./online-evals.md)）将用于限定被评估会话范围的过滤词汇。
 
-Core modules:
+核心模块：
 
-- `src/phoenix/trace/dsl/filter.py` — the shared filter compiler, parameterized per grain
-- `src/phoenix/trace/dsl/session_filter.py` — the session bindings and query assembly
-- `src/phoenix/db/session_aggregates.py` — reusable per-session aggregate subqueries
+- `src/phoenix/trace/dsl/filter.py`：共享过滤编译器，按粒度参数化
+- `src/phoenix/trace/dsl/session_filter.py`：会话绑定和查询组装
+- `src/phoenix/db/session_aggregates.py`：可复用的逐会话聚合子查询
 
-## Design Philosophy
+<a id="design-philosophy"></a>
 
-Four commitments shaped the design. They matter more than any single feature, because they
-decide how the language grows.
+## 设计理念
 
-### One language family, one flavor
+四项承诺塑造了这一设计。它们比任何单项功能更重要，因为它们决定语言如何演进。
 
-Phoenix already has a span filter language: a Python expression over flat names like `name`,
-`latency_ms`, and `annotations["quality"].score`. The session language keeps that exact
-flavor — same expression grammar, same flat-name style, same casting and annotation idioms,
-same error messages. Users and agents learn the family once and carry that knowledge across
-grains ("grain" here means the artifact level a filter runs at: span, session, and later
-trace). Internal consistency across grains outranks per-grain optimization. If a construct
-cannot be made consistent with the family, that is a design smell to resolve before shipping.
+<a id="one-language-family-one-flavor"></a>
 
-The commitment is why string containment ignores case at every grain rather than only at the
-one that needed it: the span grain was flipped alongside the session grain so the same query
-gets the same answer in both views. The reasoning is under
-[Case](#case-containment-ignores-it-equality-does-not).
+### 同一语言家族，保持同一风格
 
-### Python with a SQL backend, not Python-flavored SQL
+Phoenix 已有 Span 过滤语言，即针对 `name`、`latency_ms`、`annotations["quality"].score` 等平铺名称的 Python 表达式。会话语言完全保留这一风格：相同的表达式语法、平铺命名方式、类型转换和标注惯用形式，以及错误消息。用户和 Agent 只需学习一次，即可在不同粒度间复用知识（此处“粒度”指过滤器运行的对象层级：Span、会话，以及未来的追踪）。跨粒度的内部一致性优先于针对单一粒度的优化。若某个构造无法与整个语言家族保持一致，就应在发布前解决这一设计问题。
 
-A filter condition is real Python, and Python defines what it means. The same expressions are
-meant to later run as actual Python inside evaluator bindings, so the two execution worlds
-must agree. The spec of correctness is therefore a small Python reference evaluator, and the
-SQL compiler is correct exactly when it agrees with the reference on every test fixture (see
-[Correctness](#correctness-the-reference-evaluator)). Behavior is inherited from CPython
-rather than designed: `all()` over an empty selection is true, `len([])` is `0`, `sum(())` is
-`0`, and `len(...)` accepts a list comprehension but not a generator.
+这一承诺解释了为什么字符串包含判断在所有粒度都忽略大小写，而不是仅在最初需要它的粒度忽略：Span 粒度与会话粒度同步调整，使相同查询在两个视图中得到相同答案。原因见[大小写](#case-containment-ignores-it-equality-does-not)。
 
-Holding that line took a typed acceptance policy, because the shared compiler coerces where it
-cannot type: it casts an operand to a number when the other side is one, reads `is` as `==`,
-and passes any Python operator through to whatever SQLAlchemy makes of it. That is the accepted
-surface of the older span language and stays there. But a language declaring its conditions to
-*be* Python cannot also read `session_id == 1` as a numeric comparison against string data, or
-`+x` as `-x`. So this grain resolves every sub-expression to a type before any SQL is built and
-rejects what does not fit — the rules, and the reason behind each, are in
-[What the language accepts](#what-the-language-accepts). Every divergence found in review ended
-one of two ways: the implementation conforming, or the deviation being legislated below. None
-was left accepted by accident, because an accepted form is a compatibility promise whether or
-not anyone meant to make it.
+<a id="python-with-a-sql-backend-not-python-flavored-sql"></a>
 
-### Legislated deviations from Python
+### 使用 SQL 后端的 Python，而非 Python 风格的 SQL
 
-Filters cannot raise an exception per row, and SQL NULL does not behave like a Python value.
-So the language legislates a deviation from Python: a missing value fails every comparison. A
-session with no recorded input, a span with no token counts, an empty `max(...)` — comparing
-any of these against anything is false, in both directions. Sessions with the value genuinely
-missing are targeted explicitly with `is None`.
+过滤条件是真正的 Python，其含义由 Python 定义。未来这些表达式也将在评估器绑定中作为实际 Python 运行，因此两个执行环境必须一致。正确性规范因此是一份小型 Python 参考评估器；SQL 编译器当且仅当在每份测试数据上都与参考实现一致时才正确（见[正确性](#correctness-the-reference-evaluator)）。行为继承自 CPython，而非重新设计：空选择上的 `all()` 为真，`len([])` 为 `0`，`sum(())` 为 `0`，而 `len(...)` 接受列表推导式，不接受生成器。
 
-There is one other: `in` against a string haystack ignores case, where Python's is exact (see
-[Case](#case-containment-ignores-it-equality-does-not)). Both departures are
-legislated for the same reason — the Python-faithful behavior silently drops rows the user
-meant to find — and both are implemented twice, once in the SQL compiler and once in the
-Python reference, so the two execution worlds still agree. Everything else stays CPython.
+要坚持这一原则，需要基于类型的接受策略，因为共享编译器在无法确定类型时会强制转换：另一侧为数字时将操作数转换为数字，把 `is` 视为 `==`，并将所有 Python 运算符交给 SQLAlchemy 处理。这是旧 Span 语言已接受的范围，仍在那里保留。但既然声明条件*就是* Python，就不能把 `session_id == 1` 解释为针对字符串数据的数值比较，也不能将 `+x` 解释为 `-x`。因此，在构建任何 SQL 前，此粒度都会为每个子表达式解析类型并拒绝不匹配形式；规则及各自原因见[语言接受哪些形式](#what-the-language-accepts)。审查发现的每项差异最终只有两种处理：实现符合规范，或在下文明确定义偏离规则。没有任何形式因疏忽而被接受，因为接受一种形式就是兼容性承诺，无论是否有人本意如此。
 
-### The vocabulary cannot drift from the compiler
+<a id="legislated-deviations-from-python"></a>
 
-Everything the language binds — fields, aggregates, iterables, element fields — is served to
-clients from the same tables the compiler reads. There is no hand-maintained list of
-suggestions. If a name compiles, the vocabulary endpoint serves it; if it does not compile,
-nothing suggests it. Autocomplete, agent tooling, and validation all sit on this one source.
+### 明确定义的 Python 偏离规则
 
-## The Language
+过滤器无法逐行抛出异常，SQL NULL 的行为也不同于 Python 值。因此语言明确定义了一项偏离：缺失值无法通过任何比较。没有记录输入的会话、没有 Token 计数的 Span、空 `max(...)`，与任何内容比较都为假，无论操作数方向。真正缺少该值的会话应通过 `is None` 显式选择。
 
-### Session fields
+另一项偏离是：针对字符串搜索范围的 `in` 忽略大小写，而 Python 精确匹配（见[大小写](#case-containment-ignores-it-equality-does-not)）。两项偏离的原因相同：忠实于 Python 的行为会静默丢弃用户希望找到的行；两者也都分别在 SQL 编译器和 Python 参考实现中实现，以确保两个执行环境仍一致。其他行为均遵循 CPython。
 
-Direct columns of the session row:
+<a id="the-vocabulary-cannot-drift-from-the-compiler"></a>
 
-| Name | Type | Meaning |
+### 词汇表不得偏离编译器
+
+语言绑定的所有内容，包括字段、聚合、可迭代对象和元素字段，都从编译器读取的同一套表提供给客户端。没有人工维护的建议列表。一个名称能编译，词汇表端点就提供它；不能编译，就不会被建议。自动补全、Agent 工具和验证都建立在这个唯一来源上。
+
+<a id="the-language"></a>
+
+## 语言
+
+<a id="session-fields"></a>
+
+### 会话字段
+
+会话行的直接列：
+
+| 名称 | 类型 | 含义 |
 | --- | --- | --- |
-| `session_id` | string | Session identifier |
-| `start_time`, `end_time` | datetime | Earliest and latest trace timestamps |
-| `duration_ms` | float | Wall-clock duration in milliseconds |
+| `session_id` | string | 会话标识符 |
+| `start_time`, `end_time` | datetime | 最早和最晚的追踪时间戳 |
+| `duration_ms` | float | 实际经过时长，单位为毫秒 |
 
-Datetime comparands are ISO 8601 strings with an explicit offset, e.g.
-`start_time > '2026-07-01T00:00:00+00:00'` or a trailing `Z`. A literal without one is
-rejected at validation (`datetime literal '…' has no timezone, add an offset (e.g. 'Z' for
-UTC)`). The offset is required rather than defaulted to UTC: general REST normalization
-localizes naive input to the server timezone, and an expression that means different
-instants in different places is a bad thing to save.
+日期时间比较值是带显式时区偏移的 ISO 8601 字符串，例如 `start_time > '2026-07-01T00:00:00+00:00'`，也可使用尾缀 `Z`。不带偏移的字面量会在验证时被拒绝（`datetime literal '…' has no timezone, add an offset (e.g. 'Z' for
+UTC)`）。要求显式偏移，而不默认 UTC，是因为一般 REST 规范化会将无时区输入解释为服务器时区；同一表达式在不同地方表示不同时刻，不适合保存。
 
-`start_time` and `end_time` are not the view's time range, and the difference is easy to trip
-over. `timeRange` selects the candidate universe by *interval overlap* with a half-open
-window — a session counts if it was active inside it, however long before it started. These
-two are *point comparisons* against the session's own bounds. So a session that started
-yesterday and is still running is inside today's `timeRange` and outside
-`start_time > '<today>'`. Supplied together they compose with `AND`; neither changes how
-aggregates or comprehension subqueries are scoped beyond the session-scope join they already
-carry. Keep relative intents such as "last 7 days" in the time-range surface, where they
-belong, and keep saved DSL text deterministic with absolute literals.
+`start_time` 和 `end_time` 不是视图时间范围，这一区别容易造成误解。`timeRange` 通过与半开窗口的*区间重叠*选择候选全集：只要会话在窗口内活跃就计入，无论它提前多久开始。这两个字段则是针对会话自身边界的*时间点比较*。因此，昨天开始且仍运行的会话位于今天的 `timeRange` 内，却不满足 `start_time > '<today>'`。同时提供时以 `AND` 组合；除了已有的会话范围连接，两者均不改变聚合或推导式子查询的作用域。“最近 7 天”等相对意图应留在时间范围接口中；已保存 DSL 文本则使用绝对字面量，保持确定性。
 
-### Aggregates
+<a id="aggregates"></a>
 
-Per-session rollups, computed on demand. Each is `0` when the session has no matching data —
-never null:
+### 聚合
 
-| Name | Meaning |
+按需计算的逐会话汇总。会话没有匹配数据时，每项均为 `0`，绝不为 null：
+
+| 名称 | 含义 |
 | --- | --- |
-| `num_traces` | Trace count |
-| `num_traces_with_error` | Traces containing an errored span |
-| `token_count_prompt`, `token_count_completion`, `token_count_total` | LLM token totals |
-| `prompt_cost`, `completion_cost`, `total_cost` | Cost totals |
-| `tool_span_count`, `llm_span_count` | Spans of kind TOOL / LLM |
+| `num_traces` | 追踪数量 |
+| `num_traces_with_error` | 包含出错 Span 的追踪 |
+| `token_count_prompt`, `token_count_completion`, `token_count_total` | LLM Token 总量 |
+| `prompt_cost`, `completion_cost`, `total_cost` | 成本总量 |
+| `tool_span_count`, `llm_span_count` | TOOL / LLM 类型的 Span |
 
-A trace is one trace. Instrumentation that opens a trace per exchange makes `num_traces` an
-approximate conversation-turn count, and it is a useful thing to say to a user reaching for
-turns — but it is an ingestion convention Phoenix does not enforce, so neither the glosses
-nor this table state it as the meaning of the term.
+一条追踪就是一条追踪。每次交互开启一条追踪的插桩方式，会使 `num_traces` 近似于对话轮次数；向希望按轮次查询的用户说明这一点很有帮助。但这只是 Phoenix 不强制执行的摄取约定，因此词汇释义和此表均不将轮次数定义为该术语的含义。
 
-### Root-span access
+<a id="root-span-access"></a>
 
-A session has no attributes of its own, so several names read from the session's spans:
+### 访问根 Span
 
-- `attributes["llm.model_name"]` — attribute access on the session's *earliest root span*,
-  addressed by OTel wire key. String subscripts are joined with dots, so
-  `attributes["llm"]["model_name"]` names the same key. The lookup matches the key however
-  ingestion nested it. A missing key is treated as missing (see the deviation rule above).
-- `user.id` and `metadata["key"]` — accepted shorthands for the matching `attributes` keys.
-- `first_input` / `last_output` — strings, read from the session's earliest and latest root
-  span. "Earliest" is a deterministic ordering, not a claim about roles: trace start time,
-  then trace id, then span id. Useful for "did the session end well" checks.
-- `'refund' in any_input` / `any_output` — an EXISTS over the session's root spans: does
-  *some* root span's input or output contain this text. Cheaper than the first/last forms and
-  the right default for "does this session mention X". Note the three universes a search can
-  address — every span, every root span (`any_*`), and one root span (`first_input`,
-  `attributes[...]`) — and that they narrow in that order. These two are containment-only:
-  they take `in` and `not in` against a string literal and never `==`, and the served
-  vocabulary types them `containment` so autocomplete does not invite the equality form.
+会话自身没有属性，因此一些名称会从会话的 Span 中读取：
 
-### Annotations
+- `attributes["llm.model_name"]`：访问会话*最早根 Span* 的属性，按 OTel 传输键寻址。字符串下标以点连接，因此 `attributes["llm"]["model_name"]` 表示同一键。无论摄取时如何嵌套，查询都能匹配该键。键缺失时按缺失值处理（见上文偏离规则）。
+- `user.id` 和 `metadata["key"]`：对应 `attributes` 键的受支持简写。
+- `first_input` / `last_output`：字符串，从会话最早和最晚的根 Span 读取。“最早”是确定性排序，不涉及角色判断：先按追踪开始时间，再按追踪 ID，最后按 Span ID。适用于“会话是否良好结束”之类检查。
+- `'refund' in any_input` / `any_output`：针对会话根 Span 的 EXISTS，判断*某个*根 Span 的输入或输出是否包含文本。比首个/末个形式成本低，是“会话是否提到 X”的合适默认方式。注意搜索可作用的三个全集：所有 Span、所有根 Span（`any_*`）、单个根 Span（`first_input`、`attributes[...]`），范围依次缩小。这两项仅支持包含判断：接受针对字符串字面量的 `in` 和 `not in`，绝不接受 `==`；服务提供的词汇表将其类型标记为 `containment`，避免自动补全引导用户使用相等形式。
 
-`annotations["quality"].score > 0.8` reads session-level annotations, using the same idiom as
-the span language. Annotations on individual spans are reached through the `span_annotations`
-iterable below.
+<a id="annotations"></a>
 
-The spelling is entity-relative: `annotations[...]` reads `project_session_annotation` rows
-here and `span_annotation` rows in the span filter. That is ordinary — the filter is always
-about its own grain — but nothing about the expression says so, so the served vocabulary says
-it for anyone who uses both filters.
+### 标注
 
-### Comprehensions
+`annotations["quality"].score > 0.8` 使用与 Span 语言相同的惯用形式读取会话级标注。单个 Span 的标注通过下文 `span_annotations` 可迭代对象访问。
 
-The language quantifies and aggregates over a session's members with real Python
-comprehension syntax:
+这种写法是相对于实体的：`annotations[...]` 在这里读取 `project_session_annotation` 行，在 Span 过滤器中读取 `span_annotation` 行。这符合过滤器始终针对自身粒度的惯例，但表达式本身没有说明，因此提供的词汇表会向同时使用两种过滤器的人明确说明。
+
+<a id="comprehensions"></a>
+
+### 推导式
+
+语言使用真正的 Python 推导式语法，对会话成员进行量化判断和聚合：
 
 ```python
 any(span.status_code == "ERROR" for span in spans)
@@ -178,327 +123,161 @@ len([span for span in spans if span.span_kind == "TOOL"]) > 3
 sum(detail.tokens for detail in span_cost_details if detail.token_type == "cache_read") > 0
 ```
 
-Six callables accept a comprehension: `any`, `all` (quantifiers) and `len`, `max`, `min`,
-`sum` (reductions). Five iterables are available:
+六个可调用函数接受推导式：`any`、`all`（量词），以及 `len`、`max`、`min`、`sum`（归约）。有五个可迭代对象：
 
-| Iterable | Element fields |
+| 可迭代对象 | 元素字段 |
 | --- | --- |
 | `spans` | `name`, `span_kind`, `status_code`, `latency_ms`, `llm_token_count_prompt`, `llm_token_count_completion`, `llm_token_count_total` |
-| `traces` | `start_time`, `end_time`, `latency_ms`, and a nested `spans` iterable |
+| `traces` | `start_time`, `end_time`, `latency_ms`，以及嵌套的 `spans` 可迭代对象 |
 | `session_annotations` | `name`, `label`, `score` |
-| `span_annotations` | `name`, `label`, `score` (every span's annotations, flattened to session scope) |
+| `span_annotations` | `name`, `label`, `score`（所有 Span 的标注，展开到会话范围） |
 | `span_cost_details` | `token_type`, `is_prompt`, `cost`, `tokens`, `cost_per_token` |
 
-Design notes, each a deliberate choice:
+设计说明，每项都是有意作出的选择：
 
-- **Comprehension syntax over helper functions.** An alternative was string-nested helpers
-  like `any_span("status_code == 'ERROR'")`. Comprehensions won because the loop variable
-  solves a real problem: `start_time` exists at both the session and trace grain, and
-  `trace.start_time` is unambiguous where a bare name inside a string is not. Comprehensions
-  are also the form language models produce most reliably.
-- **Explicit grain names.** The iterables are named `spans` and `session_annotations`, not
-  context-relative names like `annotations`. Inside a comprehension you always know what you
-  are iterating.
-- **Row-backed only.** Every iterable is an existing database table. No JSON-backed
-  iterables (messages, documents, events) in this version; they can be added later without
-  breaking anything.
-- **One sanctioned nesting.** A `traces` element exposes `trace.spans`, so per-turn questions
-  work: `any(any(s.span_kind == "TOOL" for s in trace.spans) for trace in traces)`. Nesting
-  stops there, and stops loudly: a session-level collection named inside a comprehension has no
-  correlation to the element being iterated, so it is rejected by name rather than compiling
-  into a subquery with nothing to key on.
-- **Leaf token counts.** Span elements expose the per-span `llm_token_count_*` columns, never
-  the `cumulative_*` rollups. Summing cumulative counts over a session would count the same
-  tokens repeatedly through wrapping agent and tool spans.
-- **Loop-variable scope only.** Inside a comprehension, the predicate may reference the loop
-  variable's fields, literals, and arithmetic over them. Bare session-level names inside a
-  comprehension are rejected for now; this is a restriction, not a semantic choice, and can
-  be lifted later.
-- **Per-name tool counting has one spelling.** Counting calls to a single tool is written as
-  a comprehension — `len([span for span in spans if span.name == "search"])`. The earlier
-  `tool_span_count["search"]` subscript was retired: it needed a scan of observed tool names
-  to validate, and a name that never occurred silently counted as 0 rather than erroring.
-  Reintroducing the subscript would buy a shorter spelling for a query the language already
-  answers, at the cost of that vocabulary scan.
-- **Case-sensitive containment is gone, not hidden.** With `in` case-insensitive
-  (see [Case](#case-containment-ignores-it-equality-does-not)), there is no way to ask
-  for an exact-case substring. That is a real loss, accepted because searching text is
-  overwhelmingly the case-insensitive question and a second operator on day one is vocabulary
-  users have to learn before they need it. If the exact form is wanted later it is purely
-  additive — a distinct operator alongside `in`, never a change to what `in` means.
+- **使用推导式语法，而非辅助函数。** 曾考虑 `any_span("status_code == 'ERROR'")` 这类嵌套字符串辅助函数。最终选择推导式，因为循环变量解决了实际问题：`start_time` 同时存在于会话和追踪粒度，`trace.start_time` 没有歧义，而字符串中的裸名称有歧义。推导式也是语言模型最可靠生成的形式。
+- **明确粒度名称。** 可迭代对象命名为 `spans` 和 `session_annotations`，不使用 `annotations` 等相对于上下文的名称。在推导式内始终清楚迭代对象是什么。
+- **仅基于行。** 每个可迭代对象都对应现有数据库表。本版本不提供基于 JSON 的可迭代对象（消息、文档、事件）；未来可以添加，不破坏现有行为。
+- **仅允许一种嵌套。** `traces` 元素公开 `trace.spans`，因此可表达逐轮次问题：`any(any(s.span_kind == "TOOL" for s in trace.spans) for trace in traces)`。嵌套到此为止，并明确报错：推导式中引用的会话级集合与正在迭代的元素无关联，因此按名称拒绝，不会编译为无法关联键的子查询。
+- **使用叶级 Token 计数。** Span 元素公开逐 Span 的 `llm_token_count_*` 列，不公开 `cumulative_*` 汇总。对会话累加累计计数，会通过外层 Agent 和工具 Span 重复计算相同 Token。
+- **仅允许循环变量作用域。** 推导式中，谓词可引用循环变量字段、字面量及其算术运算。目前拒绝推导式内的裸会话级名称；这是限制，并非语义选择，未来可解除。
+- **按名称统计工具只有一种写法。** 统计单个工具调用次数使用推导式：`len([span for span in spans if span.name == "search"])`。先前的 `tool_span_count["search"]` 下标形式已弃用：它需要扫描观测到的工具名称来验证，从未出现的名称会静默计为 0，而不报错。重新引入下标只会为语言已有能力提供更短写法，却需要付出词汇扫描成本。
+- **区分大小写的包含判断已移除，而非隐藏。** `in` 不区分大小写（见[大小写](#case-containment-ignores-it-equality-does-not)）后，无法请求精确大小写的子串匹配。这确实是能力损失，但被接受，因为文本搜索绝大多数时候是不区分大小写的问题，而从第一天就提供第二个运算符，会要求用户在真正需要之前学习额外词汇。若未来需要精确形式，可以纯增量添加，即在 `in` 旁新增独立运算符，绝不改变 `in` 的含义。
 
-### Case: containment ignores it, equality does not
+<a id="case-containment-ignores-it-equality-does-not"></a>
 
-`in` and `not in` against a string haystack ignore case, everywhere in the filter language —
-at the session grain (`any_input`, `any_output`, `first_input`, `last_output`, `session_id`,
-root-span attribute reads, annotation labels) and at the span grain (`name`, `input.value`,
-`status_message`, attribute reads) alike. `==` and `!=` stay exact, and so does membership
-in a literal list (`span.name in ["search", "lookup"]`), which is a set test rather than a
-text search. So `'refund' in first_input` finds a session that opened with `REFUND please`,
-while `first_input == 'refund please'` does not.
+### 大小写：包含判断忽略，相等比较不忽略
 
-The reason is the surface this language replaced. The sessions table used to carry a separate
-substring search box that matched case-insensitively; retiring it in favor of the DSL would
-otherwise have quietly narrowed what users could find. Searching text is the case where
-people mean "mentions this", not "spells it exactly this way", and a filter that silently
-misses `REFUND` reads as broken rather than as precise. It compiles to PostgreSQL `ILIKE` and
-SQLite's `text_lower` on both operands — the same mechanism the retired search used, so the
-non-ASCII and wildcard-literal behavior carries over unchanged.
+过滤语言中所有针对字符串搜索范围的 `in` 和 `not in` 都忽略大小写，会话粒度（`any_input`、`any_output`、`first_input`、`last_output`、`session_id`、根 Span 属性读取、标注标签）和 Span 粒度（`name`、`input.value`、`status_message`、属性读取）均如此。`==` 和 `!=` 仍精确匹配，字面量列表成员判断（`span.name in ["search", "lookup"]`）也是如此，因为它是集合测试，而非文本搜索。因此，`'refund' in first_input` 能找到以 `REFUND please` 开始的会话，但 `first_input == 'refund please'` 不能。
 
-**The span grain was flipped to match, and that is a behavior change to a shipped
-language.** Span-grain `in` and `not in` were exact; they now ignore case too, so a saved
-span filter reading `'timeout' in output.value` starts matching spans that spell it
-`Timeout`. A saved span filter using `in` returns the same rows or more, never fewer; one using
-`not in` returns the same rows or fewer, never more. That was accepted rather than avoided: a
-user moving between the sessions and spans views was getting
-two different answers to the same-looking query, and of the two answers the case-insensitive
-one is what people mean by searching text. The polarity is a flag on the shared compiler's
-bindings, set the same way at every grain, so it stays one decision rather than a per-grain
-habit — and a later exact-case operator alongside `in` remains purely additive at both
-grains.
+原因在于此语言替代的界面。会话表格此前有独立的不区分大小写子串搜索框；若直接改为 DSL 而不调整行为，会悄然缩小用户可找到的内容。搜索文本时，人们想表达的是“提到这个”，而非“必须完全这样拼写”；静默漏掉 `REFUND` 的过滤器看起来像坏了，而非更精确。它在 PostgreSQL 编译为 `ILIKE`，在 SQLite 对两个操作数应用 `text_lower`，与原搜索机制相同，因此非 ASCII 和通配符字面量行为保持不变。
 
-### What the language accepts
+**Span 粒度也已同步调整，这是对已发布语言的行为变更。** Span 粒度的 `in` 和 `not in` 此前精确匹配，现在也忽略大小写，因此已保存的 `'timeout' in output.value` 过滤器开始匹配写作 `Timeout` 的 Span。使用 `in` 的已保存 Span 过滤器返回相同行或更多行，绝不会更少；使用 `not in` 的返回相同行或更少行，绝不会更多。选择接受此变化，是因为用户在会话和 Span 视图间切换时，相同外观的查询会得到两个不同答案，而不区分大小写的答案才是人们搜索文本时的意图。该行为由共享编译器绑定中的标志控制，各粒度设置一致，因此始终是统一决策，而非各粒度自行形成的习惯。未来在 `in` 旁新增精确大小写运算符，在两个粒度仍都是纯增量变化。
 
-Every term has a type — text, number, timestamp, condition, or *attribute value* for a root-span
-read whose stored type is unknown until the row is read — and a condition is accepted only if it
-types. The rules below are the whole policy. Each exists because the alternative was a form that
-compiled into something other than what its Python spelling says.
+<a id="what-the-language-accepts"></a>
 
-- **A condition is a condition.** Comparisons, quantifiers, and `and`/`or`/`not` over them. A
-  bare number is not a filter, and `not num_traces` does not mean "no traces": numeric truthiness
-  is a Python rule SQL has no equivalent for, and PostgreSQL rejects it outright.
-- **Comparison operands match.** `session_id == 1` is a mistake, not a request to read a session
-  id as a number. An attribute value compares against anything, because it genuinely could be
-  anything; a timestamp compares against an ISO literal, which is the spelling the language
-  already teaches. `True`/`False` compare only against a boolean-typed term.
-- **`is` and `is not` take `None` only.** CPython's `is` is object identity, which no column
-  comparison can mean. Reading it as `==` would make two spellings of the same expression differ
-  from Python in the same breath.
-- **`<`, `<=`, `>`, `>=` order numbers and timestamps, not text.** SQLite orders text by byte
-  value and PostgreSQL by the database's collation, so a text ordering means different things on
-  the two backends. The same reasoning rejects `max`/`min` over text, and a declared collation
-  would lift both together.
-- **Arithmetic is `+ - * / %` over numbers.** `//`, `**`, `<<`, `>>`, `&`, `|`, `^`, `@`, and `~`
-  are rejected before lowering rather than failing later inside SQLAlchemy, and unary `+` is the
-  identity Python defines it to be. Arithmetic on an attribute value asks for `float(...)`
-  explicitly, since its stored type is not known.
-- **Literals are text, numbers, `True`/`False`, and `None`.** Bytes, complex numbers, `Ellipsis`,
-  a float literal large enough to overflow to infinity, and a NUL inside a text literal are all
-  rejected — the last because PostgreSQL refuses a NUL in a text value while SQLite stores it, so
-  accepting it would make the same filter mean different things per deployment.
-- **`in` searches text, or looks a value up in a literal list.** The haystack is text or an
-  attribute value and the needle is a text literal; a list holds literals of one type. A column
-  needle (`session_id in first_input`) is cross-column substring search — a plausible feature
-  whose cost has not been designed, so rejecting it now keeps it available later.
-- **Empty collections are accepted.** `x in []` is always false and `x not in ()` always true,
-  exactly as in Python, and SQLAlchemy's empty-set rewrites are portable. Both are tested as
-  executed statements rather than inherited by accident.
-- **Set literals are not accepted yet.** `x in {'a', 'b'}` is the idiomatic Python spelling and
-  its absence is a real rough edge, deferred rather than resolved: admitting a rejected spelling
-  later is purely additive, where withdrawing an accepted one is not.
-- **`float(...)` and `str(...)` cast an attribute value; `int(...)` does not exist.** A cast is
-  admitted only where its result agrees on SQLite and PostgreSQL. Already typed text, numbers,
-  timestamps, and conditions are rejected: for example, an integral float renders as `1.0` on
-  SQLite and `1` on PostgreSQL, so converting that number to text would silently select different
-  sessions. Root-span attributes remain castable because their stored type is not known until the
-  row is read. Both numeric casts share one lowering, so `int(1.9)` would compare as `1.9` — the
-  opposite of what the spelling promises. Truncation can be implemented deliberately later.
-- **Names are resolved strictly, including dotted ones.** `user.id` is the one accepted dotted
-  shorthand; `usr.id` is a typo, not a request for an arbitrary attribute. The open dotted
-  fallback would have quietly undone the did-you-mean protection every other name advertises,
-  and `attributes["usr.id"]` says the same thing without ambiguity.
-- **Reductions reduce numbers.** `sum(span.name for span in spans)` adds text — SQLite coerces it
-  to zero and PostgreSQL refuses. Counting is what that question wants: `len([...])`.
-- **A comprehension iterates one collection.** The only nesting is the one a `traces` element
-  declares (`trace.spans`); a session-level collection named one scope down has nothing to
-  correlate against and is rejected by name. A session-level *term* inside a comprehension is
-  rejected with the scope named, since the same spelling works outside it.
-- **A name is spelled the way the vocabulary spells it.** Python's parser NFKC-normalizes
-  identifiers, so full-width `ｓｅｓｓｉｏｎ＿ｉｄ` would otherwise resolve as `session_id` —
-  the parser defining aliases the vocabulary endpoint cannot serve, against the anti-drift
-  commitment above. Subscript keys are data and keep whatever spelling they were given.
-  Whitespace around a condition is normalized, so a leading space is not an `IndentationError`.
+### 语言接受哪些形式
 
-The rejections are pinned in an accept/reject corpus (`test_session_filter_semantics.py`), which
-is where a future term change has to argue its case; the accepted forms in that corpus are
-executed against a real database rather than only rendered, and their row-set semantics live in
-the differential suite.
+每个项都有类型：文本、数字、时间戳、条件，或用于根 Span 读取的*属性值*（直到读取行时才知道其存储类型）。条件只有类型正确才被接受。以下规则构成完整策略。每条规则存在的原因都是：其他形式会被编译成与其 Python 写法不同的含义。
 
-### Semantics of missing values, precisely
+- **条件必须是条件。** 包括比较、量词，以及对它们应用 `and`/`or`/`not`。裸数字不是过滤器，`not num_traces` 也不表示“没有追踪”：数字真值是 Python 规则，SQL 没有等价形式，PostgreSQL 会直接拒绝。
+- **比较操作数类型匹配。** `session_id == 1` 是错误，不是要求将会话 ID 当作数字读取。属性值可以与任何内容比较，因为它实际可能是任意类型；时间戳与 ISO 字面量比较，这是语言已有的写法。`True`/`False` 只与布尔类型项比较。
+- **`is` 和 `is not` 仅接受 `None`。** CPython 的 `is` 判断对象身份，列比较无法表达这一含义。将其视为 `==` 会使同一表达式的两种写法都偏离 Python。
+- **`<`、`<=`、`>`、`>=` 只排序数字和时间戳，不排序文本。** SQLite 按字节值排序文本，PostgreSQL 按数据库排序规则排序，因此文本排序在两个后端含义不同。同样的理由也拒绝对文本使用 `max`/`min`；若未来显式定义排序规则，可同时解除两项限制。
+- **算术只允许数字上的 `+ - * / %`。** `//`、`**`、`<<`、`>>`、`&`、`|`、`^`、`@` 和 `~` 在降级转换前就被拒绝，不等到 SQLAlchemy 内部失败；一元 `+` 按 Python 定义保持值不变。属性值的存储类型未知，进行算术时必须显式使用 `float(...)`。
+- **字面量为文本、数字、`True`/`False` 和 `None`。** 拒绝字节、复数、`Ellipsis`、大到溢出为无穷的浮点字面量，以及文本字面量中的 NUL。最后一项是因为 PostgreSQL 拒绝文本值中的 NUL，而 SQLite 会存储它，接受就会使同一过滤器在不同部署中含义不同。
+- **`in` 搜索文本，或在字面量列表中查找值。** 搜索范围是文本或属性值，查找项是文本字面量；列表只包含同一类型字面量。以列为查找项（`session_id in first_input`）属于跨列子串搜索，是可考虑的功能，但成本尚未设计，因此现在拒绝，为未来保留空间。
+- **接受空集合。** `x in []` 始终为假，`x not in ()` 始终为真，与 Python 完全一致，且 SQLAlchemy 的空集重写可移植。两者都通过实际执行语句测试，而非偶然继承。
+- **尚不接受集合字面量。** `x in {'a', 'b'}` 是惯用 Python 写法，缺失它确实不够顺手，目前只是推迟而非解决：未来允许一种已拒绝写法是纯增量变化，撤回一种已接受写法则不是。
+- **`float(...)` 和 `str(...)` 转换属性值；不存在 `int(...)`。** 只有 SQLite 与 PostgreSQL 结果一致时才允许转换。拒绝已确定类型的文本、数字、时间戳和条件；例如整数值浮点数在 SQLite 渲染为 `1.0`，在 PostgreSQL 渲染为 `1`，转成文本会静默选出不同会话。根 Span 属性仍可转换，因为读取行前不知道存储类型。两种数值转换共享同一降级实现，因此 `int(1.9)` 会按 `1.9` 比较，与写法承诺相反。未来可以有意实现截断。
+- **严格解析名称，包括点号名称。** `user.id` 是唯一接受的点号简写；`usr.id` 是拼写错误，不是任意属性请求。开放的点号回退会悄然绕过其他名称提供的“你是否想输入”保护，而 `attributes["usr.id"]` 能无歧义表达相同意图。
+- **归约只处理数字。** `sum(span.name for span in spans)` 在累加文本，SQLite 会强制转换为零，PostgreSQL 则拒绝。此问题实际想要的是计数：`len([...])`。
+- **推导式只迭代一个集合。** 唯一嵌套是 `traces` 元素声明的 `trace.spans`；在下一层作用域引用会话级集合没有可关联对象，因此按名称拒绝。推导式内的会话级*项*也会被拒绝，并在错误中指出作用域，因为同一写法在外部可用。
+- **名称必须按词汇表的写法拼写。** Python 解析器会对标识符进行 NFKC 规范化，因此全角 `ｓｅｓｓｉｏｎ＿ｉｄ` 否则会解析为 `session_id`，相当于解析器定义词汇表端点无法提供的别名，违反上文防漂移承诺。下标键是数据，保留原始拼写。条件外围空白会被规范化，因此前导空格不会导致 `IndentationError`。
 
-The missing-value deviation plays out as follows. Both execution worlds implement each line:
+这些拒绝规则固定在接受/拒绝语料库（`test_session_filter_semantics.py`）中，未来修改项必须在这里说明合理性。语料库中的已接受形式会针对真实数据库执行，不只渲染；其行集语义由差异测试套件验证。
 
-- A comparison against a missing value is false, in both directions.
-- `all(P for x in IT)` counts an element with a missing field as a counterexample. In SQL the
-  counterexample check compiles to `P IS NOT TRUE`, never `NOT P`, because under three-valued
-  logic `NOT NULL` is still NULL and would silently pass.
-- `all()` over an empty selection is true (inherited from Python, and structurally free:
-  `NOT EXISTS` over an empty set).
-- `len` and `sum` over an empty selection are `0` (inherited from Python).
-- `max`/`min` over an empty selection are *missing*, so any comparison against them is false.
-  Python raises here; a filter cannot, so the deviation rule applies. Coalescing to `0`
-  instead was rejected: `max(...) < 5` would then confidently match sessions with no
-  qualifying spans at all.
-- Reductions skip elements whose reduced field is missing, matching SQL aggregate semantics.
+<a id="semantics-of-missing-values-precisely"></a>
 
-## Compilation
+### 缺失值的精确语义
 
-### One compiler, parameterized per grain
+缺失值偏离规则具体如下。两个执行环境均实现每一条：
 
-There is a single filter compiler. Each grain supplies a bindings object declaring its
-scalar names by type, its aggregate names, its annotation relation, and its iterables. The
-span language and the session language are the same machinery with different bindings, which
-is what keeps the flavor identical. The session bindings reject unknown names at validation
-time and answer with a did-you-mean suggestion drawn from the bound vocabulary.
+- 与缺失值比较，两个方向都为假。
+- `all(P for x in IT)` 将字段缺失的元素视为反例。SQL 中反例检查编译为 `P IS NOT TRUE`，绝不使用 `NOT P`，因为三值逻辑下 `NOT NULL` 仍为 NULL，会静默通过。
+- 空选择上的 `all()` 为真（继承 Python；结构上无需额外处理，即空集上的 `NOT EXISTS`）。
+- 空选择上的 `len` 和 `sum` 为 `0`（继承 Python）。
+- 空选择上的 `max`/`min` 是*缺失值*，因此与其任何比较都为假。Python 在这里抛异常，但过滤器不能，因此采用偏离规则。拒绝改为合并到 `0`，否则 `max(...) < 5` 会毫不犹豫地匹配完全没有合格 Span 的会话。
+- 归约跳过被归约字段缺失的元素，与 SQL 聚合语义一致。
 
-### Comprehensions become subqueries over the element table
+<a id="compilation"></a>
 
-Validation whitelists expression shapes on the parsed syntax tree. A pre-pass then extracts
-each comprehension into a placeholder name and records what it needs: the kind (`any`, `sum`,
-…), the iterable, the loop variable, the optional `if` clause, and any nested comprehension.
-At query time each record builds a subquery against the element's table in one of the two
-lowerings described below.
+## 编译
 
-Under the probe lowering the subquery is correlated to the session row:
+<a id="one-compiler-parameterized-per-grain"></a>
+
+### 一个编译器，按粒度参数化
+
+只有一个过滤编译器。每个粒度提供绑定对象，按类型声明标量名称、聚合名称、标注关系和可迭代对象。Span 语言和会话语言使用同一机制配合不同绑定，从而保持风格一致。会话绑定在验证时拒绝未知名称，并根据绑定词汇表给出“你是否想输入”的建议。
+
+<a id="comprehensions-become-subqueries-over-the-element-table"></a>
+
+### 推导式转换为元素表上的子查询
+
+验证器在解析后的语法树上将允许的表达式形态列入白名单。随后预处理将每个推导式提取为占位名称，并记录其所需内容：种类（`any`、`sum` 等）、可迭代对象、循环变量、可选 `if` 子句和嵌套推导式。查询时，每条记录以下述两种降级形式之一针对元素表构建子查询。
+
+在 probe 降级形式下，子查询关联到会话行：
 
 - `any(...)` → `EXISTS (SELECT 1 … WHERE predicate)`
 - `all(...)` → `NOT EXISTS (SELECT 1 … WHERE predicate IS NOT TRUE)`
-- `len`/`sum` → correlated scalar `COUNT`/`SUM`, coalesced to `0`
-- `max`/`min` → correlated scalar, left NULL when empty
+- `len`/`sum` → 关联标量 `COUNT`/`SUM`，合并空值为 `0`
+- `max`/`min` → 关联标量，空选择保留 NULL
 
-Under the scan lowering the outermost comprehension of each record is uncorrelated instead, so
-one pass over the element table answers the question for every session at once:
+在 scan 降级形式下，每条记录最外层的推导式改为不关联，使一次元素表扫描同时为所有会话回答问题：
 
 - `any(...)` → `session_id IN (SELECT session_key … WHERE predicate)`
-- `len`/`sum` → a `(session_key, aggregate)` subquery grouped by session and LEFT JOINed on
-  the session row, read through a `COALESCE(…, 0)`
-- `max`/`min` → the same grouped subquery, read raw so an empty set stays NULL
+- `len`/`sum` → 按会话分组的 `(session_key, aggregate)` 子查询，LEFT JOIN 到会话行，通过 `COALESCE(…, 0)` 读取
+- `max`/`min` → 相同的分组子查询，直接读取，使空集保持 NULL
 
-`all(...)` is the exception: it keeps the correlated `NOT EXISTS` shape under both lowerings.
-The uncorrelated form — `session_id NOT IN (SELECT session_key … WHERE predicate IS NOT
-TRUE)` — puts every element that fails the test in the anti-set, which is most of the element
-table whenever the predicate is selective, i.e. whenever someone is actually filtering, and
-`NOT IN` over a set that size degrades past statement timeouts where the correlated form
-plans as a per-session anti-join probe. Measured on a 3M-span corpus (100k sessions in the
-filtered project): the anti-set shape exceeded a 90-second statement timeout where the
-correlated form returned in well under a second; on a predicate that is true almost
-everywhere — the anti-set shape's best case — the two are within the same order of magnitude.
-The correlated shape is also immune to the `NOT IN` NULL trap: `Trace.project_session_rowid`
-is nullable, one NULL in a `NOT IN` set empties the whole result, and a NULL key simply never
-matches the correlation.
+`all(...)` 是例外：两种降级形式都保留关联 `NOT EXISTS` 结构。不关联形式 `session_id NOT IN (SELECT session_key … WHERE predicate IS NOT
+TRUE)` 将所有不满足测试的元素放入排除集合。当谓词有选择性，也就是用户真正过滤时，该集合通常占元素表的大部分。这么大的集合上的 `NOT IN` 会退化到超过语句超时，而关联形式则计划为逐会话的反连接探测。在 300 万 Span 语料库（过滤项目中有 10 万会话）上实测：排除集合形式超过 90 秒语句超时，关联形式在远低于一秒内返回；对于几乎处处为真的谓词，即排除集合形式的最佳情形，两者在同一数量级内。关联形式也不受 `NOT IN` 的 NULL 陷阱影响：`Trace.project_session_rowid` 可空，`NOT IN` 集合中只要有一个 NULL 就会清空整个结果，而 NULL 键只会无法匹配关联。
 
-The two lowerings agree by construction. A session with no matching elements is absent from
-the `any` set and has no `all` counterexample, which is exactly the vacuous-truth rule; `len`
-and `sum` coalesce to `0`; `max` and `min` stay NULL and so fail every comparison.
+两种降级形式在构造上保持一致。没有匹配元素的会话不在 `any` 集合中，且不存在 `all` 反例，正是真空真规则；`len` 和 `sum` 合并为 `0`；`max` 和 `min` 保持 NULL，因此无法通过任何比较。
 
-Only the outermost comprehension changes shape. A nested comprehension stays correlated to the
-element enclosing it, which the enclosing subquery has already scoped to a session. Inner
-predicates compile against the iterable's own bindings under both lowerings, so they inherit
-the casting, uppercasing, and error behavior of a top-level condition.
+只有最外层推导式改变形态。嵌套推导式仍关联到包围它的元素，外层子查询已将该元素限定到会话。两种降级形式下，内部谓词都依据可迭代对象自身绑定编译，因此继承顶层条件的类型转换、大写转换和错误行为。
 
-### Two lowerings, chosen by access pattern
+<a id="two-lowerings-chosen-by-access-pattern"></a>
 
-Every construct that reaches beyond the session row — aggregates, comprehensions, root-span
-access — compiles to one of two physical shapes. The caller picks, because the compiler cannot
-see whether the statement it is handed has a `LIMIT`, and that is the whole of the question:
+### 根据访问模式选择两种降级形式
 
-- **probe** — one subquery per candidate session row. A statement with a `LIMIT` can stop as
-  soon as it has enough matching rows, so it only pays for the rows it returns.
-- **scan** — one pass over the element or trace tables, joined once. This is what a statement
-  that has to touch every session wants, because there is no early exit to buy.
+所有超出会话行的构造，包括聚合、推导式、根 Span 访问，都会编译为两种物理形态之一。由调用方选择，因为编译器不知道传入语句是否带 `LIMIT`，而这正是问题的全部：
 
-The shipped dispatch follows from that:
+- **probe**：每个候选会话行使用一个子查询。带 `LIMIT` 的语句找到足够匹配行后即可停止，因此只需为返回的行付出成本。
+- **scan**：对元素表或追踪表扫描一次，并连接一次。必须访问所有会话的语句需要这种方式，因为没有提前退出的收益。
 
-| Statement | Lowering | Why |
+已发布的分派方式由此确定：
+
+| 语句 | 降级形式 | 原因 |
 |---|---|---|
-| Page, no annotation access, ordered by an indexed column | direct + probe | `LIMIT` stops after enough matching rows |
-| Page ordered by an aggregate column | direct + scan, reusing the sort's subquery | the sort must materialize that aggregate for every session before it can order rows, so the early exit is already gone |
-| Count, summary loaders, and any condition reading annotations | rowid subquery + scan | no `LIMIT` to exit on, or deduplication required |
+| 不访问标注、按已索引列排序的分页 | direct + probe | 找到足够匹配行后 `LIMIT` 停止 |
+| 按聚合列排序的分页 | direct + scan，复用排序子查询 | 排序前必须为每个会话物化该聚合，已不存在提前退出收益 |
+| 计数、摘要加载器，以及所有读取标注的条件 | rowid subquery + scan | 无可供退出的 `LIMIT`，或需要去重 |
 
-"Direct" means the predicate is applied to the statement being paginated. The alternative —
-wrapping it as `session_id IN (SELECT DISTINCT …)` — puts the per-session work outside that
-statement, so the database evaluates the condition for every session in the project before
-`LIMIT` sees a row. Measured at 100k sessions, one page cost about 2543 ms wrapped and about
-2 ms applied directly. Conditions that read annotations keep the wrapper anyway: a session
-annotation is unique on `(name, project_session_id, identifier)`, so one session can carry
-several rows under one name and the wrapper's `DISTINCT` is what collapses them. Everything
-else the compiler brings in contributes at most one row per session: quantifiers and the
-`any_input`/`any_output` predicates are `EXISTS` or `IN` predicates that add no rows at all,
-grouped aggregate and reduction subqueries carry one row per session by construction, and
-root-span IO and `attributes[...]` are rank-one-per-session windows outer joined on the
-session id.
+“Direct”指将谓词直接应用到被分页的语句。替代方式是包裹为 `session_id IN (SELECT DISTINCT …)`，这会将逐会话工作移到该语句外，使数据库在 `LIMIT` 看到任何行之前，先为项目每个会话评估条件。在 10 万会话上实测，包裹查询单页约 2543 毫秒，直接应用约 2 毫秒。读取标注的条件仍保留包装：会话标注在 `(name, project_session_id, identifier)` 上唯一，因此同一会话同一名称可有多行，包装中的 `DISTINCT` 负责合并。编译器引入的其他内容至多为每个会话贡献一行：量词及 `any_input`/`any_output` 谓词是不会添加行的 `EXISTS` 或 `IN` 谓词；分组聚合和归约子查询在构造上保证每会话一行；根 Span 输入/输出和 `attributes[...]` 则是每会话取排名第一行的窗口，按会话 ID 外连接。
 
-Selectivity is the one thing this dispatch cannot see. A page whose condition matches nothing
-never fills its `LIMIT`, so the probe lowering exhausts the project and loses to the scan
-lowering there — measured at 243 ms against 117 ms. That trade is deliberate: the rare case
-costs about 2x, the common case wins about 100x.
+选择性是这种分派无法获知的因素。条件不匹配任何内容的分页永远无法填满 `LIMIT`，因此 probe 降级会遍历整个项目，此时不如 scan：实测为 243 毫秒对 117 毫秒。这是有意的取舍：罕见情况约慢 2 倍，常见情况约快 100 倍。
 
-The benchmark harness lives at `scripts/perf/session_filter_perf.py`. It builds every measured
-query from the two seams below, so it reports the shapes the server actually runs, across
-construct family, access pattern, and selectivity.
+基准测试框架位于 `scripts/perf/session_filter_perf.py`。每个测量查询都从下述两个接口构建，因此会跨构造类别、访问模式和选择性，报告服务器实际运行的查询形态。
 
-### Two seams, one per access pattern
+<a id="two-seams-one-per-access-pattern"></a>
 
-Server consumers reach the language through exactly two functions in
-`src/phoenix/server/session_filters.py`, and the language never leaks past them.
+### 两个接口，分别对应一种访问模式
 
-`get_filtered_session_rowids_subquery(...)` produces the set of matching session row ids under
-project and time-range scoping. Consumers apply it as a single `IN` clause: the session count
-and the project-level summary loaders (record counts, annotation summaries, latency quantiles,
-cost summaries) all take this one opaque subquery.
+服务器使用方仅通过 `src/phoenix/server/session_filters.py` 中两个函数访问此语言，语言细节不会越过它们泄露到外部。
 
-`apply_session_filter_to_page(...)` takes the statement a caller is paginating and returns it
-with the condition applied — directly when that is safe, and through the rowid subquery when
-the condition reads annotations. The sessions list is its only consumer.
+`get_filtered_session_rowids_subquery(...)` 在项目和时间范围限定下生成匹配会话行 ID 集合。使用方以单个 `IN` 子句应用它：会话计数和项目级摘要加载器（记录数、标注摘要、延迟分位数、成本摘要）都只接收这个不透明子查询。
 
-The split exists because a page is the one access pattern with an early exit to protect, and
-protecting it means handing the compiler the statement rather than a set of row ids. Both
-seams answer with the same sessions for the same condition, which is what keeps a filtered
-count and a filtered list in agreement. Time scoping is shared for the same reason and uses
-interval overlap: a session matches a window when their intervals intersect, identical to the
-sessions table's time range behavior, which is what keeps them agreeing at window edges too.
+`apply_session_filter_to_page(...)` 接收调用方正在分页的语句，并返回应用条件后的语句：安全时直接应用，读取标注时经由 rowid 子查询。会话列表是唯一使用方。
 
-## Correctness: the reference evaluator
+之所以拆分，是因为分页是唯一需要保护提前退出的访问模式，保护它就需要将语句而非行 ID 集合交给编译器。两个接口对相同条件返回相同会话，使过滤后的计数与列表保持一致。时间范围限定同样共享，采用区间重叠：会话区间与窗口相交就匹配，与会话表格时间范围行为相同，因此在窗口边缘也一致。
 
-`tests/unit/trace/dsl/session_filter_reference.py` executes the full language directly over
-in-memory fixture sessions, implementing the missing-fails-comparison rule once, with
-three-valued logic for `and`/`or`/`not`. The differential suite seeds the same fixtures into
-the database and asserts, for every (fixture, condition) pair, that the compiled SQL selects
-exactly the sessions the reference selects.
+<a id="correctness-the-reference-evaluator"></a>
 
-The reference is deliberately an independent implementation, not a port of the compiler.
-Agreement between two independent implementations is the evidence; a shared bug would need to
-be made twice. The corpus covers the edges the deviation rule creates: vacuous `all`, empty
-`max`/`min`, missing element fields under both quantifiers and every reduction, `if`-clause
-filtering, each iterable, and trace→span nesting. It also carries the case rule, which is the
-one place the language does not simply inherit CPython: containment cases that differ only in
-spelling, alongside the equality and list-membership forms that must stay exact.
+## 正确性：参考评估器
 
-The reference models the root-span names and `annotations[...]` too, which is where the
-missing-value rules bite hardest and where stating them was not the same as enforcing them.
-`first_input` and `last_output` read the two ends of the root-span window and are missing when
-that end recorded nothing, so `not in` and `==` exclude those sessions; `any_input` and
-`any_output` are existential over every root span, so `'x' not in any_input` *matches* a session
-with no input at all. Both are pinned against fixtures that have no root span, no input, and a
-child span whose input must belong to neither.
+`tests/unit/trace/dsl/session_filter_reference.py` 直接在内存测试会话上执行完整语言，独立实现缺失值比较失败规则，并为 `and`/`or`/`not` 使用三值逻辑。差异测试将相同数据写入数据库，并对每个（测试数据、条件）组合断言：编译 SQL 选出的会话与参考实现完全相同。
 
-`annotations["q"]` compiles to an outer join, so a session with several rows under one name is
-several candidate rows and matches when any of them satisfies the whole condition — which the
-reference models by binding one row per referenced name and trying every combination. That makes
-one invariant checkable, and it is checked directly: `annotations["q"].score > 0.9` and
-`any(a.name == "q" and a.score > 0.9 for a in session_annotations)` select the same sessions,
-under duplicate names, null scores and labels, and missing annotations, even though one lowers to
-an aliased join and the other to `EXISTS`. The invariant covers the *positive* forms only.
-`annotations["q"].score is None` deliberately also matches sessions carrying no `q` annotation at
-all — the outer join contributes a null row — where the quantifier spelling does not, so the two
-idioms answer different questions there and the corpus pins that difference rather than papering
-over it.
+参考实现有意保持独立，而不是移植编译器。两个独立实现的一致才是证据，共享错误需要被独立犯两次。语料覆盖偏离规则产生的边界：空集上的 `all`、空 `max`/`min`、两种量词及每种归约下缺失的元素字段、`if` 子句过滤、每种可迭代对象，以及追踪→Span 嵌套。也包含大小写规则，这是语言没有直接继承 CPython 的一处：仅大小写不同的包含用例，以及必须保持精确匹配的相等和列表成员形式。
 
-## API Surface
+参考实现也建模根 Span 名称及 `annotations[...]`，这些地方最受缺失值规则影响，也是仅声明规则并不等于实际执行的地方。`first_input` 和 `last_output` 读取根 Span 窗口两端；对应一端没有记录时为缺失值，因此 `not in` 和 `==` 排除这些会话。`any_input` 和 `any_output` 则对所有根 Span 作存在判断，因此 `'x' not in any_input` 会*匹配*完全没有输入的会话。两者都通过包含无根 Span、无输入，以及输入不应归入任一形式的子 Span 的数据固定行为。
 
-The language is served over GraphQL and, as the `filter` query parameter on
-`GET /v1/projects/{project_identifier}/sessions`, over REST. Four fields on `Project` carry
-it over GraphQL:
+`annotations["q"]` 编译为外连接，因此同一名称有多行的会话会产生多个候选行，只要其中任何一行满足整个条件便匹配。参考实现为每个引用名称绑定一行，并尝试所有组合来建模。这使一个不变量可被直接检查：在名称重复、分数及标签为 null、标注缺失时，`annotations["q"].score > 0.9` 与 `any(a.name == "q" and a.score > 0.9 for a in session_annotations)` 选择相同会话，尽管前者降级为别名连接，后者降级为 `EXISTS`。此不变量仅覆盖*肯定*形式。`annotations["q"].score is None` 有意也匹配完全没有 `q` 标注的会话，因为外连接贡献一个空行，而量词写法不匹配。因此两种惯用形式在此回答不同问题，语料库会固定差异，而非掩盖它。
+
+<a id="api-surface"></a>
+
+## API 接口
+
+语言通过 GraphQL 提供，也作为 `GET /v1/projects/{project_identifier}/sessions` 的 `filter` 查询参数通过 REST 提供。GraphQL 中由 `Project` 的四个字段承载：
 
 ```graphql
 sessions(..., sessionFilterCondition: String): ProjectSessionConnection!
@@ -507,67 +286,34 @@ validateSessionFilterCondition(condition: String!): ValidationResult!
 sessionFilterVocabulary: [FilterVocabularyTerm!]!
 ```
 
-A `sessionFilterCondition` argument also appears on the project's span- and trace-grain
-summary fields (`recordCount`, `traceCount`, `costSummary`, the latency quantiles, the
-annotation summaries), so those numbers can be re-scoped to the filtered sessions. A field
-that accepts both a span filter and a session filter rejects requests that pass the two
-together — the grains are mutually exclusive, not composable.
+项目的 Span 和追踪粒度摘要字段（`recordCount`、`traceCount`、`costSummary`、延迟分位数、标注摘要）也有 `sessionFilterCondition` 参数，使这些数值可重新限定到过滤后的会话。同时接收 Span 过滤器和会话过滤器的字段，会拒绝同时传入两者的请求，因为粒度互斥，不可组合。
 
-The session-grain statistics the sessions aside renders take it too
-(`sessionAnnotationSummary`, `averageSessionDurationMs`, `averageTracesPerSession`,
-`sessionDurationMsQuantile`). They are the reason the argument reaches this far: with the
-sessions search box retired, the DSL is the only table filter, so a statistic that cannot
-follow it is a statistic that disagrees with the rows on screen. Every one of them scopes
-through the same helper as `sessionCount`, so the aside and the table always describe the
-same sessions, and the aside's session count doubles as the page's match count.
+会话侧栏展示的会话粒度统计也接收此参数（`sessionAnnotationSummary`、`averageSessionDurationMs`、`averageTracesPerSession`、`sessionDurationMsQuantile`）。参数覆盖如此广泛正是因为它们：会话搜索框移除后，DSL 是唯一表格过滤器，无法跟随它的统计就会与屏幕行不一致。每项都通过与 `sessionCount` 相同的辅助函数限定范围，因此侧栏与表格始终描述相同会话，侧栏会话数也兼作页面匹配数。
 
-**Release notes.**
+**发布说明。**
 
-- **Span filters now match text case-insensitively.** `in` and `not in` against a string —
-  `'timeout' in output.value`, `'search' in name`, any attribute or annotation-label read —
-  ignore case, matching how the session filter behaves. A saved span filter using `in` returns
-  the same rows or more, never fewer; one using `not in` returns the same rows or fewer, never
-  more. `==` and `!=` still match exactly.
-- **`sessionFilterCondition` is an expression, not a substring.** On the seven span- and
-  trace-grain fields that carried it before this change, the argument meant a substring of
-  the session's input/output. Plain-text inputs no longer match anything by substring —
-  express them as `'text' in any_input or 'text' in any_output`.
+- **Span 过滤器现在不区分大小写匹配文本。** 针对字符串的 `in` 和 `not in`，包括 `'timeout' in output.value`、`'search' in name`、所有属性或标注标签读取，都忽略大小写，与会话过滤器一致。使用 `in` 的已保存 Span 过滤器返回相同行或更多行，绝不更少；使用 `not in` 的返回相同行或更少行，绝不更多。`==` 和 `!=` 仍精确匹配。
+- **`sessionFilterCondition` 是表达式，不是子串。** 变更前已有此参数的七个 Span/追踪粒度字段，原本将其视为会话输入/输出的子串。纯文本输入不再按子串匹配；请写为 `'text' in any_input or 'text' in any_output`。
 
-### The compile boundary
+<a id="the-compile-boundary"></a>
 
-Callers reach these resolvers without validating first, so every surface that compiles a
-session filter — the sessions connection, the counts, the summary fan-out, the four
-session-grain statistics, and `validateSessionFilterCondition` itself — goes through one
-compile path in `phoenix/server/session_filters.py`. Expressions the compiler cannot use
-come back as `BadRequest`; planner and database failures are not the caller's fault and stay
-server errors. Routing validation through the same path is what keeps `isValid` honest: it
-reports invalid exactly when a resolver would reject the expression.
+### 编译边界
 
-### Validation
+调用方无需先验证即可访问这些解析器，因此所有编译会话过滤器的接口，包括会话连接、计数、摘要并行调用、四个会话粒度统计和 `validateSessionFilterCondition` 本身，都经过 `phoenix/server/session_filters.py` 中同一编译路径。编译器无法使用的表达式以 `BadRequest` 返回；规划器和数据库失败不是调用方的错，仍为服务器错误。验证采用相同路径，使 `isValid` 真实可靠：当且仅当解析器会拒绝表达式时报告无效。
 
-`validateSessionFilterCondition` compiles the condition and renders the SQL under both the
-SQLite and PostgreSQL dialects; any failure returns `isValid: false` with an error message.
-Rendering catches *generation* failures, not *execution* failures — a boolean cast to a number
-renders on both dialects, runs on SQLite, and fails on PostgreSQL — so `isValid: true` means
-"compiles and renders", not "will execute on both backends". The forms that made that gap
-observable (a quantifier used as a number, a NUL literal, a mixed `IN` list) are now rejected by
-the acceptance policy before they reach rendering at all, which narrows the gap rather than
-closing it: the claim this section makes is about generation, and stays that way.
-`ValidationResult` also carries a `warnings` list, a third channel between valid and
-invalid. A condition that compiles but references an annotation name never observed on the
-project comes back valid *and* warned — the filter still applies, and the warning names the
-observed alternatives. Warnings exist because dynamic names cannot be errors: the annotation
-may simply not have arrived yet.
+<a id="validation"></a>
 
-Checking a referenced name does not require enumerating the project's names: validation asks
-whether the names in the expression exist, scoped to the project, and only reaches for a
-suggestion list once it already has an unknown name to explain. That list is capped — a
-warning is read aloud in a screen-reader live region, so it names the closest few observed
-alternatives rather than every annotation on the project.
+### 验证
 
-### Vocabulary
+`validateSessionFilterCondition` 编译条件并按 SQLite 和 PostgreSQL 两种方言渲染 SQL；任一失败都返回 `isValid: false` 及错误消息。渲染发现的是*生成*失败，而非*执行*失败；例如布尔值转数字可在两种方言渲染，在 SQLite 运行，但在 PostgreSQL 失败。因此 `isValid: true` 表示“能编译和渲染”，不表示“能在两个后端执行”。曾暴露此差距的形式（量词当数字、NUL 字面量、混合 `IN` 列表）现在在到达渲染前就被接受策略拒绝，这缩小而非消除了差距：本节承诺的始终是生成。`ValidationResult` 还携带 `warnings` 列表，是有效与无效之间的第三种通道。条件能编译但引用项目中从未观测到的标注名称时，会同时返回有效和警告：过滤器仍应用，警告列出观测到的替代名称。警告存在是因为动态名称不能作为错误，标注可能只是尚未到达。
 
-`sessionFilterVocabulary` returns one term per bindable name:
+检查引用名称无需枚举项目全部名称：验证只按项目范围查询表达式中的名称是否存在，仅在已确认未知名称、需要说明时才获取建议列表。列表有上限，因为警告会在屏幕阅读器实时区域朗读，所以只列出最接近的几个观测名称，而非项目所有标注。
+
+<a id="vocabulary"></a>
+
+### 词汇表
+
+`sessionFilterVocabulary` 为每个可绑定名称返回一个项：
 
 ```graphql
 type FilterVocabularyTerm {
@@ -579,105 +325,54 @@ type FilterVocabularyTerm {
 }
 ```
 
-The static terms and their types are read from the compiler's own binding tables — the
-anti-drift commitment made concrete. Every binding must have a description, enforced at
-build time, so a new name cannot ship undocumented. Three hand-written terms
-(`attributes[...]`, `user.id`, `metadata["key"]`) teach the attribute-access shape even on
-an empty project.
+静态项及其类型来自编译器自身绑定表，具体落实防漂移承诺。构建时强制每个绑定都有说明，因此新名称不能在没有文档的情况下发布。三个手写项（`attributes[...]`、`user.id`、`metadata["key"]`）即使在空项目中也会说明属性访问形式。
 
-Two term groups are data-derived:
+两组项由数据派生：
 
-- **Observed attributes.** The server scans the earliest root span of the project's 1000
-  most recently started sessions — the same span the compiler reads — and serves one term
-  per attribute key. Keys are served in canonical OTel spelling
-  (`attributes["llm.model_name"]`), however ingestion nested them, so one key never appears
-  as two terms. The nested spelling remains an accepted synonym in the compiler but is not
-  served. The scan is bounded because it is discovery, not correctness: an unlisted key
-  still filters fine when typed by hand. A row bound alone says nothing about cost, since
-  the scan reads whole attribute blobs, so it also stops at a byte budget.
-- **Observed annotations.** Each observed annotation name is served as ready-to-use
-  `annotations["name"].score` and `.label` terms, drawn from the same recent-session window
-  as the attributes so the vocabulary carries one contract rather than two.
+- **观测到的属性。** 服务器扫描项目最近开始的 1000 个会话的最早根 Span，即编译器读取的同一 Span，并为每个属性键提供一个项。无论摄取时如何嵌套，键都使用规范 OTel 写法（`attributes["llm.model_name"]`），避免同一键出现为两项。嵌套写法在编译器中仍是可接受的同义形式，但不提供为词汇项。扫描有边界，因为它服务于发现，而非正确性：未列出的键手动输入仍可正常过滤。仅限制行数不能说明成本，因为扫描读取整个属性块，因此还设置字节预算。
+- **观测到的标注。** 每个观测到的标注名都提供为可直接使用的 `annotations["name"].score` 和 `.label` 项，来自与属性相同的近期会话窗口，使词汇表遵循同一份契约，而非两份。
 
-The consequence of that one contract is worth stating plainly, because it is what a user
-notices: a name only older sessions carry drops out of the suggestions once 1000 newer
-sessions exist. It has not stopped working — typed by hand it filters exactly as before.
-The vocabulary is a discovery aid, and completeness is not something it promises.
+应明确说明这一统一契约带来的后果，因为用户会注意到：只有旧会话携带的名称，在存在 1000 个更新会话后会从建议中消失。它并未失效，手动输入仍与过去完全一样地过滤。词汇表帮助发现，不承诺完整性。
 
-## The Filter Bar
+<a id="the-filter-bar"></a>
 
-The sessions table hosts a code-editor filter field. It is the single search surface: the
-older substring search box and its bespoke query path were retired, because the language
-already expresses those searches (`session_id == '...'`, `'refund' in any_input`) and two
-surfaces answering one question can disagree. The field itself is grain-agnostic: the
-session layer injects the vocabulary, the snippets, the loop-variable names, and the
-validation call, so a future trace grain reuses the component unchanged.
+## 过滤栏
 
-### Discovery
+会话表格提供代码编辑器式过滤字段，这是唯一搜索入口。旧子串搜索框及其专用查询路径已移除，因为语言已能表达这些搜索（`session_id == '...'`、`'refund' in any_input`），而两个入口回答同一问题可能不一致。字段本身与粒度无关：会话层注入词汇表、片段、循环变量名和验证调用，因此未来追踪粒度可直接复用组件。
 
-The typeahead is one ranked list of sections: recent searches, then suggestions (snippets),
-then the session fields, aggregates, collections, attributes, and annotations. While the
-user browses with nothing typed, the list is capped to five snippets and thirty fields.
-Collections rank ahead of the data-derived attribute and annotation sections on purpose:
-the core language must survive the cap, and the sections that grow with the user's data are
-the right ones to lose to it.
+<a id="discovery"></a>
 
-Snippets follow two rules. Every snippet is valid as inserted — placeholders carry working
-example values, never blanks, because a condition that errors until a blank is filled reads
-as broken rather than as an invitation to edit. And each snippet teaches something no other
-snippet covers. The five that survive the browse cap show one construct each: text search, an
-aggregate, a quantifier, a reduction, a nested comprehension.
+### 发现
 
-Text search holds a slot by right, not by luck. It is the query the retired search box used
-to serve, so a user who reaches the sessions table looking for the old field has to find its
-replacement without knowing the language first — and the snippet searches input and output
-together, because the box it replaced matched either side. Ordering is a separate mechanism
-from membership: array position decides which snippets make the cap, while the dropdown sorts
-the survivors alphabetically within their section, so the search snippet carries a completion
-boost to lead the group.
+输入联想是一个分区排序列表：先是近期搜索，然后是建议（片段），再是会话字段、聚合、集合、属性和标注。用户尚未输入、仅浏览时，列表最多显示五个片段和三十个字段。集合有意排在数据派生的属性和标注分区之前：核心语言必须在上限内保留，随用户数据增长的分区更适合被截断。
 
-### Writing comprehensions
+片段遵循两条规则。每个片段插入即有效：占位符包含可运行的示例值，绝不留空，因为填空前就报错的条件看起来像故障，而非邀请编辑。每个片段还需介绍其他片段未覆盖的内容。浏览上限内保留的五个片段各展示一种构造：文本搜索、聚合、量词、归约、嵌套推导式。
 
-Completion is scope-aware around comprehensions. In the iterable slot of a `for` clause it
-offers plain collection names. Inside a comprehension body it offers the loop variable's
-element fields, always qualified (`span.latency_ms`, never the bare field the compiler
-would reject). Inside a freshly typed `any(` it offers whole comprehension bodies.
-Accepting a collection is position-aware too: at top level it inserts a full working
-scaffold — `any(span.latency_ms > 1_000 for span in spans)` — with the example predicate
-selected for immediate overtyping.
+文本搜索必须拥有一个位置，不靠碰巧入选。这是已移除搜索框原本服务的查询，因此进入会话表格寻找旧字段的用户，无需先了解语言就应找到替代形式。片段同时搜索输入和输出，因为原搜索框匹配任一侧。排序与入选是两套机制：数组位置决定哪些片段进入上限，下拉列表则在分区内按字母排序已入选项，因此搜索片段带有补全加权，以排在该组首位。
 
-The scope detector is a text heuristic, not a parse, by necessity: a comprehension mid-edit
-is not valid Python, so no syntax tree exists at exactly the moment completion matters. An
-unrecognized collection name simply degrades to ordinary completion.
+<a id="writing-comprehensions"></a>
 
-### Validation in the loop
+### 编写推导式
 
-The field validates as the user types, debounced, through the GraphQL validation field.
-Errors and warnings surface as a single in-field badge with the message in its tooltip; the
-typeahead stays the only floating window the field opens on its own, so an error can never
-fight the dropdown for space. Comprehension errors get a wavy underline over the construct
-— best effort, since server errors carry no character offsets. Only conditions that
-validate are applied to the table; the in-progress text lives in separate state and an
-invalid expression never reaches the server. A failed validation request is itself surfaced
-as an error, so a normal-looking field never silently drops the filter.
+补全可感知推导式作用域。在 `for` 子句的可迭代对象位置，提供普通集合名称；在推导式主体内，提供循环变量的元素字段，始终带限定前缀（`span.latency_ms`，绝不使用编译器会拒绝的裸字段）；刚输入 `any(` 时，提供完整推导式主体。接受集合也感知位置：顶层会插入完整可运行骨架 `any(span.latency_ms > 1_000 for span in spans)`，并选中示例谓词，方便直接覆盖输入。
 
-Recent searches persist per project in browser storage. A condition enters history only
-after the user sits with it for a few seconds — the filter applies live, so the dwell
-separates searches the user meant from stepping stones on the way to them.
+作用域检测器必须使用文本启发式，而非解析：编辑中的推导式不是有效 Python，因此在补全最需要发挥作用时，恰好不存在语法树。无法识别的集合名称只会降级为普通补全。
 
-## Future Work
+<a id="validation-in-the-loop"></a>
 
-- **Trace grain.** The family is designed to extend to a trace filter language with the same
-  flavor; the compiler is already grain-parameterized.
-- **Session names inside comprehensions.** Lifting the loop-variable-only restriction so a
-  predicate can compare an element field against a session field.
-- **JSON-backed iterables.** Messages, documents, and events as iterables, once their access
-  patterns settle.
-- **Cumulative token fields on span elements.** Additive, for tree-shaped questions where
-  rollups are the point.
-- **Python execution.** Running the same expressions as actual Python inside evaluator
-  bindings, with the reference evaluator's semantics as the contract.
-- **A vocabulary benchmark.** The harness measures filter execution; nothing measures the
-  vocabulary resolver that feeds the filter bar. That needs its own script: configurable
-  distinct annotation-name counts, attribute payload sizes, and leaf-path cardinality across
-  project-size tiers, reporting rows and payload bytes decoded on both a cold and a warm run.
+### 输入过程中的验证
+
+用户输入时，字段通过 GraphQL 验证字段进行防抖验证。错误和警告以字段内单个徽标展示，消息置于提示浮层；输入联想仍是字段自行打开的唯一浮动窗口，错误不会与下拉列表争夺空间。推导式错误在对应构造下显示波浪线；由于服务器错误不含字符偏移，这只是尽力定位。只有通过验证的条件才应用到表格；编辑中的文本保存在独立状态中，无效表达式不会到达服务器。验证请求失败本身也会显示为错误，避免看似正常的字段静默丢弃过滤器。
+
+近期搜索按项目持久化到浏览器存储。只有用户停留在某条件上数秒后，该条件才进入历史；过滤器实时应用，因此停留时间用于区分用户真正想要的搜索和输入过程中的中间状态。
+
+<a id="future-work"></a>
+
+## 后续工作
+
+- **追踪粒度。** 此语言家族设计为可扩展成相同风格的追踪过滤语言；编译器已按粒度参数化。
+- **推导式内的会话名称。** 解除仅允许循环变量的限制，使谓词能比较元素字段与会话字段。
+- **基于 JSON 的可迭代对象。** 在访问模式稳定后，将消息、文档和事件作为可迭代对象。
+- **Span 元素的累计 Token 字段。** 作为增量能力，用于确实需要汇总的树结构问题。
+- **Python 执行。** 在评估器绑定中将相同表达式作为实际 Python 运行，以参考评估器语义为契约。
+- **词汇表基准测试。** 现有框架衡量过滤执行，但没有衡量向过滤栏提供内容的词汇表解析器。它需要独立脚本：可配置不同项目规模层级下的不同标注名称数量、属性载荷大小和叶路径基数，报告冷运行与热运行中解码的行数和载荷字节数。

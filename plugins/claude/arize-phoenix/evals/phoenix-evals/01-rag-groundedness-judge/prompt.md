@@ -5,4 +5,4 @@ allowed_tools: [Skill, Read, Write]
 runs: 3
 tags: [phoenix-evals]
 ---
-I have a Python RAG support bot (OpenAI plus a vector store). It sometimes answers with claims that are not in the retrieved context. I want an evaluator that takes the retrieved context and the bot's answer and judges whether the answer is grounded in that context. I will run it over an exported dataframe of traces, so write it to be reusable. Put it in `groundedness_eval.py`.
+我有一个基于 Python 的 RAG 客服机器人（OpenAI 加向量存储）。它有时会给出检索上下文中不存在的说法。我需要一个评估器，接收检索上下文和机器人的答案，判断答案是否以上下文为依据。我会将它用于导出的追踪数据帧，请写成可复用形式，并放在 `groundedness_eval.py` 中。

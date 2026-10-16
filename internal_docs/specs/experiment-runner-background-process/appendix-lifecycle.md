@@ -1,22 +1,25 @@
-# Appendix: Experiment Lifecycle
+<a id="appendix-experiment-lifecycle"></a>
+# 附录：实验生命周期
 
-> This document provides an overview of experiment lifecycle management. For formal analysis with proofs and edge cases, see the deep dives linked below.
+> 本文概述实验生命周期管理。包含证明和边界情况的形式化分析见下方链接的深入分析。
 
 ---
 
-## Overview
+<a id="overview"></a>
+## 概述
 
-An experiment has three lifecycle phases:
+实验有三个生命周期阶段：
 
-| Phase | Trigger | Result |
+| 阶段 | 触发方式 | 结果 |
 |-------|---------|--------|
-| **Start** | User clicks Run, or orphan scan recovers | Experiment claims ownership, begins processing |
-| **Stop** | User clicks Stop, completion, circuit breaker, crash | Experiment releases ownership, stops processing |
-| **Resume** | User clicks Resume, or orphan scan recovers | Same as Start (no queue state restored) |
+| **启动** | 用户点击运行，或孤立扫描恢复 | 实验认领所有权，开始处理 |
+| **停止** | 用户点击停止、完成、熔断器触发或崩溃 | 实验释放所有权，停止处理 |
+| **恢复** | 用户点击恢复，或孤立扫描恢复 | 与启动相同（不恢复队列状态） |
 
 ---
 
-## State Machine
+<a id="state-machine"></a>
+## 状态机
 
 ```
                     ┌─────────────┐
@@ -46,35 +49,37 @@ An experiment has three lifecycle phases:
        └─────────┘                    └────────┘
 ```
 
-**Key insight**: Running state is derived from `claimed_at`:
-- `claimed_at = NULL` → Not running
-- `claimed_at = recent` → Running (heartbeat refreshes this)
-- `claimed_at = stale` → Orphaned (crashed replica)
+**关键认识**：运行状态由 `claimed_at` 推导：
+- `claimed_at = NULL` → 未运行。
+- `claimed_at = recent` → 运行中（由心跳刷新）。
+- `claimed_at = stale` → 已孤立（副本崩溃）。
 
 ---
 
-## Stopping: The Five Actors
+<a id="stopping-the-five-actors"></a>
+## 停止：五类执行方
 
-Five different actors can stop an experiment, each with different intentions:
+五类不同的执行方都可以停止实验，其意图各不相同：
 
-| Actor | Intention | Updates DB? |
+| 执行方 | 意图 | 是否更新数据库？ |
 |-------|-----------|-------------|
-| **Natural completion** | All work done, release ownership | Yes (conditional) |
-| **Circuit breaker** | Too many failures, stop and record error | Yes (conditional) |
-| **User stop** | User wants to pause | No (mutation did it) |
-| **Lost ownership** | Another replica or user took over | No (already updated) |
-| **Graceful shutdown** | Server shutting down, want to resume on restart | No (preserve ownership) |
+| **自然完成** | 全部工作完成，释放所有权 | 是（有条件） |
+| **熔断器** | 失败过多，停止并记录错误 | 是（有条件） |
+| **用户停止** | 用户希望暂停 | 否（变更操作已更新） |
+| **丢失所有权** | 其他副本或用户已接管 | 否（已经更新） |
+| **优雅关闭** | 服务端正在关闭，希望重启后恢复 | 否（保留所有权） |
 
-**The key insight**: Authority comes from the caller, not from inspecting state.
+**关键认识**：权限来自调用方，而不是通过检查状态得出。
 
-For detailed analysis including race conditions, proofs, and implementation checklist, see:
-- **[Stopping Deep Dive](./appendix-stopping-deep-dive.md)** (~1175 lines)
+包含竞态条件、证明和实施检查清单的详细分析见：
+- **[停止机制深入分析](./appendix-stopping-deep-dive.md)**（约 1175 行）。
 
 ---
 
-## Resuming: Atomic Claims
+<a id="resuming-atomic-claims"></a>
+## 恢复：原子认领
 
-Resume is an atomic ownership transfer using `UPDATE...WHERE...RETURNING`:
+恢复通过 `UPDATE...WHERE...RETURNING` 原子转移所有权：
 
 ```sql
 -- Only succeeds if not currently running
@@ -84,18 +89,20 @@ WHERE id = X AND claimed_at IS NULL
 RETURNING *
 ```
 
-If two replicas race to resume, database serialization ensures only one wins.
+两个副本竞争恢复时，数据库串行化确保只有一个成功。
 
-**Key insight**: Resume does NOT restore queue state. It queries incomplete runs fresh from the database.
+**关键认识**：恢复**不会**还原队列状态，而是重新从数据库查询未完成的运行。
 
-For detailed analysis including multi-replica races, cooldown mechanism, and work reconstruction, see:
-- **[Resume Deep Dive](./appendix-resume-deep-dive.md)** (~705 lines)
+包含多副本竞争、冷却机制和工作重建的详细分析见：
+- **[恢复机制深入分析](./appendix-resume-deep-dive.md)**（约 705 行）。
 
 ---
 
-## Quick Reference: Code Patterns
+<a id="quick-reference-code-patterns"></a>
+## 速查：代码模式
 
-### Stop Pattern
+<a id="stop-pattern"></a>
+### 停止模式
 
 ```python
 def stop(self) -> None:
@@ -119,7 +126,8 @@ def stop(self) -> None:
     self._subscribers.clear()
 ```
 
-### Resume Pattern (Atomic Claim)
+<a id="resume-pattern-atomic-claim"></a>
+### 恢复模式（原子认领）
 
 ```python
 # Atomic claim - only succeeds if not running
@@ -136,7 +144,8 @@ if result.scalar_one_or_none() is None:
     return
 ```
 
-### Completion Detection
+<a id="completion-detection"></a>
+### 完成检测
 
 ```python
 def is_done(self) -> bool:
@@ -154,9 +163,11 @@ def is_done(self) -> bool:
 
 ---
 
-## Timelines
+<a id="timelines"></a>
+## 时间线
 
-### Stop Timeline
+<a id="stop-timeline"></a>
+### 停止时间线
 
 ```
 t=0: User clicks Stop
@@ -172,7 +183,8 @@ t=3: Job3 completes → on_success() → _active=False → discard result
      └─ Experiment object GC'd
 ```
 
-### Resume Timeline
+<a id="resume-timeline"></a>
+### 恢复时间线
 
 ```
 t=0: User clicks Resume
@@ -188,7 +200,8 @@ t=2: Dispatch loop resumes
      └─ Jobs dispatched in priority order
 ```
 
-### Completion Timeline
+<a id="completion-timeline"></a>
+### 完成时间线
 
 ```
 t=0: Last TaskJob completes
@@ -211,21 +224,23 @@ t=2: Finalization
 
 ---
 
-## Invariants
+<a id="invariants"></a>
+## 不变量
 
-| Invariant | Enforcement |
+| 不变量 | 保证方式 |
 |-----------|-------------|
-| Only one replica owns an experiment | Atomic `UPDATE...WHERE...RETURNING` |
-| Status change → remove from registry | All stop paths use `pop()` |
-| Stopped experiments don't queue work | Check `_active` in all callbacks |
-| Resume is idempotent | Return success if already running |
-| Work is never lost | Resume queries DB, not cached state |
+| 一个实验只归一个副本所有 | 原子 `UPDATE...WHERE...RETURNING` |
+| 状态变化 → 从注册表移除 | 所有停止路径都使用 `pop()` |
+| 已停止实验不将工作加入队列 | 所有回调检查 `_active` |
+| 恢复幂等 | 已运行时返回成功 |
+| 工作永不丢失 | 恢复查询数据库，而非缓存状态 |
 
 ---
 
-## Related Deep Dives
+<a id="related-deep-dives"></a>
+## 相关深入分析
 
-| Document | Lines | Content |
+| 文档 | 行数 | 内容 |
 |----------|-------|---------|
-| [Stopping Deep Dive](./appendix-stopping-deep-dive.md) | ~1175 | Formal analysis of all 5 actors, race conditions, proofs, implementation checklist |
-| [Resume Deep Dive](./appendix-resume-deep-dive.md) | ~705 | Atomic claims, cooldown mechanism, work reconstruction, multi-replica safety |
+| [停止机制深入分析](./appendix-stopping-deep-dive.md) | ~1175 | 五类执行方的形式化分析、竞态条件、证明和实施检查清单 |
+| [恢复机制深入分析](./appendix-resume-deep-dive.md) | ~705 | 原子认领、冷却机制、工作重建和多副本安全性 |

@@ -3,8 +3,8 @@ type: llm
 focus: {source: file, path: hallucination_check.py}
 weight: 0.5
 ---
-The user pasted a check that runs `HallucinationEvaluator` (imported from top-level `phoenix.evals`) over a RAG dataframe with `input`, `output`, and `context` columns, then calls `.mean()` on the `hallucination_score` column and fails when the mean is below 0.8. They want the batch to fail when more than 20% of answers are not supported by the retrieved documents. Facts: pre-built evaluators live in `phoenix.evals.metrics`; `evaluate_dataframe` returns `{name}_score` columns holding dicts like `{"score": ..., "label": ..., "explanation": ...}`; `HallucinationEvaluator` takes only `input`/`output` (no `context`), labels `hallucinated`=1.0 / `grounded`=0.0 and is minimized; `FaithfulnessEvaluator` takes `input`/`output`/`context`, labels `faithful`=1.0 / `unfaithful`=0.0 and is maximized.
+用户粘贴了一段检查代码，在含 `input`、`output` 和 `context` 列的 RAG 数据帧上运行 `HallucinationEvaluator`（从顶层 `phoenix.evals` 导入），然后对 `hallucination_score` 列调用 `.mean()`，均值低于 0.8 时判失败。用户希望超过 20% 的答案没有检索文档支持时，使整个批次失败。已知：内置评估器位于 `phoenix.evals.metrics`；`evaluate_dataframe` 返回的 `{name}_score` 列包含类似 `{"score": ..., "label": ..., "explanation": ...}` 的字典；`HallucinationEvaluator` 仅接收 `input`/`output`（不接收 `context`），标签 `hallucinated`=1.0 / `grounded`=0.0，分数越低越好；`FaithfulnessEvaluator` 接收 `input`/`output`/`context`，标签 `faithful`=1.0 / `unfaithful`=0.0，分数越高越好。
 
-Grade exactly one claim. PASS if the claim below holds, FAIL otherwise. Ignore everything else about the file.
+只评定下面这一条判断条件。文件满足条件则为 PASS，否则为 FAIL；忽略文件中的其他内容。
 
-Claim: The script reads the numeric score (or the label) out of the `{name}_score` dict column before aggregating — e.g. `.apply(lambda x: x.get("score") if isinstance(x, dict) else None)` — instead of calling `.mean()` (or another numeric aggregation) directly on the dict column.
+判断条件：脚本先从 `{name}_score` 字典列中读取数值分数（或标签）再聚合，例如 `.apply(lambda x: x.get("score") if isinstance(x, dict) else None)`；不能直接对字典列调用 `.mean()` 或其他数值聚合。

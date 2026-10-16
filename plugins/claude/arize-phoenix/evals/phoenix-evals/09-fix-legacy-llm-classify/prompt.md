@@ -5,7 +5,7 @@ allowed_tools: [Skill, Read, Write]
 runs: 3
 tags: [phoenix-evals]
 ---
-I upgraded `arize-phoenix-evals` to the latest version and this relevance-eval script of mine stopped working — the imports fail now. Can you get it running again? I run it over an exported dataframe `df` that has `input` and `output` columns, and I want the per-label counts at the end like before.
+我将 `arize-phoenix-evals` 升级到最新版后，这段相关性评估脚本就无法运行了，现在导入会失败。能帮我修好吗？我会对导出的数据帧 `df` 运行它，其中包含 `input` 和 `output` 列，并希望最终像以前一样输出各标签的计数。
 
 ```python
 from phoenix.evals import OpenAIModel, llm_classify
@@ -24,4 +24,4 @@ results = llm_classify(
 print(results["label"].value_counts())
 ```
 
-Save the fixed version as `relevance_eval.py`.
+将修复后的版本保存为 `relevance_eval.py`。

@@ -1,1 +1,1 @@
-What share of the total research-assistant bill comes from the most expensive 10% of traces? Round 10% of the trace count up to a whole number of traces.
+research-assistant 中费用最高的 10% 追踪记录，占总费用的比例是多少？计算这 10% 对应的追踪记录条数时，向上取整。

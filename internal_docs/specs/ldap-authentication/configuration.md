@@ -1,123 +1,133 @@
-# Configuration Reference
+<a id="configuration-reference"></a>
 
-**⚠️ CRITICAL: These environment variable names are ONE-WAY door decisions. Once released, changing them breaks user configurations.**
+# 配置参考
 
-## Environment Variable Contract Summary
+**⚠️ 关键要求：这些环境变量名称属于不可逆决策。发布后更名会破坏用户配置。**
 
-| Variable | Required? | Default | Type | Notes |
+<a id="environment-variable-contract-summary"></a>
+
+## 环境变量契约汇总
+
+| 变量 | 必填？ | 默认值 | 类型 | 说明 |
 |----------|-----------|---------|------|-------|
-| `PHOENIX_LDAP_HOST` | ✅ **Required** | - | string | Comma-separated for failover |
-| `PHOENIX_LDAP_PORT` | Optional | `389` (starttls) or `636` (ldaps) | int | Defaults based on `tls_mode` |
-| `PHOENIX_LDAP_TLS_MODE` | Optional | `starttls` | `none\|starttls\|ldaps` | TLS connection mode |
-| `PHOENIX_LDAP_TLS_VERIFY` | Optional | `true` | boolean | **Always true in production** |
-| `PHOENIX_LDAP_TLS_CA_CERT_FILE` | Optional | - | path | Custom CA certificate (PEM) for private CAs |
-| `PHOENIX_LDAP_TLS_CLIENT_CERT_FILE` | Optional | - | path | Client certificate (PEM) for mutual TLS |
-| `PHOENIX_LDAP_TLS_CLIENT_KEY_FILE` | Optional | - | path | Client private key (PEM) for mutual TLS |
-| `PHOENIX_LDAP_BIND_DN` | Optional | - | string | Service account (required for search-and-bind) |
-| `PHOENIX_LDAP_BIND_PASSWORD` | Optional | - | string | Service account password |
-| `PHOENIX_LDAP_USER_SEARCH_BASE_DNS` | ✅ **Required** | - | JSON array | `'["ou=users,dc=example,dc=com"]'` |
-| `PHOENIX_LDAP_USER_SEARCH_FILTER` | Optional | `(&(objectClass=user)(sAMAccountName=%s))` | string | `%s` = username placeholder |
-| `PHOENIX_LDAP_ATTR_EMAIL` | Optional | `mail` | string | Email attribute name |
-| `PHOENIX_LDAP_ATTR_DISPLAY_NAME` | Optional | `displayName` | string | Display name attribute |
-| `PHOENIX_LDAP_ATTR_MEMBER_OF` | Optional | `memberOf` | string | Group membership attribute (used when `GROUP_SEARCH_FILTER` not set) |
-| `PHOENIX_LDAP_GROUP_SEARCH_BASE_DNS` | Conditional | - | JSON array | Required when `GROUP_SEARCH_FILTER` is set |
-| `PHOENIX_LDAP_GROUP_SEARCH_FILTER` | Optional | - | string | When set, enables POSIX mode (ignores `ATTR_MEMBER_OF`) |
-| `PHOENIX_LDAP_GROUP_SEARCH_FILTER_USER_ATTR` | Optional | - | string | Attribute to substitute in GROUP_SEARCH_FILTER (default: login username) |
-| `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS` | ✅ **Required** | `[]` | JSON array | **Grafana-compatible format** |
-| `PHOENIX_LDAP_ALLOW_SIGN_UP` | Optional | `true` | boolean | Auto-create users on first login |
-| `PHOENIX_LDAP_ATTR_UNIQUE_ID` | Optional | - | string | Immutable ID (only if expecting email changes) |
+| `PHOENIX_LDAP_HOST` | ✅ **必填** | - | 字符串 | 逗号分隔，用于故障转移 |
+| `PHOENIX_LDAP_PORT` | 可选 | `389` （starttls） 或 `636` （ldaps） | 整数 | 默认值取决于 `tls_mode` |
+| `PHOENIX_LDAP_TLS_MODE` | 可选 | `starttls` | `none\|starttls\|ldaps` | TLS 连接模式 |
+| `PHOENIX_LDAP_TLS_VERIFY` | 可选 | `true` | 布尔值 | **生产环境始终设为 true** |
+| `PHOENIX_LDAP_TLS_CA_CERT_FILE` | 可选 | - | 路径 | 私有 CA 使用的自定义 CA 证书（PEM） |
+| `PHOENIX_LDAP_TLS_CLIENT_CERT_FILE` | 可选 | - | 路径 | 双向 TLS 客户端证书（PEM） |
+| `PHOENIX_LDAP_TLS_CLIENT_KEY_FILE` | 可选 | - | 路径 | 双向 TLS 客户端私钥（PEM） |
+| `PHOENIX_LDAP_BIND_DN` | 可选 | - | 字符串 | 服务账户，搜索绑定模式必需 |
+| `PHOENIX_LDAP_BIND_PASSWORD` | 可选 | - | 字符串 | 服务账户密码 |
+| `PHOENIX_LDAP_USER_SEARCH_BASE_DNS` | ✅ **必填** | - | JSON 数组 | `'["ou=users,dc=example,dc=com"]'` |
+| `PHOENIX_LDAP_USER_SEARCH_FILTER` | 可选 | `(&(objectClass=user)(sAMAccountName=%s))` | 字符串 | `%s` = 用户名占位符 |
+| `PHOENIX_LDAP_ATTR_EMAIL` | 可选 | `mail` | 字符串 | 邮箱属性名 |
+| `PHOENIX_LDAP_ATTR_DISPLAY_NAME` | 可选 | `displayName` | 字符串 | 显示名称属性 |
+| `PHOENIX_LDAP_ATTR_MEMBER_OF` | 可选 | `memberOf` | 字符串 | 组成员属性，未设置 `GROUP_SEARCH_FILTER` 时使用 |
+| `PHOENIX_LDAP_GROUP_SEARCH_BASE_DNS` | 条件必填 | - | JSON 数组 | 设置以下字段时必需： `GROUP_SEARCH_FILTER`  |
+| `PHOENIX_LDAP_GROUP_SEARCH_FILTER` | 可选 | - | 字符串 | 设置后启用 POSIX 模式，忽略 `ATTR_MEMBER_OF` |
+| `PHOENIX_LDAP_GROUP_SEARCH_FILTER_USER_ATTR` | 可选 | - | 字符串 | 替换 GROUP_SEARCH_FILTER 的属性，默认使用登录用户名 |
+| `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS` | ✅ **必填** | `[]` | JSON 数组 | **兼容 Grafana 的格式** |
+| `PHOENIX_LDAP_ALLOW_SIGN_UP` | 可选 | `true` | 布尔值 | 首次登录时自动创建用户 |
+| `PHOENIX_LDAP_ATTR_UNIQUE_ID` | 可选 | - | 字符串 | 不可变 ID，仅在预期邮箱变化时使用 |
 
-### TLS Mode Default
+<a id="tls-mode-default"></a>
 
-- Phoenix defaults `PHOENIX_LDAP_TLS_MODE` to `starttls` so deployments can connect over the commonly open port 389 while still upgrading to TLS before any bind.
-- This matches what most Active Directory/OpenLDAP environments expect out of the box and avoids asking operators to expose port 636 unless they explicitly choose LDAPS.
-- The implementation always calls `start_tls()` before `bind()` (see [Protocol Compliance](./protocol-compliance.md#7-starttls-implementation--security)), and the docker MITM profile continuously verifies that StartTLS traffic stays encrypted, so the default remains a secure channel rather than plaintext.
-- Admins who prefer TLS-from-byte-zero can set `PHOENIX_LDAP_TLS_MODE=ldaps`, which automatically defaults the port to 636 in `LDAPConfig.from_env`.
+### 默认 TLS 模式
 
-**Key Design Decisions** (verified against Grafana source code):
-- ✅ **Prefix**: `PHOENIX_LDAP_*` matches Phoenix conventions, no conflict with Grafana
-- ✅ **Boolean values**: String `"true"`/`"false"` (not `1`/`0`) for clarity
-- ✅ **JSON format**: `GROUP_ROLE_MAPPINGS` uses Grafana's `GroupToOrgRole` structure
-- ✅ **Defaults**: Match Grafana defaults where applicable (timeout: 10s, port: 389, etc.)
-- ⚠️ **Limitation**: Replica-only multi-server (all servers must share config)
+- Phoenix 将 `PHOENIX_LDAP_TLS_MODE` 默认为 `starttls`，可通过通常已开放的 389 端口连接，同时在任何绑定之前升级至 TLS。
+- 这符合大多数 Active Directory/OpenLDAP 环境的开箱即用预期，除非明确选择 LDAPS，否则无需运维人员开放 636 端口。
+- 实现始终在 `bind()` 前调用 `start_tls()`（参见[协议合规性](./protocol-compliance.md#7-starttls-implementation--security)）；Docker 中间人测试配置持续验证 StartTLS 流量保持加密，因此默认通道安全，并非明文。
+- 希望从第一个字节就使用 TLS 的管理员可设置 `PHOENIX_LDAP_TLS_MODE=ldaps`，`LDAPConfig.from_env` 会自动将默认端口设为 636。
 
-## Phoenix vs. Grafana Configuration Comparison
+**关键设计决策**（已对照 Grafana 源码验证）：
+- ✅ **前缀**：`PHOENIX_LDAP_*` 符合 Phoenix 约定，与 Grafana 不冲突
+- ✅ **布尔值**：使用字符串 `"true"`/`"false"`，不用 `1`/`0`，语义更清晰
+- ✅ **JSON 格式**：`GROUP_ROLE_MAPPINGS` 使用 Grafana 的 `GroupToOrgRole` 结构
+- ✅ **默认值**：适用时与 Grafana 默认值一致，例如超时 10 秒、端口 389
+- ⚠️ **限制**：多服务器仅支持副本，所有服务器必须共享配置
 
-This table maps Phoenix's environment variables to Grafana's TOML configuration file structure, helping users migrate between systems.
+<a id="phoenix-vs-grafana-configuration-comparison"></a>
 
-| **Configuration** | **Phoenix (Environment Variables)** | **Grafana (ldap.toml)** | **Notes** |
+## Phoenix 与 Grafana 配置对比
+
+下表将 Phoenix 环境变量映射至 Grafana TOML 配置文件结构，帮助用户在系统之间迁移。
+
+| **配置** | **Phoenix（环境变量）** | **Grafana（ldap.toml）** | **说明** |
 |-------------------|-------------------------------------|-------------------------|-----------|
-| **Enable LDAP** | `PHOENIX_LDAP_HOST` (presence) | `[auth.ldap]`<br>`enabled = true`<br>`config_file = "/etc/grafana/ldap.toml"` | Phoenix: Auto-enabled when HOST is set<br>Grafana: Requires explicit enable + file path |
-| **Server Host** | `PHOENIX_LDAP_HOST="dc1.com,dc2.com"` | `[[servers]]`<br>`host = "dc1.com"`<br>`[[servers]]`<br>`host = "dc2.com"` | Phoenix: Comma-separated string<br>Grafana: Multiple `[[servers]]` blocks |
-| **Server Port** | `PHOENIX_LDAP_PORT=389` | `port = 389` | Both default to 389 |
-| **TLS Mode** | `PHOENIX_LDAP_TLS_MODE="starttls"` | `use_ssl = false`<br>`start_tls = false` (default) | Phoenix: Single TLS_MODE with StartTLS default<br>Grafana: Separate SSL/StartTLS flags; StartTLS disabled until explicitly enabled |
-| **TLS Verification** | `PHOENIX_LDAP_TLS_VERIFY="true"` | `ssl_skip_verify = false` | Both verify certificates by default |
-| **Custom CA Cert** | `PHOENIX_LDAP_TLS_CA_CERT_FILE="/path/to/ca.pem"` | `root_ca_cert = "/path/to/ca.pem"` | Identical semantics for private CAs |
-| **Client Cert (mTLS)** | `PHOENIX_LDAP_TLS_CLIENT_CERT_FILE="/path/to/client.crt"`<br>`PHOENIX_LDAP_TLS_CLIENT_KEY_FILE="/path/to/client.key"` | `client_cert = "/path/to/client.crt"`<br>`client_key = "/path/to/client.key"` | Identical semantics for mutual TLS |
-| **Bind DN** | `PHOENIX_LDAP_BIND_DN="cn=admin,..."` | `bind_dn = "cn=admin,..."` | Identical semantics |
-| **Bind Password** | `PHOENIX_LDAP_BIND_PASSWORD="secret"` | `bind_password = "secret"`<br>or `bind_password = '${ENV_VAR}'` | Phoenix: Direct env var<br>Grafana: TOML value or interpolation |
-| **User Search Base** | `PHOENIX_LDAP_USER_SEARCH_BASE_DNS='["ou=users,..."]'` | `search_base_dns = ["ou=users,dc=..."]` | Both: JSON/TOML array of DNs |
-| **User Search Filter** | `PHOENIX_LDAP_USER_SEARCH_FILTER="(uid=%s)"` | `search_filter = "(uid=%s)"` | Identical: `%s` = username |
-| **Email Attribute** | `PHOENIX_LDAP_ATTR_EMAIL="mail"` | `[servers.attributes]`<br>`email = "mail"` | Phoenix: Direct env var<br>Grafana: Nested TOML section |
-| **Name Attribute** | `PHOENIX_LDAP_ATTR_DISPLAY_NAME="displayName"` | `name = "displayName"` | Both map display name |
-| **Unique ID** | `PHOENIX_LDAP_ATTR_UNIQUE_ID="objectGUID"` | Not supported | Phoenix: Optional immutable identifier for email change resilience |
-| **Group Membership** | `PHOENIX_LDAP_ATTR_MEMBER_OF="memberOf"` | `member_of = "memberOf"` | Active Directory attribute |
-| **Group Search Base** | `PHOENIX_LDAP_GROUP_SEARCH_BASE_DNS='["ou=groups,..."]'` | `group_search_base_dns = ["ou=groups,dc=..."]` | Both: JSON/TOML array of DNs |
-| **Group Search Filter** | `PHOENIX_LDAP_GROUP_SEARCH_FILTER="(member=%s)"` | `group_search_filter = "(member=%s)"` | Identical: `%s` = substituted value |
-| **Group Filter User Attr** | `PHOENIX_LDAP_GROUP_SEARCH_FILTER_USER_ATTR="uid"` | `group_search_filter_user_attribute = "uid"` | Attribute value to substitute for `%s` in GROUP_SEARCH_FILTER. When not set, uses login username. |
-| **Group→Role Mapping** | `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[`<br>`  {"group_dn": "cn=admins,...", "role": "ADMIN"}`<br>`]'` | `[[servers.group_mappings]]`<br>`group_dn = "cn=admins,..."`<br>`org_role = "Admin"` | Phoenix: JSON with `role` (no org)<br>Grafana: TOML with `org_role` |
-| **Allow Sign-Up** | `PHOENIX_LDAP_ALLOW_SIGN_UP="true"` | `[auth.ldap]`<br>`allow_sign_up = true` | Both default to `true` |
-| **Timeout** | Not exposed (uses ldap3 defaults) | `timeout = 10` | Grafana: Configurable in seconds |
-| **Connection Pooling** | Not exposed (uses ldap3 defaults) | Not configurable | Both use underlying library defaults |
+| **启用 LDAP** | `PHOENIX_LDAP_HOST` （是否存在） | `[auth.ldap]`<br>`enabled = true`<br>`config_file = "/etc/grafana/ldap.toml"` | Phoenix：设置 HOST 时自动启用<br>Grafana：需要显式启用并指定文件路径 |
+| **服务器主机** | `PHOENIX_LDAP_HOST="dc1.com,dc2.com"` | `[[servers]]`<br>`host = "dc1.com"`<br>`[[servers]]`<br>`host = "dc2.com"` | Phoenix：逗号分隔字符串<br>Grafana：多个 `[[servers]]` 块 |
+| **服务器端口** | `PHOENIX_LDAP_PORT=389` | `port = 389` | 两者默认均为 389 |
+| **TLS 模式** | `PHOENIX_LDAP_TLS_MODE="starttls"` | `use_ssl = false`<br>`start_tls = false` （默认） | Phoenix：单一 TLS_MODE，默认 StartTLS<br>Grafana：独立 SSL/StartTLS 标志；StartTLS 需显式启用 |
+| **TLS 校验** | `PHOENIX_LDAP_TLS_VERIFY="true"` | `ssl_skip_verify = false` | 两者默认均校验证书 |
+| **自定义 CA 证书** | `PHOENIX_LDAP_TLS_CA_CERT_FILE="/path/to/ca.pem"` | `root_ca_cert = "/path/to/ca.pem"` | 私有 CA 语义相同 |
+| **客户端证书（mTLS）** | `PHOENIX_LDAP_TLS_CLIENT_CERT_FILE="/path/to/client.crt"`<br>`PHOENIX_LDAP_TLS_CLIENT_KEY_FILE="/path/to/client.key"` | `client_cert = "/path/to/client.crt"`<br>`client_key = "/path/to/client.key"` | 双向 TLS 语义相同 |
+| **绑定 DN** | `PHOENIX_LDAP_BIND_DN="cn=admin,..."` | `bind_dn = "cn=admin,..."` | 语义相同 |
+| **绑定密码** | `PHOENIX_LDAP_BIND_PASSWORD="secret"` | `bind_password = "secret"`<br>或 `bind_password = '${ENV_VAR}'` | Phoenix：直接使用环境变量<br>Grafana：TOML 值或插值 |
+| **用户搜索基准** | `PHOENIX_LDAP_USER_SEARCH_BASE_DNS='["ou=users,..."]'` | `search_base_dns = ["ou=users,dc=..."]` | 两者均为 DN 的 JSON/TOML 数组 |
+| **用户搜索过滤器** | `PHOENIX_LDAP_USER_SEARCH_FILTER="(uid=%s)"` | `search_filter = "(uid=%s)"` | 相同： `%s` = 用户名 |
+| **邮箱属性** | `PHOENIX_LDAP_ATTR_EMAIL="mail"` | `[servers.attributes]`<br>`email = "mail"` | Phoenix：直接使用环境变量<br>Grafana：嵌套 TOML 章节 |
+| **名称属性** | `PHOENIX_LDAP_ATTR_DISPLAY_NAME="displayName"` | `name = "displayName"` | 两者均映射显示名称 |
+| **唯一 ID** | `PHOENIX_LDAP_ATTR_UNIQUE_ID="objectGUID"` | 不支持 | Phoenix：可选不可变标识符，可应对邮箱变化 |
+| **组成员关系** | `PHOENIX_LDAP_ATTR_MEMBER_OF="memberOf"` | `member_of = "memberOf"` | Active Directory 属性 |
+| **组搜索基准** | `PHOENIX_LDAP_GROUP_SEARCH_BASE_DNS='["ou=groups,..."]'` | `group_search_base_dns = ["ou=groups,dc=..."]` | 两者均为 DN 的 JSON/TOML 数组 |
+| **组搜索过滤器** | `PHOENIX_LDAP_GROUP_SEARCH_FILTER="(member=%s)"` | `group_search_filter = "(member=%s)"` | 相同： `%s` = 替换值 |
+| **组过滤用户属性** | `PHOENIX_LDAP_GROUP_SEARCH_FILTER_USER_ATTR="uid"` | `group_search_filter_user_attribute = "uid"` | 替换以下占位符的属性值： `%s`，用于 GROUP_SEARCH_FILTER。未设置时使用登录用户名。 |
+| **组→角色映射** | `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[`<br>`  {"group_dn": "cn=admins,...", "role": "ADMIN"}`<br>`]'` | `[[servers.group_mappings]]`<br>`group_dn = "cn=admins,..."`<br>`org_role = "Admin"` | Phoenix：JSON 使用 `role` （无组织）<br>Grafana：TOML 使用 `org_role` |
+| **允许注册** | `PHOENIX_LDAP_ALLOW_SIGN_UP="true"` | `[auth.ldap]`<br>`allow_sign_up = true` | 两者默认均为 `true` |
+| **超时** | 不提供配置，使用 ldap3 默认值 | `timeout = 10` | Grafana：可按秒配置 |
+| **连接池** | 不提供配置，使用 ldap3 默认值 | 不可配置 | 两者均使用底层库默认值 |
 
-**Key Differences**:
+**主要区别**：
 
-1. **Configuration Method**
-   - Phoenix: Pure environment variables (12-factor app pattern)
-   - Grafana: TOML configuration file with optional env var interpolation
+1. **配置方式**
+   - Phoenix：纯环境变量，遵循十二要素应用模式
+   - Grafana：TOML 配置文件，可选环境变量插值
 
-2. **Multi-Server Configuration**
-   - Phoenix: Comma-separated replicas (identical config only)
-   - Grafana: Multiple `[[servers]]` blocks (can have different configs per server)
+2. **多服务器配置**
+   - Phoenix：逗号分隔的副本，仅支持相同配置
+   - Grafana：多个 `[[servers]]` 块，每台服务器可采用不同配置
 
-3. **Role Mapping Format**
-   - Phoenix: JSON with `role` field, uppercase values (`ADMIN`, `MEMBER`, `VIEWER`)
-   - Grafana: TOML with `org_role` field, capitalized values (`Admin`, `Editor`, `Viewer`)
+3. **角色映射格式**
+   - Phoenix：JSON 使用 `role` 字段，值为全大写（`ADMIN`、`MEMBER`、`VIEWER`）
+   - Grafana：TOML 使用 `org_role` 字段，值为首字母大写（`Admin`、`Editor`、`Viewer`）
 
-4. **Migration Path**
-   - Grafana → Phoenix: Must convert TOML to env vars manually
-   - Cannot reuse `ldap.toml` files directly
-   - Role mapping requires case conversion (`Admin` → `ADMIN`, etc.)
+4. **迁移路径**
+   - Grafana → Phoenix：必须手动将 TOML 转换为环境变量
+   - 不能直接复用 `ldap.toml` 文件
+   - 角色映射需要转换大小写（`Admin` → `ADMIN` 等）
 
-**Compatibility Notes**:
-- **Grafana users**: Cannot directly reuse `ldap.toml` files (must convert to env vars)
-- **Field names**: Grafana uses `org_role`, Phoenix uses `role` (no org concept)
-- **Role values**: Grafana uses capitalized (`Admin`, `Editor`, `Viewer`), Phoenix uses uppercase (`ADMIN`, `MEMBER`, `VIEWER`)
+**兼容性说明**：
+- **Grafana 用户**：不能直接复用 `ldap.toml` 文件，必须转换为环境变量
+- **字段名称**：Grafana 使用 `org_role`，Phoenix 使用 `role`，没有组织概念
+- **角色值**：Grafana 使用首字母大写（`Admin`、`Editor`、`Viewer`），Phoenix 使用全大写（`ADMIN`、`MEMBER`、`VIEWER`）
 
-**Common Configuration Mistakes to Avoid**:
+**应避免的常见配置错误**：
 
-| ❌ **WRONG** | ✅ **CORRECT** | Reason |
+| ❌ **错误** | ✅ **正确** | 原因 |
 |-------------|---------------|---------|
-| `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='{"admin":["..."]}'` | `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[{"group_dn":"...", "role":"ADMIN"}]'` | Must use JSON array structure with required fields |
-| `"role": "admin"` (lowercase) | `"role": "ADMIN"` (uppercase) | Phoenix uses uppercase role names |
-| `"role": "ADMIN"` (Grafana field) | `"role": "ADMIN"` (Phoenix field) | Phoenix uses `role`, not `org_role` (no org concept) |
-| `PHOENIX_LDAP_TLS_MODE=starttls` (unquoted) | `PHOENIX_LDAP_TLS_MODE="starttls"` (quoted) | Shell may require quotes for strings |
-| `PHOENIX_LDAP_PORT="389"` (string) | `PHOENIX_LDAP_PORT=389` (int) | Port should be unquoted integer |
-| Multiple `PHOENIX_LDAP_HOST` lines | `PHOENIX_LDAP_HOST="dc1.com,dc2.com"` | Use comma-separated, not multiple vars |
-| `%s` in `GROUP_SEARCH_FILTER` for username | `%s` in `USER_SEARCH_FILTER` | User filter uses username; group filter uses login username by default (or attribute from GROUP_SEARCH_FILTER_USER_ATTR) |
+| `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='{"admin":["..."]}'` | `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[{"group_dn":"...", "role":"ADMIN"}]'` | 必须使用包含必需字段的 JSON 数组结构 |
+| `"role": "admin"` （小写） | `"role": "ADMIN"` （大写） | Phoenix 使用大写角色名称 |
+| `"role": "ADMIN"` （Grafana 字段） | `"role": "ADMIN"` （Phoenix 字段） | Phoenix 使用 `role`, 而非 `org_role` （没有组织概念） |
+| `PHOENIX_LDAP_TLS_MODE=starttls` （无引号） | `PHOENIX_LDAP_TLS_MODE="starttls"` （有引号） | Shell 字符串可能需要引号 |
+| `PHOENIX_LDAP_PORT="389"` （字符串） | `PHOENIX_LDAP_PORT=389` （整数） | 端口应为无引号整数 |
+| 多行 `PHOENIX_LDAP_HOST` | `PHOENIX_LDAP_HOST="dc1.com,dc2.com"` | 使用逗号分隔，不使用多个变量 |
+| `%s` 位于 `GROUP_SEARCH_FILTER` 用于用户名 | `%s` 位于 `USER_SEARCH_FILTER` | 用户过滤器使用用户名；组过滤器默认使用登录用户名，或 GROUP_SEARCH_FILTER_USER_ATTR 指定的属性 |
 
-**Validation Checklist** (implemented in code):
-1. ✅ `PHOENIX_LDAP_HOST` is not empty (config.py:1423)
-2. ✅ `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS` is valid JSON array (config.py:1433-1442)
-3. ✅ Each mapping has `group_dn` and `role` fields (config.py:1457-1476)
-4. ✅ `role` values are `"ADMIN"`, `"MEMBER"`, or `"VIEWER"` (case-insensitive) (config.py:1449)
-5. ✅ If `GROUP_SEARCH_FILTER` is set, `GROUP_SEARCH_BASE_DNS` must also be set
-6. ✅ `TLS_MODE` is either `"starttls"` or `"ldaps"` (config.py:1484-1488)
-7. ⚠️ **Security**: Warn if `TLS_MODE=none` or `TLS_VERIFY=false` in production (config.py)
+**校验清单**（已在代码中实现）：
+1. ✅ `PHOENIX_LDAP_HOST` 不为空（config.py:1423）
+2. ✅ `PHOENIX_LDAP_GROUP_ROLE_MAPPINGS` 是有效 JSON 数组（config.py:1433-1442）
+3. ✅ 每个映射包含 `group_dn` 和 `role` 字段（config.py:1457-1476）
+4. ✅ `role` 值为 `"ADMIN"`、`"MEMBER"` 或 `"VIEWER"`，不区分大小写（config.py:1449）
+5. ✅ 设置 `GROUP_SEARCH_FILTER` 时，必须同时设置 `GROUP_SEARCH_BASE_DNS`
+6. ✅ `TLS_MODE` 为 `"starttls"` 或 `"ldaps"`（config.py:1484-1488）
+7. ⚠️ **安全**：生产环境中若 `TLS_MODE=none` 或 `TLS_VERIFY=false`，则发出警告（config.py）
 
 ---
 
-## Complete Environment Variables
+<a id="complete-environment-variables"></a>
+
+## 完整环境变量
 
 ```bash
 # ==============================================================================
@@ -294,9 +304,11 @@ PHOENIX_LDAP_ALLOW_SIGN_UP="true"
 
 ```
 
-## Configuration Examples
+<a id="configuration-examples"></a>
 
-**Example 1: Active Directory (Single Server)**
+## 配置示例
+
+**示例 1：Active Directory（单服务器）**
 ```bash
 PHOENIX_LDAP_HOST="ad.corp.com"
 PHOENIX_LDAP_PORT=389
@@ -316,7 +328,7 @@ PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[
 ]'
 ```
 
-**Example 2: OpenLDAP (POSIX Groups)**
+**示例 2：OpenLDAP（POSIX 组）**
 ```bash
 PHOENIX_LDAP_HOST="ldap.example.com"
 PHOENIX_LDAP_PORT=389
@@ -338,7 +350,7 @@ PHOENIX_LDAP_GROUP_ROLE_MAPPINGS='[
 ]'
 ```
 
-**Example 3: Multiple LDAP Servers (High Availability)**
+**示例 3：多台 LDAP 服务器（高可用）**
 ```bash
 PHOENIX_LDAP_HOST="dc1.corp.com,dc2.corp.com,dc3.corp.com"
 PHOENIX_LDAP_PORT=389

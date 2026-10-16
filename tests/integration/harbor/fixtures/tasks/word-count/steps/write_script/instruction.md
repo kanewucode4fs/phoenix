@@ -1,6 +1,6 @@
-Create a Python script at `/app/wc.py` that counts the words in a text file.
+在 `/app/wc.py` 创建一个 Python 脚本，用于统计文本文件中的单词数。
 
-Requirements:
-- `python3 /app/wc.py <path>` prints the number of whitespace-separated words in the file, followed by a newline, and exits 0.
-- The count must match `wc -w <path>`.
-- A sample file is available at `/app/sample.txt` for testing.
+要求：
+- `python3 /app/wc.py <path>` 输出文件中按空白字符分隔的单词数，末尾带换行符，并以退出码 0 结束。
+- 统计结果必须与 `wc -w <path>` 一致。
+- 可使用 `/app/sample.txt` 中的示例文件进行测试。

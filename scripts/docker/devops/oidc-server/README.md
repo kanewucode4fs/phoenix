@@ -1,42 +1,50 @@
-# Phoenix OIDC Debug Server
+<a id="phoenix-oidc-debug-server"></a>
 
-A **fully spec-compliant OpenID Connect 1.0** server implementation for testing and debugging authentication flows. This server is designed for development environments and provides comprehensive logging to help understand the OIDC protocol.
+# Phoenix OIDC 调试服务
 
-> ⚠️ **For Development Only**: This is a debug server with extensive logging. Not suitable for production use.
+一个**完全符合 OpenID Connect 1.0 规范**的服务实现，用于测试和调试认证流程。服务面向开发环境，提供完整日志，帮助理解 OIDC 协议。
 
-## 📚 Table of Contents
+> ⚠️ **仅供开发使用**：这是带大量日志的调试服务，不适用于生产环境。
 
-- [Overview](#overview)
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [OIDC Flows](#oidc-flows)
-  - [Authorization Code Flow](#authorization-code-flow)
-  - [PKCE Flow](#pkce-flow)
-- [API Endpoints](#api-endpoints)
-- [Configuration](#configuration)
-- [Architecture](#architecture)
-- [Spec Compliance](#spec-compliance)
-- [Educational Resources](#educational-resources)
+<a id="-table-of-contents"></a>
+
+## 📚 目录
+
+- [概述](#overview)
+- [功能](#features)
+- [快速开始](#quick-start)
+- [OIDC 流程](#oidc-flows)
+  - [授权码流程](#authorization-code-flow)
+  - [PKCE 流程](#pkce-flow)
+- [API 端点](#api-endpoints)
+- [配置](#configuration)
+- [架构](#architecture)
+- [规范符合性](#spec-compliance)
+- [学习资料](#educational-resources)
 
 ---
 
-## Overview
+<a id="overview"></a>
 
-This OIDC server implements the **OpenID Connect Core 1.0** specification with full support for:
+## 概述
 
-- **Authorization Code Flow** (Section 3.1)
-- **PKCE** (RFC 7636) for public and confidential clients
-- **Discovery Document** (OpenID Connect Discovery 1.0)
-- **UserInfo Endpoint** (Section 5.3)
-- **JWT-based ID Tokens and Access Tokens** (RS256)
+此 OIDC 服务实现 **OpenID Connect Core 1.0** 规范，完整支持：
 
-### What is OpenID Connect?
+- **授权码流程**（第 3.1 节）
+- 面向公共客户端和机密客户端的 **PKCE**（RFC 7636）
+- **发现文档**（OpenID Connect Discovery 1.0）
+- **UserInfo 端点**（第 5.3 节）
+- **基于 JWT 的 ID 令牌和访问令牌**（RS256）
 
-OpenID Connect (OIDC) is an identity layer built on top of OAuth 2.0. It allows clients to:
+<a id="what-is-openid-connect"></a>
 
-1. **Verify the identity** of end-users
-2. **Obtain basic profile information** about users
-3. Do so in an **interoperable and REST-like** manner
+### 什么是 OpenID Connect
+
+OpenID Connect（OIDC）是建立在 OAuth 2.0 之上的身份层，允许客户端：
+
+1. **验证最终用户的身份**
+2. **获取用户的基本资料**
+3. 以**可互操作、类似 REST 的方式**完成上述操作
 
 ```
 ┌─────────────┐
@@ -53,47 +61,63 @@ OpenID Connect (OIDC) is an identity layer built on top of OAuth 2.0. It allows 
 
 ---
 
-## Features
+<a id="features"></a>
 
-### ✅ Spec Compliance
+## 功能
 
-- **OpenID Connect Core 1.0** - Fully compliant implementation
-- **RFC 7636 (PKCE)** - Proof Key for Code Exchange
-- **OAuth 2.0 (RFC 6749)** - Authorization framework
-- Every function is annotated with spec section references
+<a id="-spec-compliance"></a>
 
-### 🔍 Debug Features
+### ✅ 规范符合性
 
-- **Structured JSON Logging** - Every operation logged with timestamps
-- **Request/Response Tracking** - Complete audit trail
-- **Multi-user Support** - Database-driven user management
-- **User Selection UI** - Test with multiple users
+- **OpenID Connect Core 1.0**：完全符合规范的实现
+- **RFC 7636（PKCE）**：授权码交换证明密钥
+- **OAuth 2.0（RFC 6749）**：授权框架
+- 每个函数都标注对应的规范章节
 
-### 🔐 Security Features
+<a id="-debug-features"></a>
 
-- **RS256 JWT Signing** - Asymmetric key cryptography
-- **Persistent Key Pairs** - Keys survive container restarts
-- **Single-use Authorization Codes** - Prevents replay attacks
-- **PKCE Support** - Enhanced security for public clients
-- **Client Authentication** - HTTP Basic Auth and POST body methods
+### 🔍 调试功能
 
-### 🎯 Client Support
+- **结构化 JSON 日志**：每个操作均带时间戳记录
+- **请求和响应跟踪**：完整审计轨迹
+- **多用户支持**：由数据库驱动的用户管理
+- **用户选择界面**：使用多个用户测试
 
-- **Standard OAuth/OIDC** - Confidential clients with secrets
-- **PKCE Public Clients** - Mobile apps, SPAs
-- **PKCE Confidential Clients** - Server-side apps with PKCE
-- **Configurable Modes** - Support one or all flows
+<a id="-security-features"></a>
+
+### 🔐 安全功能
+
+- **RS256 JWT 签名**：非对称密钥加密
+- **持久化密钥对**：容器重启后保留密钥
+- **一次性授权码**：防止重放攻击
+- **PKCE 支持**：增强公共客户端安全性
+- **客户端认证**：HTTP Basic Auth 和 POST 请求体方式
+
+<a id="-client-support"></a>
+
+### 🎯 客户端支持
+
+- **标准 OAuth/OIDC**：使用密钥的机密客户端
+- **PKCE 公共客户端**：移动应用、单页应用
+- **PKCE 机密客户端**：使用 PKCE 的服务端应用
+- **可配置模式**：支持一种或全部流程
 
 ---
 
-## Quick Start
+<a id="quick-start"></a>
 
-### Prerequisites
+## 快速开始
+
+<a id="prerequisites"></a>
+
+### 前置条件
 
 - Node.js 18+
-- PostgreSQL database (for user management)
+- PostgreSQL 数据库（用于用户管理）
 
-### Installation
+<a id="installation"></a>
+
+### 安装
 
 ```bash
 # Install dependencies
@@ -106,7 +130,9 @@ pnpm build
 pnpm start
 ```
 
-### Environment Variables
+<a id="environment-variables"></a>
+
+### 环境变量
 
 ```bash
 # Server Configuration
@@ -129,7 +155,9 @@ DB_USER=postgres
 DB_PASSWORD=postgres
 ```
 
-### Test the Server
+<a id="test-the-server"></a>
+
+### 测试服务
 
 ```bash
 # Check discovery document
@@ -144,13 +172,19 @@ curl http://localhost:9000/health
 
 ---
 
-## OIDC Flows
+<a id="oidc-flows"></a>
 
-### Authorization Code Flow
+## OIDC 流程
 
-The **Authorization Code Flow** is the most secure OAuth 2.0 flow, recommended for server-side web applications.
+<a id="authorization-code-flow"></a>
 
-#### Flow Diagram
+### 授权码流程
+
+**授权码流程**是最安全的 OAuth 2.0 流程，推荐用于服务端 Web 应用。
+
+<a id="flow-diagram"></a>
+
+#### 流程图
 
 ```mermaid
 sequenceDiagram
@@ -207,41 +241,47 @@ sequenceDiagram
     Client->>User: Login successful!
 ```
 
-#### Key Steps
+<a id="key-steps"></a>
 
-1. **Authorization Request** (Section 3.1.2.1)
-   - Client redirects user to `/auth` endpoint
-   - Includes: `client_id`, `redirect_uri`, `response_type=code`, `scope`, `state`
+#### 关键步骤
 
-2. **User Authentication** (Section 3.1.2.3)
-   - Server authenticates the user
-   - For debug: queries PostgreSQL for OAuth2 users
-   - Auto-login if single user, otherwise show selector
+1. **授权请求**（第 3.1.2.1 节）
+   - 客户端将用户重定向到 `/auth` 端点
+   - 包含：`client_id`、`redirect_uri`、`response_type=code`、`scope`、`state`
 
-3. **Authorization Response** (Section 3.1.2.5)
-   - Server generates short-lived authorization code (10 min)
-   - Redirects back to client with code and state
+2. **用户认证**（第 3.1.2.3 节）
+   - 服务端验证用户身份
+   - 调试时从 PostgreSQL 查询 OAuth2 用户
+   - 只有一个用户时自动登录，否则显示用户选择器
 
-4. **Token Request** (Section 3.1.3.1)
-   - Client exchanges code for tokens
-   - Includes: `grant_type=authorization_code`, `code`, `redirect_uri`, `client_secret`
+3. **授权响应**（第 3.1.2.5 节）
+   - 服务端生成短期授权码（10 分钟）
+   - 携带授权码和 state 重定向回客户端
 
-5. **Token Response** (Section 3.1.3.3)
-   - Server returns `access_token` and `id_token`
-   - ID Token contains user identity claims
-   - Access Token used for API access
+4. **令牌请求**（第 3.1.3.1 节）
+   - 客户端用授权码交换令牌
+   - 包含：`grant_type=authorization_code`、`code`、`redirect_uri`、`client_secret`
 
-6. **UserInfo Request** (Section 5.3.1)
-   - Client requests user details with access token
-   - Server returns user profile, groups, and roles
+5. **令牌响应**（第 3.1.3.3 节）
+   - 服务端返回 `access_token` 和 `id_token`
+   - ID 令牌包含用户身份声明
+   - 访问令牌用于访问 API
+
+6. **UserInfo 请求**（第 5.3.1 节）
+   - 客户端使用访问令牌请求用户详情
+   - 服务端返回用户资料、组和角色
 
 ---
 
-### PKCE Flow
+<a id="pkce-flow"></a>
 
-**PKCE** (Proof Key for Code Exchange, RFC 7636) adds an extra security layer for public clients (mobile apps, SPAs) that cannot securely store client secrets.
+### PKCE 流程
 
-#### How PKCE Works
+**PKCE**（授权码交换证明密钥，RFC 7636）为无法安全保存客户端密钥的公共客户端（移动应用、单页应用）增加额外安全层。
+
+<a id="how-pkce-works"></a>
+
+#### PKCE 工作原理
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -280,7 +320,9 @@ sequenceDiagram
 └─────────────────────────────────────────────────────────┘
 ```
 
-#### PKCE Flow Diagram
+<a id="pkce-flow-diagram"></a>
+
+#### PKCE 流程图
 
 ```mermaid
 sequenceDiagram
@@ -340,38 +382,47 @@ sequenceDiagram
     Client->>User: Login successful!
 ```
 
-#### PKCE Security Benefits
+<a id="pkce-security-benefits"></a>
 
-| Attack Scenario                     | Without PKCE                                 | With PKCE                                                          |
-| ----------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
-| **Authorization Code Interception** | Attacker can exchange stolen code for tokens | Attacker cannot exchange code without `code_verifier`              |
-| **Malicious App on Device**         | Can steal code from legitimate app           | Cannot use code without original `code_verifier`                   |
-| **Network Interception**            | Code alone is sufficient                     | Code + verifier both needed (verifier never sent to auth endpoint) |
+#### PKCE 的安全收益
 
-#### PKCE Methods
+| 攻击场景 | 不使用 PKCE | 使用 PKCE |
+| --- | --- | --- |
+| **授权码拦截** | 攻击者可用窃取的授权码交换令牌 | 没有 `code_verifier` 就无法交换令牌 |
+| **设备上的恶意应用** | 可以从合法应用窃取授权码 | 没有原始 `code_verifier` 就无法使用授权码 |
+| **网络拦截** | 仅有授权码即可 | 必须同时持有授权码和 verifier，后者从不发送到授权端点 |
 
-1. **S256** (RECOMMENDED)
+<a id="pkce-methods"></a>
+
+#### PKCE 方法
+
+1. **S256**（推荐）
 
    ```
    code_challenge = BASE64URL(SHA256(ASCII(code_verifier)))
    ```
 
-2. **plain** (Not Recommended)
+2. **plain**（不推荐）
+
    ```
    code_challenge = code_verifier
    ```
 
 ---
 
-## API Endpoints
+<a id="api-endpoints"></a>
 
-### Discovery Endpoint
+## API 端点
+
+<a id="discovery-endpoint"></a>
+
+### 发现端点
 
 **GET** `/.well-known/openid-configuration`
 
-Returns the OpenID Provider configuration.
+返回 OpenID 提供方配置。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -397,13 +448,15 @@ Returns the OpenID Provider configuration.
 
 ---
 
-### JWKS Endpoint
+<a id="jwks-endpoint"></a>
+
+### JWKS 端点
 
 **GET** `/.well-known/jwks.json`
 
-Returns the JSON Web Key Set with public keys for token verification.
+返回 JSON Web Key Set，其中包含用于验证令牌的公钥。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -422,33 +475,35 @@ Returns the JSON Web Key Set with public keys for token verification.
 
 ---
 
-### Authorization Endpoint
+<a id="authorization-endpoint"></a>
+
+### 授权端点
 
 **GET** `/auth`
 
-Initiates the authentication flow.
+发起认证流程。
 
-**Query Parameters:**
+**查询参数：**
 
-| Parameter               | Required    | Description                                    |
-| ----------------------- | ----------- | ---------------------------------------------- |
-| `response_type`         | Yes         | Must be `code`                                 |
-| `client_id`             | Yes         | Client identifier                              |
-| `redirect_uri`          | Yes         | Callback URL                                   |
-| `scope`                 | Yes         | Space-separated scopes (must include `openid`) |
-| `state`                 | Recommended | CSRF protection token                          |
-| `nonce`                 | Optional    | Replay protection (returned in ID token)       |
-| `code_challenge`        | PKCE        | Base64URL-encoded challenge                    |
-| `code_challenge_method` | PKCE        | `S256` or `plain`                              |
+| 参数 | 是否必填 | 说明 |
+| --- | --- | --- |
+| `response_type` | 是 | 必须为 `code` |
+| `client_id` | 是 | 客户端标识符 |
+| `redirect_uri` | 是 | 回调 URL |
+| `scope` | 是 | 以空格分隔的作用域，必须包含 `openid` |
+| `state` | 推荐 | CSRF 防护令牌 |
+| `nonce` | 可选 | 防重放值，在 ID 令牌中返回 |
+| `code_challenge` | PKCE | Base64URL 编码的 challenge |
+| `code_challenge_method` | PKCE | `S256` 或 `plain` |
 
-**Success Response:**
+**成功响应：**
 
 ```
 HTTP/1.1 302 Found
 Location: {redirect_uri}?code={authorization_code}&state={state}
 ```
 
-**Error Response:**
+**错误响应：**
 
 ```
 HTTP/1.1 302 Found
@@ -457,31 +512,33 @@ Location: {redirect_uri}?error=invalid_request&error_description=...&state={stat
 
 ---
 
-### Token Endpoint
+<a id="token-endpoint"></a>
+
+### 令牌端点
 
 **POST** `/token`
 
-Exchanges authorization code for tokens.
+用授权码交换令牌。
 
-**Request Headers:**
+**请求头：**
 
 ```
 Content-Type: application/x-www-form-urlencoded
 Authorization: Basic {BASE64(client_id:client_secret)}  [Optional]
 ```
 
-**Request Body:**
+**请求体：**
 
-| Parameter       | Required     | Description                        |
-| --------------- | ------------ | ---------------------------------- |
-| `grant_type`    | Yes          | Must be `authorization_code`       |
-| `code`          | Yes          | Authorization code from `/auth`    |
-| `redirect_uri`  | Yes          | Must match authorization request   |
-| `client_id`     | Yes          | Client identifier                  |
-| `client_secret` | Confidential | Client secret (body or Basic Auth) |
-| `code_verifier` | PKCE         | Code verifier for PKCE flow        |
+| 参数 | 是否必填 | 说明 |
+| --- | --- | --- |
+| `grant_type` | 是 | 必须为 `authorization_code` |
+| `code` | 是 | 从 `/auth` 获取的授权码 |
+| `redirect_uri` | 是 | 必须与授权请求一致 |
+| `client_id` | 是 | 客户端标识符 |
+| `client_secret` | 机密客户端 | 客户端密钥，通过请求体或 Basic Auth 发送 |
+| `code_verifier` | PKCE | PKCE 流程的验证值 |
 
-**Success Response:**
+**成功响应：**
 
 ```json
 {
@@ -493,7 +550,7 @@ Authorization: Basic {BASE64(client_id:client_secret)}  [Optional]
 }
 ```
 
-**Error Response:**
+**错误响应：**
 
 ```json
 {
@@ -502,7 +559,9 @@ Authorization: Basic {BASE64(client_id:client_secret)}  [Optional]
 }
 ```
 
-#### ID Token Claims
+<a id="id-token-claims"></a>
+
+#### ID 令牌声明
 
 ```json
 {
@@ -520,19 +579,21 @@ Authorization: Basic {BASE64(client_id:client_secret)}  [Optional]
 
 ---
 
-### UserInfo Endpoint
+<a id="userinfo-endpoint"></a>
+
+### UserInfo 端点
 
 **GET** `/userinfo`
 
-Returns claims about the authenticated user.
+返回已认证用户的声明。
 
-**Request Headers:**
+**请求头：**
 
 ```
 Authorization: Bearer {access_token}
 ```
 
-**Success Response:**
+**成功响应：**
 
 ```json
 {
@@ -546,13 +607,15 @@ Authorization: Bearer {access_token}
 
 ---
 
-### Health Check
+<a id="health-check"></a>
+
+### 健康检查
 
 **GET** `/health`
 
-Returns server health status.
+返回服务健康状态。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -565,38 +628,52 @@ Returns server health status.
 
 ---
 
-## Configuration
+<a id="configuration"></a>
 
-### Authentication Methods
+## 配置
 
-The server supports four modes via `OIDC_CLIENT_AUTH_METHOD`:
+<a id="authentication-methods"></a>
 
-#### 1. Standard OIDC (`"oidc"`)
+### 认证方式
 
-- Confidential clients only
-- Requires `client_secret`
-- No PKCE support
+服务通过 `OIDC_CLIENT_AUTH_METHOD` 支持四种模式：
 
-#### 2. PKCE Public (`"pkce-public"`)
+<a id="1-standard-oidc-oidc"></a>
 
-- Public clients only
-- No `client_secret` required
-- PKCE required
+#### 1. 标准 OIDC（`"oidc"`）
 
-#### 3. PKCE Confidential (`"pkce-confidential"`)
+- 仅支持机密客户端
+- 需要 `client_secret`
+- 不支持 PKCE
 
-- Confidential clients with PKCE
-- Requires `client_secret` AND `code_verifier`
-- Maximum security
+<a id="2-pkce-public-pkce-public"></a>
 
-#### 4. All Methods (`"all"`)
+#### 2. PKCE 公共客户端（`"pkce-public"`）
 
-- Supports all above methods
-- Auto-detects based on request parameters
+- 仅支持公共客户端
+- 不需要 `client_secret`
+- 必须使用 PKCE
 
-### Supported Clients
+<a id="3-pkce-confidential-pkce-confidential"></a>
 
-The server recognizes these client IDs:
+#### 3. PKCE 机密客户端（`"pkce-confidential"`）
+
+- 使用 PKCE 的机密客户端
+- 同时需要 `client_secret` 和 `code_verifier`
+- 最高安全性
+
+<a id="4-all-methods-all"></a>
+
+#### 4. 全部方式（`"all"`）
+
+- 支持上述全部方式
+- 根据请求参数自动识别
+
+<a id="supported-clients"></a>
+
+### 支持的客户端
+
+服务识别以下客户端 ID：
 
 ```typescript
 const clients = {
@@ -613,9 +690,13 @@ const clients = {
 
 ---
 
-## Architecture
+<a id="architecture"></a>
 
-### Component Diagram
+## 架构
+
+<a id="component-diagram"></a>
+
+### 组件图
 
 ```mermaid
 graph TD
@@ -652,75 +733,95 @@ graph TD
     end
 ```
 
-### Key Components
+<a id="key-components"></a>
 
-#### 1. **OIDCServer** (`src/oidc/server.ts`)
+### 关键组件
 
-- Core OIDC protocol implementation
-- Handles authorization and token endpoints
-- Manages authorization codes
-- Generates JWT tokens
-- ~2000 lines with extensive spec annotations
+<a id="1-oidcserver-srcoidcserverts"></a>
 
-#### 2. **TokenFactory** (`src/utils/token-factory.ts`)
+#### 1. **OIDCServer**（`src/oidc/server.ts`）
 
-- Generates Access Tokens and ID Tokens
-- Calculates `at_hash` claim
-- RS256 JWT signing
-- Comprehensive logging
+- OIDC 协议核心实现
+- 处理授权和令牌端点
+- 管理授权码
+- 生成 JWT 令牌
+- 约 2000 行，包含大量规范注释
 
-#### 3. **PKCEUtils** (`src/oidc/pkce.ts`)
+<a id="2-tokenfactory-srcutilstoken-factoryts"></a>
 
-- PKCE challenge validation
-- Code verifier verification
-- Supports S256 and plain methods
+#### 2. **TokenFactory**（`src/utils/token-factory.ts`）
 
-#### 4. **DatabaseClient** (`src/database/client.ts`)
+- 生成访问令牌和 ID 令牌
+- 计算 `at_hash` 声明
+- RS256 JWT 签名
+- 完整日志
 
-- PostgreSQL connection
-- User management
-- Polls for user changes every 5 seconds
-- Falls back to default user if DB unavailable
+<a id="3-pkceutils-srcoidcpkcets"></a>
 
-#### 5. **Logger** (`src/utils/logger.ts`)
+#### 3. **PKCEUtils**（`src/oidc/pkce.ts`）
 
-- Structured JSON logging
-- Every operation logged with timestamps
-- Request/response tracking
+- PKCE challenge 校验
+- code verifier 验证
+- 支持 S256 和 plain 方法
+
+<a id="4-databaseclient-srcdatabaseclientts"></a>
+
+#### 4. **DatabaseClient**（`src/database/client.ts`）
+
+- PostgreSQL 连接
+- 用户管理
+- 每 5 秒轮询用户变更
+- 数据库不可用时回退到默认用户
+
+<a id="5-logger-srcutilsloggerts"></a>
+
+#### 5. **Logger**（`src/utils/logger.ts`）
+
+- 结构化 JSON 日志
+- 每个操作均带时间戳记录
+- 请求与响应跟踪
 
 ---
 
-## Spec Compliance
+<a id="spec-compliance"></a>
 
-This implementation is **fully compliant** with:
+## 规范符合性
+
+此实现**完全符合**以下规范：
+
+<a id="openid-connect-core-10"></a>
 
 ### OpenID Connect Core 1.0
 
-- ✅ Section 2 - ID Token
-- ✅ Section 3.1.2 - Authorization Endpoint
-- ✅ Section 3.1.3 - Token Endpoint
-- ✅ Section 5.3 - UserInfo Endpoint
-- ✅ Section 9 - Client Authentication
-- ✅ Section 16 - Security Considerations
+- ✅ 第 2 节：ID 令牌
+- ✅ 第 3.1.2 节：授权端点
+- ✅ 第 3.1.3 节：令牌端点
+- ✅ 第 5.3 节：UserInfo 端点
+- ✅ 第 9 节：客户端认证
+- ✅ 第 16 节：安全注意事项
 
-### RFC 7636 (PKCE)
+<a id="rfc-7636-pkce"></a>
 
-- ✅ Section 4.1 - Code Verifier Creation
-- ✅ Section 4.2 - Code Challenge Creation
-- ✅ Section 4.4 - Authorization Request
-- ✅ Section 4.5 - Token Request
-- ✅ Section 4.6 - Server Verification
+### RFC 7636（PKCE）
 
-### Code Annotations
+- ✅ 第 4.1 节：创建 code verifier
+- ✅ 第 4.2 节：创建 code challenge
+- ✅ 第 4.4 节：授权请求
+- ✅ 第 4.5 节：令牌请求
+- ✅ 第 4.6 节：服务端验证
 
-Every function in the codebase includes JSDoc comments with:
+<a id="code-annotations"></a>
 
-- Spec section references
-- Direct links to specification
-- Explanation of requirements
-- REQUIRED/RECOMMENDED/OPTIONAL markers
+### 代码注释
 
-**Example:**
+代码库中的每个函数均包含 JSDoc 注释，注明：
+
+- 规范章节引用
+- 规范的直接链接
+- 要求说明
+- REQUIRED/RECOMMENDED/OPTIONAL 标记
+
+**示例：**
 
 ```typescript
 /**
@@ -741,11 +842,17 @@ async handleToken(body: any, headers: any) {
 
 ---
 
-## Educational Resources
+<a id="educational-resources"></a>
 
-### Understanding the Flow
+## 学习资料
 
-#### 1. Why Two Endpoints?
+<a id="understanding-the-flow"></a>
+
+### 理解流程
+
+<a id="1-why-two-endpoints"></a>
+
+#### 1. 为什么需要两个端点
 
 ```
 Authorization Endpoint (/auth)
@@ -761,18 +868,22 @@ Backend-focused: Direct HTTP call
 Returns: Long-lived tokens (1 hour)
 ```
 
-**Security Benefit:** Authorization code is useless without client authentication at token endpoint.
+**安全收益：** 没有在令牌端点完成客户端认证，授权码就无法使用。
 
-#### 2. Why Authorization Code Flow?
+<a id="2-why-authorization-code-flow"></a>
 
-| Flow                          | Security                 | Use Case          |
-| ----------------------------- | ------------------------ | ----------------- |
-| **Implicit**                  | ❌ Tokens in URL         | Deprecated        |
-| **Password**                  | ❌ Credentials to client | Deprecated        |
-| **Authorization Code**        | ✅ Most secure           | **Recommended**   |
-| **Authorization Code + PKCE** | ✅✅ Enhanced            | **Best Practice** |
+#### 2. 为什么使用授权码流程
 
-#### 3. Understanding Tokens
+| 流程 | 安全性 | 使用场景 |
+| --- | --- | --- |
+| **隐式流程** | ❌ 令牌出现在 URL 中 | 已弃用 |
+| **密码流程** | ❌ 凭证交给客户端 | 已弃用 |
+| **授权码流程** | ✅ 最安全 | **推荐** |
+| **授权码 + PKCE** | ✅✅ 增强安全性 | **最佳实践** |
+
+<a id="3-understanding-tokens"></a>
+
+#### 3. 理解令牌
 
 ```
 ┌─────────────────┐
@@ -797,7 +908,9 @@ Returns: Long-lived tokens (1 hour)
 └─────────────────┘
 ```
 
-#### 4. JWT Structure
+<a id="4-jwt-structure"></a>
+
+#### 4. JWT 结构
 
 ```
 Header.Payload.Signature
@@ -827,18 +940,24 @@ RSASHA256(
 )
 ```
 
-### Common Pitfalls
+<a id="common-pitfalls"></a>
 
-#### ❌ Wrong: Sending client_secret in authorization request
+### 常见错误
+
+<a id="-wrong-sending-client_secret-in-authorization-request"></a>
+
+#### ❌ 错误：在授权请求中发送 client_secret
 
 ```javascript
 // NEVER DO THIS
 window.location = `/auth?client_id=x&client_secret=SECRET`;
 ```
 
-**Why:** Authorization endpoint is in the browser (URL visible to user).
+**原因：** 授权端点位于浏览器中，URL 对用户可见。
 
-#### ✅ Correct: Send client_secret only in token request
+<a id="-correct-send-client_secret-only-in-token-request"></a>
+
+#### ✅ 正确：仅在令牌请求中发送 client_secret
 
 ```javascript
 // Backend only
@@ -851,14 +970,18 @@ fetch("/token", {
 });
 ```
 
-#### ❌ Wrong: Storing access token without expiration check
+<a id="-wrong-storing-access-token-without-expiration-check"></a>
+
+#### ❌ 错误：存储访问令牌却不检查过期时间
 
 ```javascript
 // WRONG
 localStorage.setItem("token", accessToken);
 ```
 
-#### ✅ Correct: Store token with expiration
+<a id="-correct-store-token-with-expiration"></a>
+
+#### ✅ 正确：同时保存令牌及过期时间
 
 ```javascript
 // CORRECT
@@ -872,7 +995,9 @@ localStorage.setItem(
 );
 ```
 
-#### ❌ Wrong: Using authorization code twice
+<a id="-wrong-using-authorization-code-twice"></a>
+
+#### ❌ 错误：使用同一授权码两次
 
 ```javascript
 // This will fail - codes are single-use
@@ -880,9 +1005,13 @@ await fetch("/token", { code: "abc123" });
 await fetch("/token", { code: "abc123" }); // ERROR: invalid_grant
 ```
 
-### Testing Examples
+<a id="testing-examples"></a>
 
-#### Test Authorization Code Flow
+### 测试示例
+
+<a id="test-authorization-code-flow"></a>
+
+#### 测试授权码流程
 
 ```bash
 # 1. Get authorization code
@@ -906,7 +1035,9 @@ curl http://localhost:9000/userinfo \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
-#### Test PKCE Flow
+<a id="test-pkce-flow"></a>
+
+#### 测试 PKCE 流程
 
 ```bash
 # 1. Generate code verifier and challenge
@@ -932,15 +1063,21 @@ curl -X POST http://localhost:9000/token \
 
 ---
 
-## Troubleshooting
+<a id="troubleshooting"></a>
 
-### Common Issues
+## 故障排查
+
+<a id="common-issues"></a>
+
+### 常见问题
+
+<a id="1-no-users-available"></a>
 
 #### 1. "No users available"
 
-**Cause:** Database not connected or no OAuth2 users exist.
+**原因：** 数据库未连接，或不存在 OAuth2 用户。
 
-**Solution:**
+**解决方案：**
 
 ```sql
 -- Create a test user
@@ -948,34 +1085,42 @@ INSERT INTO users (email, username, auth_method, user_role_id)
 VALUES ('test@example.com', 'Test User', 'OAUTH2', 1);
 ```
 
+<a id="2-invalid-redirect_uri"></a>
+
 #### 2. "Invalid redirect_uri"
 
-**Cause:** Redirect URI in token request doesn't match authorization request.
+**原因：** 令牌请求中的重定向 URI 与授权请求不一致。
 
-**Solution:** Ensure exact match, including trailing slashes.
+**解决方案：** 确保完全一致，包括末尾斜杠。
+
+<a id="3-invalid-client_secret"></a>
 
 #### 3. "Invalid client_secret"
 
-**Cause:** Wrong secret or sent in wrong format.
+**原因：** 密钥错误，或发送格式错误。
 
-**Solution:** Check client configuration and use either:
+**解决方案：** 检查客户端配置，并使用以下任一方式：
 
-- HTTP Basic Auth: `Authorization: Basic BASE64(client_id:client_secret)`
-- POST body: `client_secret=...`
+- HTTP Basic Auth：`Authorization: Basic BASE64(client_id:client_secret)`
+- POST 请求体：`client_secret=...`
+
+<a id="4-pkce-verification-failed"></a>
 
 #### 4. "PKCE verification failed"
 
-**Cause:** Code verifier doesn't match code challenge.
+**原因：** code verifier 与 code challenge 不匹配。
 
-**Solution:**
+**解决方案：**
 
-- Ensure same `code_verifier` used in both requests
-- Check `code_challenge_method` is consistent
-- Verify base64url encoding (no `=`, use `-_` instead of `+/`)
+- 确保两次请求使用相同 `code_verifier`
+- 检查 `code_challenge_method` 是否一致
+- 验证 base64url 编码：没有 `=`，使用 `-_` 代替 `+/`
 
-### Debug Logging
+<a id="debug-logging"></a>
 
-All logs are structured JSON. Filter by event type:
+### 调试日志
+
+全部日志均为结构化 JSON，可按事件类型筛选：
 
 ```bash
 # Watch token exchanges
@@ -990,9 +1135,13 @@ docker logs oidc-server | grep user_found
 
 ---
 
-## Development
+<a id="development"></a>
 
-### Project Structure
+## 开发
+
+<a id="project-structure"></a>
+
+### 项目结构
 
 ```
 oidc-server/
@@ -1016,7 +1165,9 @@ oidc-server/
 └── tsconfig.json
 ```
 
-### Build & Run
+<a id="build--run"></a>
+
+### 构建与运行
 
 ```bash
 # Development with watch mode
@@ -1037,9 +1188,13 @@ pnpm lint
 
 ---
 
-## References
+<a id="references"></a>
 
-### Specifications
+## 参考资料
+
+<a id="specifications"></a>
+
+### 规范
 
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html)
@@ -1048,23 +1203,29 @@ pnpm lint
 - [RFC 7519 - JWT](https://tools.ietf.org/html/rfc7519)
 - [RFC 7517 - JWK](https://tools.ietf.org/html/rfc7517)
 
-### Tools
+<a id="tools"></a>
 
-- **JWT Debugger**: https://jwt.io
-- **Base64URL Encoder**: https://base64.guru/standards/base64url
-- **OIDC Playground**: https://openidconnect.net/
+### 工具
 
----
-
-## License
-
-This OIDC server is part of the Phoenix project.
+- **JWT 调试器**：https://jwt.io
+- **Base64URL 编码器**：https://base64.guru/standards/base64url
+- **OIDC 试验台**：https://openidconnect.net/
 
 ---
 
-## Contributing
+<a id="license"></a>
 
-This is a debug/development server. For production use cases, consider:
+## 许可
+
+此 OIDC 服务是 Phoenix 项目的一部分。
+
+---
+
+<a id="contributing"></a>
+
+## 贡献
+
+这是调试和开发服务。生产用途可考虑：
 
 - [ORY Hydra](https://www.ory.sh/hydra/)
 - [Keycloak](https://www.keycloak.org/)
@@ -1073,4 +1234,4 @@ This is a debug/development server. For production use cases, consider:
 
 ---
 
-**Built with ❤️ for debugging Phoenix authentication flows**
+**用 ❤️ 构建，助力 Phoenix 认证流程调试**

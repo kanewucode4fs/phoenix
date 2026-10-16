@@ -1,1 +1,1 @@
-Reply with exactly: ok
+请严格回复以下内容：ok

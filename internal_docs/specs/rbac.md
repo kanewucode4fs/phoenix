@@ -1,256 +1,178 @@
-# Declarative RBAC
+<a id="declarative-rbac"></a>
+# 声明式 RBAC
 
-## Summary
+<a id="summary"></a>
+## 概述
 
-Phoenix has a fixed set of roles: System, Admin, Member, and Viewer. Their
-permissions are hard-coded, so administrators cannot create roles that sit
-between them.
+Phoenix 现有固定角色：System、Admin、Member 和 Viewer。权限写死在代码中，管理员无法创建权限介于这些角色之间的新角色。
 
-This proposal makes *role membership* data. Phoenix still owns the permission
-catalog — the fixed vocabulary of things a role can grant — but a role becomes a
-named set of permissions drawn from that catalog, and administrators can create
-their own roles and assign users to them. Phoenix owns the vocabulary;
-administrators combine it.
+本提案将**角色的权限成员关系**变为数据。Phoenix 仍拥有权限目录，即角色可授予权限的固定词汇；角色则成为从目录中选择的一组具名权限，管理员可以创建角色并分配用户。Phoenix 定义词汇，管理员负责组合。
 
-The first version is global. It answers "what can this user do in Phoenix?",
-not "what can this user do to this specific project, dataset, or prompt?" (that
-is [ABAC](./abac.md), which builds on this model).
+首个版本采用全局范围，回答“该用户能在 Phoenix 中做什么？”，而非“该用户能对特定项目、数据集或提示词做什么？”。后者属于建立在本模型之上的 [ABAC](./abac.md)。
 
-## Goals
+<a id="goals"></a>
+## 目标
 
-- Administrators can create roles from a curated catalog of permissions.
-- Administrators can assign users to those roles.
-- Existing Admin, Member, and Viewer behavior is unchanged.
-- One user has one role.
-- OAuth and LDAP group mapping can later target custom roles.
+- 管理员可以从精心整理的权限目录创建角色。
+- 管理员可以将用户分配到这些角色。
+- 保持现有 Admin、Member 和 Viewer 行为不变。
+- 一个用户只有一个角色。
+- OAuth 和 LDAP 组映射之后可指向自定义角色。
 
-## Non-Goals
+<a id="non-goals"></a>
+## 非目标
 
-- Resource-scoped permissions (per project, dataset, etc.) — see ABAC.
-- Multiple roles per user.
-- User-defined permissions (administrators combine the catalog; they cannot
-  extend it).
-- Deny rules or role precedence.
-- Replacing operational protections such as read-only mode and storage locks.
-- An audit-log system.
-- Scoped API keys ship in a later phase (see below), not in the first release.
+- 资源级权限，例如逐项目或逐数据集授权，见 ABAC。
+- 一个用户拥有多个角色。
+- 用户自定义权限：管理员组合目录，不能扩展目录。
+- 拒绝规则或角色优先级。
+- 替代只读模式、存储锁等运行保护。
+- 审计日志系统。
+- 限定范围的 API 密钥留待后续阶段，首版不包含，见下文。
 
-## Current Model
+<a id="current-model"></a>
+## 当前模型
 
-Role names live in the database, but permissions do not. Backend and frontend
-code checks role names directly ("is admin", "is not viewer"). In practice
-enforcement today is three tiers: read for everyone, an `IsNotViewer` gate on
-almost every mutation, and an `IsAdmin` gate on a small set (user management,
-secrets, custom model providers, project delete). That works for a small fixed
-set of roles but cannot express anything in between.
+角色名存储在数据库中，权限则没有。前后端代码直接检查角色名，例如“是管理员”“不是查看者”。实际执行分三层：所有人可读；几乎所有变更操作经过 `IsNotViewer` 检查；少数操作经过 `IsAdmin` 检查，包括用户管理、密钥、自定义模型提供商和删除项目。这适用于少量固定角色，却无法表达中间权限。
 
-The role name is also baked into the token/API-key claims at issue time, so
-authorization does no database read — and a role change does not reach a
-long-lived API key until the key is reissued. The new model changes this (see
-Authorization).
+角色名在签发时也写入 token/API 密钥声明，因此授权无需读取数据库；角色变更也不会影响长期 API 密钥，直到重新签发。新模型将改变这一点，见“授权”。
 
-## Model
+<a id="model"></a>
+## 模型
 
-### Permissions
+<a id="permissions"></a>
+### 权限
 
-A permission is a Phoenix-owned unit of access named for the entity it governs
-and the operation it allows, written `entity:operation` — for example
-`project:create`, `project:update`, `prompt:delete`, `user:invite`. (We say
-*permission*, not "access control"; "access control" names the whole field.)
+权限是由 Phoenix 定义的访问单元，按受控实体和允许操作命名，写作 `entity:operation`，例如 `project:create`、`project:update`、`prompt:delete`、`user:invite`。本文称其为“权限”，而非“访问控制”；后者指整个领域。
 
-The catalog of valid permissions is **code-owned and fixed**: Phoenix ships it
-as a registry, version-controls it, and validates grants against it. It is not a
-table administrators can append to. "Making permissions data" means *grants* —
-which permissions a role holds — are data; the catalog itself is code.
+有效权限目录**由代码定义且固定**：Phoenix 将其作为注册表发布、进行版本控制，并据此验证授权。它不是管理员可追加记录的数据表。“将权限变为数据”指的是**授权**，即角色拥有哪些权限；目录本身仍为代码。
 
-The grammar is fixed:
+语法固定：
 
-- **entity** — the resource or capability being governed (`project`, `prompt`,
-  `dataset`, `user`, `role`, `api-key`, `retention`).
-- **operation** — what the role may do to that entity. Most entities expose the
-  standard `create`, `read`, `update`, and `delete` operations, but an entity
-  may define verbs that fit it better (for example `retention:increase` and
-  `retention:decrease` instead of `update`).
-- Both segments are lowercase; a multi-word segment uses a hyphen
-  (`api-key:create`), never camelCase.
+- **entity**：受控资源或能力，例如 `project`、`prompt`、`dataset`、`user`、`role`、`api-key`、`retention`。
+- **operation**：角色可以对该实体执行的操作。多数实体提供标准 `create`、`read`、`update`、`delete`，也可定义更适合的动词，例如用 `retention:increase` 和 `retention:decrease` 代替 `update`。
+- 两部分都用小写，多词部分使用连字符，例如 `api-key:create`，不得用 camelCase。
 
-Example catalog (illustrative, not final):
+目录示例，仅作说明，尚未定稿：
 
-| Permission | Allows |
+| 权限 | 允许操作 |
 |---|---|
-| `project:read` | View projects and their traces |
-| `project:create` | Create projects |
-| `project:update` | Rename and configure projects |
-| `project:delete` | Delete projects |
-| `prompt:update` | Create and edit prompts |
-| `dataset:update` | Create and edit datasets |
-| `user:invite` | Invite and deactivate users |
-| `role:update` | Create, edit, and delete custom roles |
-| `api-key:create` | Create and rotate API keys |
-| `secret:update` | Manage integration credentials |
+| `project:read` | 查看项目及其追踪 |
+| `project:create` | 创建项目 |
+| `project:update` | 重命名和配置项目 |
+| `project:delete` | 删除项目 |
+| `prompt:update` | 创建和编辑提示词 |
+| `dataset:update` | 创建和编辑数据集 |
+| `user:invite` | 邀请和停用用户 |
+| `role:update` | 创建、编辑和删除自定义角色 |
+| `api-key:create` | 创建和轮换 API 密钥 |
+| `secret:update` | 管理集成凭证 |
 
-The catalog starts **coarse**, mirroring today's actual gates: the `IsNotViewer`
-mutations collapse into a handful of `entity:*` permissions, and the `IsAdmin`
-gates into `user:invite`, `secret:update`, `role:update`, and the like. A
-permission is split (the `retention:increase` / `retention:decrease` pattern)
-only when a concrete custom-role least-privilege case demands it. Splitting later
-is cheap — grant both halves to the roles that had the whole; over-fragmenting up
-front is expensive and untestable.
+目录从**粗粒度**开始，对应现有实际检查：将 `IsNotViewer` 变更操作归并为少量 `entity:*` 权限，将 `IsAdmin` 检查归并为 `user:invite`、`secret:update`、`role:update` 等。只有出现具体自定义角色最小权限需求时才拆分权限，例如 `retention:increase` / `retention:decrease`。以后拆分成本低，将两项都授予原本拥有整体权限的角色即可；提前过度细分则成本高且无法充分测试。
 
-### Roles
+<a id="roles"></a>
+### 角色
 
-A role is a named set of permissions. A user has exactly one role.
+角色是一组具名权限。每个用户恰好拥有一个角色。
 
-Built-in roles remain: System (internal, never assignable), Admin, Member, and
-Viewer, each keeping today's behavior. Their permission sets are **fixed code
-constants**, not editable grant rows — they exist as rows for assignment, but
-behavior preservation is diffable in code rather than seeded into a migration
-that could drift. Custom roles, by contrast, store their grants as data.
+保留内置角色 System（内部使用，永不可分配）、Admin、Member 和 Viewer，均保持现有行为。其权限集是**固定代码常量**，而非可编辑授权行。角色以数据库行形式存在以供分配，但行为保持可通过代码差异审查，而不是植入可能漂移的迁移。自定义角色则将授权存为数据。
 
-Both built-in and custom roles resolve through one path: "does the effective
-permission set contain `X`?" There is no separate name-based fast path to
-maintain.
+内置和自定义角色都通过同一路径解析：“有效权限集是否包含 `X`？”无需维护额外的按名称判断快速路径。
 
-### Custom Roles
+<a id="custom-roles"></a>
+### 自定义角色
 
-A custom role is an administrator-defined role: any combination of permissions
-from the catalog, given a slug, name, and description. Custom roles exist
-alongside the built-in roles and are assignable like them.
+自定义角色由管理员定义，可组合目录中的任意权限，并设置 slug、名称和描述。它与内置角色并存，也可分配给用户。
 
-- Only administrators (anyone holding `role:update`) can create, edit, and
-  delete custom roles, subject to the escalation guards below.
-- A custom role holds any combination of catalog permissions; it cannot grant a
-  capability that has no permission.
-- Custom roles are global, matching the first version's scope: a role grants the
-  same access everywhere in Phoenix, not per project or dataset.
-- A custom role carries an **immutable kebab-case slug** set at creation (e.g.
-  `data-steward`). The slug is the stable identifier for external-auth mappings
-  and the API contract; the display name and description are freely editable. The
-  slug never changes and is portable across deployments — unlike the display name
-  or the DB id.
+- 只有管理员，即持有 `role:update` 的人，可以创建、编辑和删除自定义角色，并受下述提权保护约束。
+- 自定义角色可组合目录中的任意权限，但不能授予没有对应权限定义的能力。
+- 自定义角色是全局的，与首版范围一致：在整个 Phoenix 授予相同访问权限，而非按项目或数据集授权。
+- 自定义角色在创建时设置**不可变的 kebab-case slug**，例如 `data-steward`。slug 是外部认证映射和 API 契约的稳定标识符；显示名称和描述可自由编辑。slug 永不改变，可跨部署迁移，不同于显示名称或数据库 ID。
 
-Built-in roles are not editable. To customize, **clone** a built-in into a new
-custom role and edit the clone; the built-ins stay as the behavior-preservation
-anchor and migration baseline.
+内置角色不可编辑。要定制，应将内置角色**克隆**为新自定义角色，再编辑副本；内置角色仍作为保持行为的锚点和迁移基线。
 
-Splitting an entity's operations lets a custom role grant least privilege.
-Because `retention:increase` and `retention:decrease` are separate permissions, a
-role can let someone reclaim storage by shortening retention without letting them
-inflate cost by lengthening it. Likewise `user:invite` is independent of
-`role:update`, so a role can onboard people without granting control over roles.
-The built-in roles bundle these permissions to preserve today's behavior.
+拆分实体操作可让自定义角色授予最小权限。例如，`retention:increase` 与 `retention:decrease` 分开后，可以允许通过缩短保留期回收存储，而不允许通过延长保留期增加费用。同样，`user:invite` 独立于 `role:update`，可允许人员入驻而不授予角色控制权。内置角色组合这些权限以保持现有行为。
 
-Example custom roles composed from the catalog:
+目录组合出的自定义角色示例：
 
-- **Data Steward** — `project:read`, `project:update`, `dataset:update`,
-  `prompt:update`, `retention:decrease`. Curates content and shrinks retention,
-  but cannot delete projects, lengthen retention, or manage users.
-- **User Admin** — `project:read`, `user:invite`. Onboards people without editing
-  data or touching secrets.
+- **数据管理员（Data Steward）**：`project:read`、`project:update`、`dataset:update`、`prompt:update`、`retention:decrease`。整理内容并缩短保留期，但不能删除项目、延长保留期或管理用户。
+- **用户管理员（User Admin）**：`project:read`、`user:invite`。负责人员入驻，但不能编辑数据或接触密钥。
 
-### Grants
+<a id="grants"></a>
+### 授权
 
-A grant gives a role one permission. Grants are additive: users in a role can do
-exactly what its grants allow, nothing more. There are no deny grants.
+每项授权赋予角色一项权限。授权采用累加方式：角色中的用户只能执行授权明确允许的操作，不能超出。不存在拒绝授权。
 
-## Product Behavior
+<a id="product-behavior"></a>
+## 产品行为
 
-### Role Management
+<a id="role-management"></a>
+### 角色管理
 
-Administrators can view all roles and create, edit, and delete custom roles.
-Built-in roles are visible but read-only. Deleting a custom role requires that it
-has no users, or that a replacement role is chosen for them.
+管理员可查看所有角色，并创建、编辑和删除自定义角色。内置角色可见但只读。删除自定义角色时，必须确保它没有用户，或为这些用户选择替代角色。
 
-Role management is **hidden when authentication is disabled** — with no
-authenticated users, roles enforce nothing, consistent with how user management
-is already treated.
+**关闭认证时隐藏角色管理**。没有认证用户时，角色无法约束任何行为，这与现有用户管理处理方式一致。
 
-### User Management
+<a id="user-management"></a>
+### 用户管理
 
-Users can be assigned any assignable role, including custom roles. System is
-never assignable through any surface. Users cannot change their own role.
+用户可分配任意可分配角色，包括自定义角色。任何界面均不得分配 System。用户不能修改自己的角色。
 
-### Authorization
+<a id="authorization"></a>
+### 授权检查
 
-Checks move from "is this user an Admin?" to "does this user's role grant this
-permission?" The first implementation maps existing role behavior onto the new
-model, so existing deployments see no access changes.
+检查从“该用户是否为 Admin？”变为“用户角色是否授予该权限？”。首个实现将现有角色行为映射到新模型，因此现有部署访问能力不变。
 
-Effective permissions are resolved **live from the database** on each request,
-behind a short-TTL/invalidated cache — not snapshotted into the token claims.
-This is a departure from today's claims-only path, and it is what makes role
-edits take effect immediately and makes "narrowing the role narrows the key"
-true. Token/key claims carry only a role reference (and, later, a key's own grant
-subset); the effective set is computed from current grants.
+每个请求通过短 TTL 或可失效缓存，**实时从数据库**解析有效权限，不再快照到 token 声明。这改变了当前仅依赖声明的路径，使角色编辑立即生效，并确保“收紧角色即收紧密钥”。token/密钥声明仅携带角色引用，以及后续阶段密钥自身的授权子集；有效集合根据当前授权计算。
 
-### Escalation Guards
+<a id="escalation-guards"></a>
+### 提权保护
 
-Because `role:update` is itself a grantable permission, custom roles introduce a
-self-escalation surface that built-in admin never had. Two rules close it:
+`role:update` 本身可被授予，因此自定义角色引入了内置管理员原本没有的自我提权入口。通过两条规则封闭：
 
-- **No self-edit.** A user may edit or delete any custom role *except the one
-  they are currently assigned to*. (Combined with "users cannot change their own
-  role," neither the grants of your role nor your assignment can be escalated by
-  you.)
-- **No grant above self.** A user cannot grant a permission they do not
-  themselves hold. This prevents minting a super-role from a partial one.
+- **禁止自我编辑。** 用户可以编辑或删除任意自定义角色，**但自己当前所属的角色除外**。结合“用户不能修改自己的角色”，用户既不能扩大自身角色的授权，也不能改变自身角色分配。
+- **不得授予超出自身的权限。** 用户不能授予自己不拥有的权限，避免从部分权限制造超级角色。
 
-### API Keys (later phase)
+<a id="api-keys-later-phase"></a>
+### API 密钥（后续阶段）
 
-Scoped API keys ship after the permission-resolution path is proven; until then a
-key inherits its owner's role in full. When scoping lands:
+权限解析路径验证成熟后，再发布限定范围的 API 密钥；此前密钥完整继承所有者角色。实现范围限定后：
 
-- An API key can carry its own subset of permissions, stored as the literal
-  chosen set.
-- A key's effective access is the **intersection** of its grants and the owner's
-  *current* role, evaluated live: a key can never exceed the role, narrowing the
-  role narrows the key, and a key scoped to `[project:read]` stays
-  `[project:read]` even if the role later gains more.
-- A key with no explicit grants inherits the owner's current role, so scoping is
-  opt-in.
+- API 密钥可携带自己的权限子集，按用户选择的字面集合存储。
+- 密钥有效权限为自身授权与所有者**当前**角色的**交集**，实时求值：密钥永不超出角色；收紧角色即收紧密钥；限定为 `[project:read]` 的密钥即使角色以后增权，也仍是 `[project:read]`。
+- 没有显式授权的密钥继承所有者当前角色，因此范围限定为可选功能。
 
-Viewers keep the ability to create personal API keys: such a key is intersected
-with the read-only Viewer role, so it can only read — removing this would be a
-behavior change.
+Viewer 保留创建个人 API 密钥的能力。这类密钥与只读 Viewer 角色取交集，因此只能读取；移除该能力将改变现有行为。
 
-### External Auth
+<a id="external-auth"></a>
+### 外部认证
 
-OAuth and LDAP role mapping keeps working with built-in roles (mapped by name)
-and can later target custom roles by their **immutable slug**. If a provider maps
-a user to a missing or unassignable role, existing behavior applies: strict mode
-rejects the login; non-strict mode falls back to least privilege.
+OAuth 和 LDAP 角色映射继续支持内置角色，按名称映射；以后可以通过自定义角色的**不可变 slug**映射。如果提供商将用户映射到不存在或不可分配的角色，采用现有行为：严格模式拒绝登录，非严格模式回退到最小权限。
 
-## Rollout
+<a id="rollout"></a>
+## 推进步骤
 
-1. Define the permission catalog (in code) and map the built-in roles onto it as
-   code constants. No behavior change.
-2. Add role management: create, edit, delete, and assign custom roles, with the
-   escalation guards.
-3. Move backend and frontend checks from role names to permissions, resolved live
-   from the database, incrementally.
-4. Let OAuth and LDAP mappings target custom roles by slug.
-5. (Later) Scoped API keys.
+1. 在代码中定义权限目录，并以代码常量映射内置角色，不改变行为。
+2. 添加角色管理，允许创建、编辑、删除和分配自定义角色，并应用提权保护。
+3. 逐步将前后端检查从角色名改为实时从数据库解析的权限。
+4. 允许 OAuth 和 LDAP 映射通过 slug 指向自定义角色。
+5. 后续实现限定范围的 API 密钥。
 
-## Security Guardrails
+<a id="security-guardrails"></a>
+## 安全约束
 
-- Deny by default when a role lacks the needed permission.
-- System stays internal and unassignable.
-- Built-in roles are read-only; customize by cloning.
-- The **default admin account is permanently Admin and unmodifiable** — the
-  bulletproof, race-free backstop against locking the deployment out of role and
-  user management. (A best-effort "you're removing the last manager" warning may
-  supplement it, but the immutable default admin is the hard guarantee.)
-- Users cannot change their own role, edit their own role's grants, or grant a
-  permission they do not hold.
-- Deleting a role never deletes users.
-- Unknown grants are invalid configuration, not allowed access.
-- Read-only mode and storage locks stay separate from RBAC.
+- 角色缺少所需权限时默认拒绝。
+- System 保持内部使用且不可分配。
+- 内置角色只读，通过克隆定制。
+- **默认管理员账号永久为 Admin，且不可修改**，作为可靠且无竞态的最终保障，防止部署失去角色和用户管理能力。可以辅以尽力而为的“正在移除最后一位管理者”警告，但不可变默认管理员才是硬性保证。
+- 用户不能修改自身角色、编辑自身角色授权，或授予自己不拥有的权限。
+- 删除角色绝不删除用户。
+- 未知授权属于无效配置，不能据此放行。
+- 只读模式和存储锁独立于 RBAC。
 
-## Open Questions
+<a id="open-questions"></a>
+## 待解决问题
 
-- Should built-in roles ever become editable, or is clone-to-custom the permanent
-  answer? (Current decision: clone only.)
-- How granular should the catalog get for prompts, datasets, evaluators, and
-  experiments — i.e. which least-privilege cases justify splitting a permission?
-- What cache invalidation strategy backs live permission resolution (TTL,
-  event-driven, or both)?
+- 内置角色是否终有一天应可编辑，还是永久采用克隆为自定义角色？当前决定：仅克隆。
+- 提示词、数据集、评估器和实验的目录应细化到何种程度，即哪些最小权限需求值得拆分权限？
+- 实时权限解析采用什么缓存失效策略：TTL、事件驱动，还是两者结合？

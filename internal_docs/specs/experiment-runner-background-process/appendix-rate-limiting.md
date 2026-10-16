@@ -1,27 +1,30 @@
-# Appendix: Rate Limiting, Architecture, and Edge Cases
+<a id="appendix-rate-limiting-architecture-and-edge-cases"></a>
+# 附录：限流、架构与边界情况
 
-> This appendix documents the architectural exploration and first-principles analysis that led to the experiment runner design. It covers rate limiting strategies, the Command Pattern for self-executing jobs, and comprehensive edge case handling.
-
----
-
-## Table of Contents
-
-1. [Mental Model: Food Delivery Service](#mental-model-food-delivery-service)
-2. [First Principles](#first-principles)
-3. [The Minimal Architecture](#the-minimal-architecture)
-4. [The Command Pattern: Self-Executing Jobs](#the-command-pattern-self-executing-jobs)
-5. [Two Approaches: Gatekeeper vs Advisor](#two-approaches-gatekeeper-vs-advisor)
-6. [Why Advisor Wins](#why-advisor-wins)
-7. [Abstraction Boundaries](#abstraction-boundaries)
-8. [Circuit Breaker: Network Failure Handling](#circuit-breaker-network-failure-handling)
-9. [Edge Cases](#edge-cases)
-10. [Implementation Notes](#implementation-notes)
+> 本附录记录形成实验运行器设计的架构探索和第一性原理分析，包括限流策略、自执行作业的命令模式，以及全面的边界情况处理。
 
 ---
 
-## Mental Model: Food Delivery Service
+<a id="table-of-contents"></a>
+## 目录
 
-The clearest way to understand rate limiting approaches is through analogy:
+1. [心智模型：外卖配送](#mental-model-food-delivery-service)
+2. [第一性原理](#first-principles)
+3. [最小架构](#the-minimal-architecture)
+4. [命令模式：自执行作业](#the-command-pattern-self-executing-jobs)
+5. [两种方式：Gatekeeper 与 Advisor](#two-approaches-gatekeeper-vs-advisor)
+6. [为何 Advisor 更优](#why-advisor-wins)
+7. [抽象边界](#abstraction-boundaries)
+8. [熔断器：网络故障处理](#circuit-breaker-network-failure-handling)
+9. [边界情况](#edge-cases)
+10. [实现说明](#implementation-notes)
+
+---
+
+<a id="mental-model-food-delivery-service"></a>
+## 心智模型：外卖配送
+
+通过类比最容易理解限流方式：
 
 ```
 Restaurants      = Experiments (sources of work)
@@ -31,7 +34,7 @@ Dispatch App     = Daemon (scheduler)
 Order Slip       = Job (self-contained work unit)
 ```
 
-**Gatekeeper approach**: Send driver to restaurant. If food not ready, driver waits.
+**Gatekeeper 方式**：派骑手去餐厅，饭没做好就等待。
 
 ```
 Driver arrives at Restaurant A
@@ -43,7 +46,7 @@ Driver arrives at Restaurant A
 Meanwhile: Restaurant B has ready orders, but drivers are waiting at A.
 ```
 
-**Advisor approach**: Only send driver when food is ready.
+**Advisor 方式**：饭做好才派骑手。
 
 ```
 Driver asks dispatch for work
@@ -54,116 +57,126 @@ Driver asks dispatch for work
 Restaurant A's order queued for later when kitchen catches up.
 ```
 
-**The key insight**: In the Advisor approach, the order slip (Job) contains everything needed—the driver just picks it up and delivers. The restaurant (Experiment) decides when an order is ready to go out.
+**关键认识：** Advisor 中，订单（Job）包含全部所需内容，骑手只负责取送。餐厅（Experiment）决定订单何时可以配送。
 
 | | Gatekeeper | Advisor |
 |--|------------|---------|
-| Driver during wait | Blocked at restaurant | Serving other restaurants |
-| Retry state held by | Driver (waiting) | Restaurant (queued) |
-| Restaurant B throughput | Reduced (fewer drivers) | Full (all drivers available) |
+| 等待期间骑手 | 阻塞在餐厅 | 服务其他餐厅 |
+| 重试状态归属 | 骑手等待 | 餐厅排队 |
+| 餐厅 B 吞吐 | 降低，骑手较少 | 完整，全部骑手可用 |
 
 ---
 
-## First Principles
+<a id="first-principles"></a>
+## 第一性原理
 
-These foundational insights guide the entire design.
+以下基础认识指导整个设计。
 
-### 1. The End-to-End Principle
+<a id="1-the-end-to-end-principle"></a>
+### 1. 端到端原则
 
-*From networking: "Put intelligence at the endpoints, keep the middle dumb."*
+*来自网络设计：将智能放在端点，中间保持简单。*
 
 ```
 Endpoints (smart):     Experiment ←───────────────────→ LLM API
 Middle (dumb):                    ←── Job ── Daemon ──→
 ```
 
-| Component | Should be | Why |
+| 组件 | 应有特性 | 原因 |
 |-----------|-----------|-----|
-| **Experiment** | Smart | Knows tasks, retries, rate limits, callbacks |
-| **Job** | Self-contained | Carries everything, reports itself |
-| **Daemon** | Dumb | Just dispatches, enforces concurrency |
+| **Experiment** | 智能 | 了解任务、重试、限流和回调 |
+| **Job** | 自包含 | 携带全部内容，自行报告 |
+| **Daemon** | 简单 | 只分派并控制并发 |
 
-The "middle" (Daemon, Job execution) should be as dumb as possible. Intelligence lives at the edges.
+中间层，即 Daemon 和 Job 执行，应尽量简单，智能位于边缘。
 
-### 2. Separation of Constraints
+<a id="2-separation-of-constraints"></a>
+### 2. 约束分离
 
-There are **three independent constraints**:
+存在**三个独立约束**：
 
-| Constraint | Source | Controlled by | Unit |
+| 约束 | 来源 | 控制机制 | 单位 |
 |------------|--------|---------------|------|
-| **Rate limit** | External (provider) | Token bucket | Requests/second |
-| **Concurrency** | Internal (resources) | Semaphore | Simultaneous requests |
-| **Fairness** | Internal (UX) | Round-robin | Which experiment next |
+| **限流** | 外部提供商 | 令牌桶 | 请求/秒 |
+| **并发** | 内部资源 | 信号量 | 同时请求数 |
+| **公平性** | 内部体验 | 轮询 | 下一个实验 |
 
-These are **orthogonal**. Mixing them creates confusion. Each should be handled by a separate mechanism.
+它们相互**正交**，混合会造成混乱，应分别处理。
 
-### 3. State Locality
+<a id="3-state-locality"></a>
+### 3. 状态局部性
 
-*State should live where it's needed, nowhere else.*
+*状态只应存在于需要它的位置。*
 
-| State | Lives in | Why there |
+| 状态 | 位置 | 原因 |
 |-------|----------|-----------|
-| Rate limit model | Token bucket (per provider) | Shared across experiments |
-| Task queue | Experiment | Experiment owns its tasks |
-| Retry queue | Experiment | Experiment decides retry policy |
-| In-flight tracking | Experiment | Experiment needs to know |
-| Concurrency count | Semaphore (global) | Shared resource |
+| 限流模型 | 逐提供商令牌桶 | 跨实验共享 |
+| 任务队列 | Experiment | 拥有自身任务 |
+| 重试队列 | Experiment | 决定重试策略 |
+| 在途跟踪 | Experiment | 实验需要了解 |
+| 并发计数 | 全局信号量 | 共享资源 |
 
-**Key insight**: No state should live in the Job beyond execution lifetime. Jobs are transient.
+**关键认识：** Job 不应保留超出执行生命周期的状态，它是临时对象。
 
-### 4. Work Conservation
+<a id="4-work-conservation"></a>
+### 4. 工作守恒
 
-*The system should always be doing useful work if useful work exists.*
+*只要有可执行的有用工作，系统就应一直做有用工作。*
 
 ```
 BAD:  Slots idle while work is ready (Gatekeeper blocking)
 GOOD: If any experiment has ready work, something is executing it
 ```
 
-This is why Advisor beats Gatekeeper—no slots blocked when other work is ready.
+这就是 Advisor 优于 Gatekeeper 的原因：其他工作就绪时，没有槽位阻塞。
 
-### 5. Minimal Coordination
+<a id="5-minimal-coordination"></a>
+### 5. 最小协调
 
-*Coordinate only when necessary. Independent things should be independent.*
+*只在必要时协调，独立事项保持独立。*
 
-| Do these need to coordinate? | Answer |
+| 是否需要协调？ | 答案 |
 |------------------------------|--------|
-| Two experiments, different providers | **No** (no shared constraint) |
-| Two experiments, same provider | **Yes** (shared rate limit) |
-| Concurrency and rate limiting | **No** (orthogonal constraints) |
+| 不同提供商的两个实验 | **否**，无共享约束 |
+| 同提供商的两个实验 | **是**，共享限流 |
+| 并发与限流 | **否**，约束正交 |
 
-Experiments on different providers should be completely independent. The only coordination is through shared rate limits.
+不同提供商实验应完全独立，唯一协调来自共享限流。
 
-### 6. Information Hiding
+<a id="6-information-hiding"></a>
+### 6. 信息隐藏
 
-| Component | Needs to know | Doesn't need to know |
+| 组件 | 需知道 | 无需知道 |
 |-----------|---------------|----------------------|
-| **Experiment** | Its tasks, its provider, token bucket | Other experiments, concurrency limit |
-| **Daemon** | Which experiments exist, concurrency limit | Task details, provider specifics |
-| **Job** | How to execute, how to report | Other jobs, daemon, concurrency |
-| **Token bucket** | Request rate | What requests are for |
+| **Experiment** | 自身任务、提供商、令牌桶 | 其他实验、并发上限 |
+| **Daemon** | 存在哪些实验、并发上限 | 任务详情、提供商细节 |
+| **Job** | 如何执行和报告 | 其他作业、守护进程、并发 |
+| **令牌桶** | 请求速率 | 请求用途 |
 
-The less each component knows, the cleaner the architecture.
+各组件了解越少，架构越清晰。
 
-### 7. What We're Actually Scheduling
+<a id="7-what-were-actually-scheduling"></a>
+### 7. 实际调度的是什么
 
-Not tasks. Not workers. We're scheduling **execution permits**.
+调度的不是任务或工作进程，而是**执行许可**。
 
 ```
 Execution permit = Rate capacity ∧ Concurrency capacity
 ```
 
-A Job can execute when both gates are open:
-1. **Rate**: Token bucket has capacity
-2. **Concurrency**: Semaphore has permit
+两道关卡都打开时，Job 才能执行：
+1. **速率**：令牌桶有容量。
+2. **并发**：信号量有许可。
 
 ---
 
-## The Minimal Architecture
+<a id="the-minimal-architecture"></a>
+## 最小架构
 
-Strip everything to essentials. Three concepts, no more.
+只保留本质，三个概念，不再增加。
 
-### The Three Concepts
+<a id="the-three-concepts"></a>
+### 三个概念
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -214,16 +227,17 @@ Strip everything to essentials. Three concepts, no more.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### What is a Job, Concretely?
+<a id="what-is-a-job-concretely"></a>
+### Job 具体是什么
 
-A **Job** is the smallest unit of work that makes one LLM API call.
+**Job** 是进行一次 LLM API 调用的最小工作单元。
 
-| Job Type | Definition | Identity |
+| Job 类型 | 定义 | 标识 |
 |----------|------------|----------|
-| **Task Job** | One dataset row × One repetition | `(experiment_id, row_id, repetition)` |
-| **Eval Job** | One task result × One evaluator | `(experiment_id, row_id, repetition, evaluator_id)` |
+| **任务作业** | 一行数据 × 一次重复 | `(experiment_id, row_id, repetition)` |
+| **评估作业** | 一个任务结果 × 一个评估器 | `(experiment_id, row_id, repetition, evaluator_id)` |
 
-**Example:**
+**示例：**
 ```
 Experiment:
   - Dataset: 100 rows
@@ -235,7 +249,7 @@ Eval Jobs: 300 results × 2 evaluators = 600 Jobs (if all tasks succeed)
 Total: up to 900 Jobs
 ```
 
-**In the queues:**
+**队列中：**
 ```python
 # Task queue: (row, repetition) pairs
 _task_queue = [
@@ -258,22 +272,24 @@ _eval_queue = [
 
 ---
 
-## The Command Pattern: Self-Executing Jobs
+<a id="the-command-pattern-self-executing-jobs"></a>
+## 命令模式：自执行作业
 
-The Job is a **Command** (Gang of Four pattern)—an object that encapsulates everything needed to perform an action.
+Job 是**命令**，即四人组设计模式：封装执行某个操作所需全部内容的对象。
 
-### TaskJob vs EvalJob
+<a id="taskjob-vs-evaljob"></a>
+### TaskJob 与 EvalJob
 
-Task Jobs and Eval Jobs have different behaviors:
+任务作业和评估作业行为不同：
 
-| Aspect | TaskJob | EvalJob |
+| 方面 | TaskJob | EvalJob |
 |--------|---------|---------|
-| **Input** | Dataset row + repetition | Task result + evaluator config |
-| **Streaming** | Yes (chunks to UI) | No |
-| **Output table** | `experiment_runs` | `experiment_run_annotations` |
-| **Priority** | Lower | Higher (evals before new tasks) |
+| **输入** | 数据行和重复编号 | 任务结果和评估器配置 |
+| **流式输出** | 是，向界面发送数据块 | 否 |
+| **输出表** | `experiment_runs` | `experiment_run_annotations` |
+| **优先级** | 较低 | 较高，先评估再新任务 |
 
-We use explicit types for clarity and type safety:
+采用显式类型，提高清晰度和类型安全：
 
 ```python
 @dataclass
@@ -381,19 +397,21 @@ class EvalJob:
 Job = TaskJob | EvalJob
 ```
 
-### Why This Is Powerful
+<a id="why-this-is-powerful"></a>
+### 为何有效
 
-| Benefit | Explanation |
+| 优点 | 说明 |
 |---------|-------------|
-| **Self-contained** | Job has everything it needs. No external dependencies at execution time. |
-| **Decoupled** | Experiment and Daemon never see each other. They only see Jobs. |
-| **Testable** | Mock the callbacks, test Job in isolation. |
-| **Provider-agnostic** | Daemon doesn't know about OpenAI vs Anthropic. Job handles it. |
-| **Retriable** | On failure, Experiment creates a new Job. Old Job is garbage. |
+| **自包含** | Job 携带全部所需信息，执行时无外部依赖 |
+| **解耦** | Experiment 和 Daemon 彼此不可见，只看到 Job |
+| **可测试** | 模拟回调，可独立测试 Job |
+| **提供商无关** | Daemon 不区分 OpenAI、Anthropic，由 Job 处理 |
+| **可重试** | 失败时 Experiment 创建新 Job，旧 Job 可回收 |
 
-### The Closure Pattern
+<a id="the-closure-pattern"></a>
+### 闭包模式
 
-Callbacks are closures that capture the Experiment's methods:
+回调是捕获 Experiment 方法的闭包：
 
 ```python
 class Experiment:
@@ -442,17 +460,19 @@ class Experiment:
         )
 ```
 
-The Job is a "self-addressed stamped envelope"—it knows where to deliver itself when done.
+Job 像写好回邮地址并贴好邮票的信封，知道完成后向哪里交付。
 
 ---
 
-## Two Approaches: Gatekeeper vs Advisor
+<a id="two-approaches-gatekeeper-vs-advisor"></a>
+## 两种方式：Gatekeeper 与 Advisor
 
-Both approaches use the **same token bucket algorithm**. They differ only in **when** the token check happens.
+两者采用**相同令牌桶算法**，仅检查令牌的**时机**不同。
 
-### Gatekeeper (Current PlaygroundRateLimiter)
+<a id="gatekeeper-current-playgroundratelimiter"></a>
+### Gatekeeper（当前 PlaygroundRateLimiter）
 
-Token check happens **at API call time**, inside a wrapper:
+在包装器内部，**调用 API 时**检查令牌：
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -482,14 +502,15 @@ Token check happens **at API call time**, inside a wrapper:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Problems:**
-- Slot blocks waiting for tokens
-- Blocked slot can't serve other experiments
-- Retry loop is inside the slot (hidden, blocking)
+**问题：**
+- 槽位阻塞等待令牌。
+- 阻塞槽位不能服务其他实验。
+- 重试循环藏在槽位内部并阻塞。
 
-### Advisor (Our Design)
+<a id="advisor-our-design"></a>
+### Advisor（本设计）
 
-Token check happens **at dispatch time**, in the Experiment:
+在 Experiment 中，**分派时**检查令牌：
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -516,25 +537,28 @@ Token check happens **at dispatch time**, in the Experiment:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Benefits:**
-- Slot never blocks on tokens
-- If Experiment A is throttled, slots serve Experiment B
-- Retry state is visible (in Experiment's queue)
+**优点：**
+- 槽位从不因令牌阻塞。
+- A 被限流时，槽位服务 B。
+- 重试状态可见，存在实验队列。
 
-### The Key Difference
+<a id="the-key-difference"></a>
+### 关键差异
 
 | | Gatekeeper | Advisor |
 |--|------------|---------|
-| **Who queries token bucket** | Execution slot (at call time) | Experiment (at dispatch time) |
-| **Slot behavior** | May block waiting for tokens | Never blocks |
-| **Experiment interface** | "Has work?" | "Has **dispatchable** work?" |
-| **Retry lives in** | Execution slot (hidden) | Experiment (visible queue) |
+| **谁查询令牌桶** | 执行槽位，调用时 | Experiment，分派时 |
+| **槽位行为** | 可能阻塞等待 | 从不阻塞 |
+| **实验接口** | 有工作吗？ | 有**可分派**工作吗？ |
+| **重试位置** | 执行槽位内部，不可见 | 实验队列，可见 |
 
 ---
 
-## Why Advisor Wins
+<a id="why-advisor-wins"></a>
+## 为何 Advisor 更优
 
-### Problem 1: Cross-Provider Throughput Loss
+<a id="problem-1-cross-provider-throughput-loss"></a>
+### 问题 1：跨提供商吞吐损失
 
 ```
 Scenario:
@@ -553,7 +577,8 @@ Advisor:
   B throughput: 100%
 ```
 
-### Problem 2: Retry Blocking
+<a id="problem-2-retry-blocking"></a>
+### 问题 2：重试阻塞
 
 ```
 Scenario:
@@ -569,7 +594,8 @@ Advisor:
   Slot serves other tasks during backoff
 ```
 
-### Problem 3: Cross-Experiment Interference
+<a id="problem-3-cross-experiment-interference"></a>
+### 问题 3：跨实验干扰
 
 ```
 Scenario:
@@ -586,33 +612,37 @@ Advisor:
   Slots serve B instead
 ```
 
-### When Gatekeeper Is Fine
+<a id="when-gatekeeper-is-fine"></a>
+### Gatekeeper 何时可用
 
-| Scenario | Gatekeeper problem? |
+| 场景 | Gatekeeper 有问题？ |
 |----------|---------------------|
-| Single experiment, single provider | Minimal (just retry blocking) |
-| Dedicated slots per experiment (not shared) | No (blocking is isolated) |
-| All experiments throttled equally | Minimal (no "other work" to do) |
-| Unlimited concurrent slots | No (blocking doesn't reduce capacity) |
+| 单实验、单提供商 | 很小，仅重试阻塞 |
+| 每实验独占槽位 | 否，阻塞被隔离 |
+| 全部实验限流程度相同 | 很小，无其他工作 |
+| 无限并发槽位 | 否，阻塞不降低容量 |
 
-**Our context**: We have shared slots across multiple experiments with different providers. Advisor is the clear winner.
+**我们的场景：** 多提供商的多个实验共享槽位，Advisor 明显更优。
 
 ---
 
-## Abstraction Boundaries
+<a id="abstraction-boundaries"></a>
+## 抽象边界
 
-### The Four Abstractions
+<a id="the-four-abstractions"></a>
+### 四种抽象
 
-| Abstraction | Implementation | Responsibility |
+| 抽象 | 实现 | 职责 |
 |-------------|----------------|----------------|
-| **Producer** | Experiment | Generate work, track state, manage retries |
-| **Scheduler** | Daemon | Allocate slots, enforce fairness |
-| **Executor** | Job | Execute work, report via callbacks |
-| **External** | LLM API | Impose rate limits |
+| **生产者** | Experiment | 生成工作、跟踪状态、管理重试 |
+| **调度器** | Daemon | 分配槽位、保证公平 |
+| **执行器** | Job | 执行工作、通过回调报告 |
+| **外部系统** | LLM API | 施加限流 |
 
-### Where the Token Bucket Fits
+<a id="where-the-token-bucket-fits"></a>
+### 令牌桶的位置
 
-The token bucket is a **model of the external constraint**. It's not a decision-maker—it's an oracle that answers: "Is there capacity?"
+令牌桶是**外部约束的模型**，不负责决策，只回答是否有容量。
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -648,9 +678,10 @@ The token bucket is a **model of the external constraint**. It's not a decision-
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### The Experiment's Composite Interface
+<a id="the-experiments-composite-interface"></a>
+### Experiment 的组合接口
 
-The Experiment encapsulates a composite question: "Do you have work that can be dispatched now?"
+Experiment 封装组合问题：“现在是否有可分派工作？”
 
 ```python
 class Experiment:
@@ -680,23 +711,25 @@ class Experiment:
         return None
 ```
 
-This makes the Daemon simple—it just asks Experiments in round-robin order and dispatches whatever Jobs it gets.
+这样 Daemon 很简单，只轮询询问实验，并分派拿到的 Job。
 
 ---
 
-## Circuit Breaker: Network Failure Handling
+<a id="circuit-breaker-network-failure-handling"></a>
+## 熔断器：网络故障处理
 
-Network failures are different from rate limits:
+网络故障与限流不同：
 
-| | Rate Limit (429) | Network Failure |
+| | 限流（429） | 网络故障 |
 |--|------------------|-----------------|
-| Provider status | Reachable, but busy | Unreachable |
-| Error type | HTTP 429 | Connection error, timeout, DNS |
-| Token bucket helps? | Yes (adapts rate) | No (not a rate issue) |
-| Scope | Per-provider | Per-provider |
-| Recovery | Automatic (tokens regenerate) | Requires network recovery |
+| 提供商状态 | 可达但忙 | 不可达 |
+| 错误类型 | HTTP 429 | 连接错误、超时、DNS |
+| 令牌桶有用？ | 是，调整速率 | 否，不是速率问题 |
+| 范围 | 逐提供商 | 逐提供商 |
+| 恢复 | 令牌再生，自动恢复 | 需要网络恢复 |
 
-### The Problem with Naive Retry
+<a id="the-problem-with-naive-retry"></a>
+### 简单重试的问题
 
 ```
 Network goes down
@@ -708,9 +741,10 @@ Network goes down
 → 100 retries hit simultaneously (thundering herd)
 ```
 
-### Solution: Circuit Breaker Pattern
+<a id="solution-circuit-breaker-pattern"></a>
+### 方案：熔断器模式
 
-Track consecutive failures per provider. After N failures, "open" the circuit:
+按提供商跟踪连续失败次数，达到 N 次后断开电路：
 
 ```python
 class ProviderHealthMonitor:
@@ -751,9 +785,10 @@ class ProviderHealthMonitor:
             self._cooldown_until = time.time() + self._cooldown_seconds
 ```
 
-### Unified Rate Limiter
+<a id="unified-rate-limiter"></a>
+### 统一限流器
 
-Combine rate limiting and circuit breaking in one component:
+在一个组件中组合限流与熔断：
 
 ```python
 class AdaptiveRateLimiter:
@@ -792,7 +827,8 @@ class AdaptiveRateLimiter:
         self._health_monitor.record_network_error()
 ```
 
-### Flow with Circuit Breaker
+<a id="flow-with-circuit-breaker"></a>
+### 带熔断器的流程
 
 ```
 Normal operation:
@@ -821,17 +857,20 @@ After cooldown (30s):
 
 ---
 
-## Edge Cases
+<a id="edge-cases"></a>
+## 边界情况
 
-Comprehensive analysis of edge cases and how the design handles them.
+全面分析边界情况及设计如何处理。
 
-### Lifecycle Edge Cases
+<a id="lifecycle-edge-cases"></a>
+### 生命周期边界情况
 
-#### 1. Graceful Shutdown
+<a id="1-graceful-shutdown"></a>
+#### 1. 优雅关闭
 
-**Scenario**: Daemon receives SIGTERM. What happens to in-flight Jobs?
+**场景：** Daemon 收到 SIGTERM，在途 Job 怎么办？
 
-**Solution**: Wait for in-flight Jobs with timeout, then let crash recovery handle stragglers.
+**方案：** 带超时等待在途 Job，剩余交给崩溃恢复。
 
 ```python
 async def run(self):
@@ -847,13 +886,14 @@ async def run(self):
             pass
 ```
 
-**Design survives**: ✅ Jobs either complete or crash recovery handles them.
+**设计可应对：** ✅ 作业完成或由崩溃恢复处理。
 
-#### 2. Cancellation
+<a id="2-cancellation"></a>
+#### 2. 取消
 
-**Scenario**: User cancels experiment. What happens to in-flight Jobs?
+**场景：** 用户取消实验，在途 Job 怎么办？
 
-**Solution**: Two-phase cancellation—flag + discard results.
+**方案：** 两阶段取消：标志加丢弃结果。
 
 ```python
 class Experiment:
@@ -869,13 +909,14 @@ class Job:
         await self._record_success(task_id, result)
 ```
 
-**Design survives**: ✅ In-flight Jobs complete harmlessly.
+**设计可应对：** ✅ 在途 Job 无害地完成。
 
-#### 3. Crash Recovery
+<a id="3-crash-recovery"></a>
+#### 3. 崩溃恢复
 
-**Scenario**: Process crashes with Jobs in-flight.
+**场景：** 有在途作业时进程崩溃。
 
-**Solution**: DB-level tracking with `claimed_by` and `claimed_at`. On startup, detect stale claims.
+**方案：** 数据库用 `claimed_by` 和 `claimed_at` 跟踪，启动时检测过期认领。
 
 ```python
 # On startup
@@ -891,15 +932,17 @@ stale_experiments = await db.execute(
 )
 ```
 
-**Design survives**: ✅ Jobs are transient; task state lives in DB.
+**设计可应对：** ✅ Job 临时存在，任务状态在数据库。
 
-### Resource Edge Cases
+<a id="resource-edge-cases"></a>
+### 资源边界情况
 
-#### 4. Memory Pressure (Large Dataset)
+<a id="4-memory-pressure-large-dataset"></a>
+#### 4. 内存压力（大型数据集）
 
-**Scenario**: Experiment has 1M tasks. Loading all into memory is bad.
+**场景：** 实验有 1M 任务，不宜全部加载进内存。
 
-**Solution**: Pagination in Experiment.
+**方案：** Experiment 内分页。
 
 ```python
 class Experiment:
@@ -915,13 +958,14 @@ class Experiment:
             self._db_offset += len(tasks)
 ```
 
-**Design survives**: ✅ Implementation detail in Experiment.
+**设计可应对：** ✅ 属于 Experiment 实现细节。
 
-#### 5. High Throughput (Fast Tasks)
+<a id="5-high-throughput-fast-tasks"></a>
+#### 5. 高吞吐（快速任务）
 
-**Scenario**: 1000 tasks complete per second. DB writes overwhelmed.
+**场景：** 每秒完成 1000 任务，数据库写入不堪重负。
 
-**Solution**: Batch writes in Experiment.
+**方案：** Experiment 内批量写入。
 
 ```python
 class Experiment:
@@ -940,13 +984,14 @@ class Experiment:
             self._result_buffer.clear()
 ```
 
-**Design survives**: ✅ Experiment controls batching strategy.
+**设计可应对：** ✅ Experiment 控制批量策略。
 
-#### 6. DB Write Failure
+<a id="6-db-write-failure"></a>
+#### 6. 数据库写入失败
 
-**Scenario**: Job completes, but DB is down.
+**场景：** 作业完成，但数据库不可用。
 
-**Solution**: Fail the task. Crash recovery will re-run it. Idempotent writes handle duplicates.
+**方案：** 任务失败，由崩溃恢复重跑，幂等写入处理重复。
 
 ```python
 async def _handle_success(self, task_id, result):
@@ -959,15 +1004,17 @@ async def _handle_success(self, task_id, result):
         self._requeue(task_id)
 ```
 
-**Design survives**: ✅ Crash recovery is the universal backstop.
+**设计可应对：** ✅ 崩溃恢复作为通用兜底。
 
-### Error Edge Cases
+<a id="error-edge-cases"></a>
+### 错误边界情况
 
-#### 7. Poison Pill (Always-Failing Task)
+<a id="7-poison-pill-always-failing-task"></a>
+#### 7. 毒丸（始终失败的任务）
 
-**Scenario**: One task triggers a provider bug, fails every time.
+**场景：** 某任务触发提供商缺陷，每次失败。
 
-**Solution**: Max retry limit per task.
+**方案：** 设置逐任务最大重试次数。
 
 ```python
 class Experiment:
@@ -983,26 +1030,28 @@ class Experiment:
             self._requeue_with_backoff(task)
 ```
 
-**Design survives**: ✅ Experiment controls retry policy.
+**设计可应对：** ✅ Experiment 控制重试策略。
 
-#### 8. Partial Stream Failure
+<a id="8-partial-stream-failure"></a>
+#### 8. 部分流失败
 
-**Scenario**: Stream starts, some chunks sent to UI, then connection fails.
+**场景：** 流启动，部分数据块发给界面后连接失败。
 
-**Analysis**:
-- UI sees: chunk1 → chunk2 → chunk3 → [error]
-- Task retries: chunk1 → chunk2 → chunk3 → chunk4 → [success]
-- UI might see partial, then full stream on retry
+**分析：**
+- 界面看到 chunk1 → chunk2 → chunk3 → [error]。
+- 重试时 chunk1 → chunk2 → chunk3 → chunk4 → [success]。
+- 界面可能先看到部分流，重试时再看到完整流。
 
-**Solution**: UI tracks task status, shows "retrying" state, handles duplicate streams.
+**方案：** 界面跟踪任务状态，显示重试中，并处理重复流。
 
-**Design survives**: ✅ But UI needs to handle retry semantics.
+**设计可应对：** ✅ 但界面需处理重试语义。
 
-#### 9. Provider Returns Invalid Response
+<a id="9-provider-returns-invalid-response"></a>
+#### 9. 提供商返回无效响应
 
-**Scenario**: Provider returns garbage (invalid JSON, unexpected format).
+**场景：** 返回无效 JSON、意外格式等垃圾内容。
 
-**Solution**: Job validates response, reports as failure.
+**方案：** Job 验证响应，报告失败。
 
 ```python
 class Job:
@@ -1015,15 +1064,17 @@ class Job:
             await self.on_failure(e)
 ```
 
-**Design survives**: ✅ Validation in Job.
+**设计可应对：** ✅ 在 Job 内验证。
 
-### Short-Circuit Edge Cases
+<a id="short-circuit-edge-cases"></a>
+### 短路边界情况
 
-#### 10. Cached Result
+<a id="10-cached-result"></a>
+#### 10. 缓存结果
 
-**Scenario**: Task result is already cached (e.g., from previous run).
+**场景：** 任务结果已有缓存，例如先前运行。
 
-**Solution**: Short-circuit before rate limit check.
+**方案：** 限流检查前短路。
 
 ```python
 def try_get_ready_job(self) -> Job | None:
@@ -1038,13 +1089,14 @@ def try_get_ready_job(self) -> Job | None:
         # ... rest of logic
 ```
 
-**Design survives**: ✅ No token consumed for cached results.
+**设计可应对：** ✅ 缓存结果不消耗令牌。
 
-#### 11. Invalid Input
+<a id="11-invalid-input"></a>
+#### 11. 无效输入
 
-**Scenario**: Task input is malformed.
+**场景：** 任务输入格式错误。
 
-**Solution**: Short-circuit before rate limit check.
+**方案：** 限流检查前短路。
 
 ```python
 if not task.is_valid():
@@ -1053,13 +1105,14 @@ if not task.is_valid():
     continue  # No Job created, no token consumed
 ```
 
-**Design survives**: ✅ Validation before rate limit check.
+**设计可应对：** ✅ 限流检查前验证。
 
-#### 12. Empty Dataset
+<a id="12-empty-dataset"></a>
+#### 12. 空数据集
 
-**Scenario**: Experiment started with 0 tasks.
+**场景：** 实验启动时有 0 个任务。
 
-**Solution**: Immediately complete.
+**方案：** 立即完成。
 
 ```python
 def is_complete(self) -> bool:
@@ -1071,15 +1124,17 @@ def is_complete(self) -> bool:
     )
 ```
 
-**Design survives**: ✅ Empty experiment completes immediately.
+**设计可应对：** ✅ 空实验立即完成。
 
-### Eval Edge Cases
+<a id="eval-edge-cases"></a>
+### 评估边界情况
 
-#### 13. Eval After Task Failure
+<a id="13-eval-after-task-failure"></a>
+#### 13. 任务失败后评估
 
-**Scenario**: Task failed. Should we run evals?
+**场景：** 任务失败，还要运行评估吗？
 
-**Solution**: Usually no. Experiment decides.
+**方案：** 通常不运行，由 Experiment 决定。
 
 ```python
 def _handle_task_success(self, task_id, result):
@@ -1094,13 +1149,14 @@ def _handle_task_failure(self, task_id, error):
     # NO evals queued
 ```
 
-**Design survives**: ✅ Experiment controls eval policy.
+**设计可应对：** ✅ Experiment 控制评估策略。
 
-#### 14. Eval Uses Different Provider
+<a id="14-eval-uses-different-provider"></a>
+#### 14. 评估采用不同提供商
 
-**Scenario**: Task uses OpenAI, eval uses Anthropic.
+**场景：** 任务用 OpenAI，评估用 Anthropic。
 
-**Solution**: Experiment checks the correct token bucket per provider.
+**方案：** Experiment 按提供商检查正确令牌桶。
 
 ```python
 def try_get_ready_job(self) -> Job | None:
@@ -1123,15 +1179,17 @@ def try_get_ready_job(self) -> Job | None:
     return None
 ```
 
-**Design survives**: ✅ Experiment manages multiple token buckets.
+**设计可应对：** ✅ Experiment 管理多个令牌桶。
 
-### Timing Edge Cases
+<a id="timing-edge-cases"></a>
+### 时间边界情况
 
-#### 15. Clock Skew (Multi-Replica)
+<a id="15-clock-skew-multi-replica"></a>
+#### 15. 时钟偏差（多副本）
 
-**Scenario**: Different replicas have different clocks.
+**场景：** 不同副本时钟不同。
 
-**Solution**: Use DB server timestamp, not local clock.
+**方案：** 使用数据库服务端时间，而非本地时钟。
 
 ```python
 # Instead of
@@ -1141,13 +1199,14 @@ UPDATE ... SET claimed_at = %(local_time)s
 UPDATE ... SET claimed_at = NOW()  -- DB timestamp
 ```
 
-**Design survives**: ✅ Implementation detail.
+**设计可应对：** ✅ 实现细节。
 
-#### 16. Very Slow Tasks
+<a id="16-very-slow-tasks"></a>
+#### 16. 极慢任务
 
-**Scenario**: Tasks take 5+ minutes (complex reasoning).
+**场景：** 复杂推理耗时超过 5 分钟。
 
-**Solution**: Configurable timeout per Job.
+**方案：** 每个 Job 可配置超时。
 
 ```python
 job = Job(
@@ -1157,15 +1216,17 @@ job = Job(
 )
 ```
 
-**Design survives**: ✅ Timeout is configurable.
+**设计可应对：** ✅ 超时可配置。
 
-### Concurrency Edge Cases
+<a id="concurrency-edge-cases"></a>
+### 并发边界情况
 
-#### 17. Lost Callback (Bug)
+<a id="17-lost-callback-bug"></a>
+#### 17. 回调丢失（缺陷）
 
-**Scenario**: Job completes, but callback raises exception.
+**场景：** Job 完成，回调却抛异常。
 
-**Solution**: Callback failures are bugs. Let them crash loud. Crash recovery handles the aftermath.
+**方案：** 回调失败属于缺陷，应明确崩溃，由崩溃恢复处理后续。
 
 ```python
 async def execute(self):
@@ -1178,43 +1239,47 @@ async def execute(self):
     await self.on_success(result)  # If this fails, propagate
 ```
 
-**Design survives**: ✅ Crash recovery is the universal backstop.
+**设计可应对：** ✅ 崩溃恢复作为通用兜底。
 
-### Summary Table
+<a id="summary-table"></a>
+### 汇总表
 
-| Edge Case | Category | Solution | Design Survives |
+| 边界情况 | 类别 | 方案 | 设计可应对 |
 |-----------|----------|----------|-----------------|
-| Graceful shutdown | Lifecycle | Wait + crash recovery | ✅ |
-| Cancellation | Lifecycle | Flag + discard results | ✅ |
-| Crash recovery | Lifecycle | DB `claimed_by`/`claimed_at` | ✅ |
-| Memory pressure | Resource | Pagination | ✅ |
-| High throughput | Resource | Batch writes | ✅ |
-| DB write failure | Resource | Fail + re-execute | ✅ |
-| Poison pill | Error | Max retry limit | ✅ |
-| Partial stream | Error | UI handles retry state | ✅ |
-| Invalid response | Error | Validation in Job | ✅ |
-| Cached result | Short-circuit | Before rate limit check | ✅ |
-| Invalid input | Short-circuit | Before rate limit check | ✅ |
-| Empty dataset | Short-circuit | Immediate completion | ✅ |
-| Eval after failure | Eval | Experiment decides | ✅ |
-| Eval different provider | Eval | Multiple token buckets | ✅ |
-| Clock skew | Timing | DB timestamp | ✅ |
-| Slow tasks | Timing | Configurable timeout | ✅ |
-| Lost callback | Concurrency | Crash loud + recovery | ✅ |
+| 优雅关闭 | 生命周期 | 等待加崩溃恢复 | ✅ |
+| 取消 | 生命周期 | 标志加丢弃结果 | ✅ |
+| 崩溃恢复 | 生命周期 | 数据库 `claimed_by`/`claimed_at` | ✅ |
+| 内存压力 | 资源 | 分页 | ✅ |
+| 高吞吐 | 资源 | 批量写入 | ✅ |
+| 数据库写入失败 | 资源 | 失败后重新执行 | ✅ |
+| 毒丸 | 错误 | 最大重试限制 | ✅ |
+| 部分流 | 错误 | 界面处理重试 | ✅ |
+| 无效响应 | 错误 | Job 内验证 | ✅ |
+| 缓存结果 | 短路 | 限流前检查 | ✅ |
+| 无效输入 | 短路 | 限流前检查 | ✅ |
+| 空数据集 | 短路 | 立即完成 | ✅ |
+| 失败后评估 | 评估 | Experiment 决定 | ✅ |
+| 不同提供商评估 | 评估 | 多令牌桶 | ✅ |
+| 时钟偏差 | 时间 | 数据库时间 | ✅ |
+| 慢任务 | 时间 | 可配置超时 | ✅ |
+| 回调丢失 | 并发 | 明确崩溃加恢复 | ✅ |
 
-**All edge cases are handled by the design.**
+**设计处理了全部边界情况。**
 
 ---
 
-## Implementation Notes
+<a id="implementation-notes"></a>
+## 实现说明
 
-### Connecting to Current Codebase
+<a id="connecting-to-current-codebase"></a>
+### 与现有代码衔接
 
-The current `PlaygroundRateLimiter` and `PlaygroundClient` can be adapted:
+可调整现有 `PlaygroundRateLimiter` 和 `PlaygroundClient`：
 
-#### Token Bucket Access
+<a id="token-bucket-access"></a>
+#### 令牌桶访问
 
-The token bucket already exists inside `PlaygroundRateLimiter`:
+令牌桶已存在于 `PlaygroundRateLimiter` 内部：
 
 ```python
 # Current structure
@@ -1230,9 +1295,10 @@ class Experiment:
         self._token_bucket = client.rate_limiter._throttler
 ```
 
-#### Unwrapping the Client
+<a id="unwrapping-the-client"></a>
+#### 解开客户端包装
 
-Current code wraps API calls with `_alimit`. For Advisor pattern, use raw client:
+当前通过 `_alimit` 包装 API 调用。Advisor 模式应使用原始客户端：
 
 ```python
 # Current (Gatekeeper): Wrapped
@@ -1245,9 +1311,10 @@ async with self._client_factory() as client:
     await client.chat.completions.create(...)  # No wrapper
 ```
 
-#### Provider-Specific Error Handling
+<a id="provider-specific-error-handling"></a>
+#### 提供商专用错误处理
 
-Job needs to classify errors. The client knows the provider-specific error type:
+Job 需要分类错误，客户端知道提供商专用错误类型：
 
 ```python
 class Job:
@@ -1262,7 +1329,7 @@ class Job:
         return isinstance(e, self._rate_limit_error)
 ```
 
-Or normalize errors in the client:
+也可在客户端规范化错误：
 
 ```python
 class ProviderRateLimitError(Exception):
@@ -1278,9 +1345,10 @@ class PlaygroundClient:
             raise ProviderRateLimitError()
 ```
 
-### Instantiation Hierarchy
+<a id="instantiation-hierarchy"></a>
+### 实例化层级
 
-Understanding what is created when, and what is shared:
+理解何时创建什么，以及哪些共享：
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1335,24 +1403,25 @@ Understanding what is created when, and what is shared:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key points:**
-- **Credentials** are captured once in the `client_factory` closure at experiment start
-- **Token bucket** is shared across experiments using the same rate-limit key
-- **Raw clients** are created fresh per Job execution (no stale connections)
-- **Jobs** are cheap (just references to shared resources, no heavy initialization)
+**要点：**
+- **凭证**在实验启动时由 `client_factory` 闭包捕获一次。
+- **令牌桶**由使用相同限流键的实验共享。
+- **原始客户端**逐 Job 执行新建，避免过期连接。
+- **Job** 成本低，仅引用共享资源，无重初始化。
 
-### Flexible Rate Limiter Keying
+<a id="flexible-rate-limiter-keying"></a>
+### 灵活限流键
 
-Current keying by provider is too coarse for some use cases:
+当前按提供商取键，对某些场景过粗：
 
-| Provider | Rate Limit Scope | Current Key | Better Key |
+| 提供商 | 限流范围 | 当前键 | 更佳键 |
 |----------|------------------|-------------|------------|
-| OpenAI | Per-organization | `"openai"` | `"openai"` ✅ |
-| Anthropic | Per-organization | `"anthropic"` | `"anthropic"` ✅ |
-| Azure OpenAI | **Per-deployment** | `"azure_openai"` ❌ | `("azure_openai", deployment)` |
-| Some APIs | Per-API-key | `provider` | `(provider, api_key_hash)` |
+| OpenAI | 逐组织 | `"openai"` | `"openai"` ✅ |
+| Anthropic | 逐组织 | `"anthropic"` | `"anthropic"` ✅ |
+| Azure OpenAI | **逐部署** | `"azure_openai"` ❌ | `("azure_openai", deployment)` |
+| 部分 API | 逐 API 密钥 | `provider` | `(provider, api_key_hash)` |
 
-**Solution:** Determine key at client creation time:
+**方案：** 创建客户端时确定键。
 
 ```python
 def get_rate_limiter_key(provider: str, model_name: str) -> str:
@@ -1371,13 +1440,14 @@ self.rate_limiter = PlaygroundRateLimiter(
 )
 ```
 
-**Because Experiment creates Jobs and holds the client, the correct token bucket is automatically used.** No changes needed to Job or Daemon.
+**Experiment 创建 Job 并持有客户端，因此自动使用正确令牌桶。** Job 和 Daemon 无需改动。
 
-### No Polymorphic Workers
+<a id="no-polymorphic-workers"></a>
+### 不使用多态工作器
 
-A key benefit of the Command Pattern: **dispatch becomes trivially simple**.
+命令模式关键优势：**分派变得极简单**。
 
-**Before (polymorphism in the dispatcher):**
+**之前，多态位于分派器：**
 ```python
 class Dispatcher:
     def dispatch(self, work: Work) -> None:
@@ -1393,7 +1463,7 @@ class Dispatcher:
             # Different logic...
 ```
 
-**After (polymorphism in the command):**
+**之后，多态位于命令：**
 ```python
 # Dispatcher knows NOTHING
 async def dispatch(job: Job) -> None:
@@ -1409,7 +1479,7 @@ job = Job(
 )
 ```
 
-**The inversion:**
+**反转：**
 
 ```
 BEFORE:                                 AFTER:
@@ -1429,115 +1499,124 @@ BEFORE:                                 AFTER:
 └─────────────────────┘                 └─────────────────────┘
 ```
 
-### The Essence of Command Pattern
+<a id="the-essence-of-command-pattern"></a>
+### 命令模式的本质
 
-The Command Pattern's fundamental insight:
+命令模式的基本认识：
 
-> **Turn a method call into an object.**
+> **将方法调用变成对象。**
 
-When you do this:
+这样做后：
 
-| Without Command | With Command |
+| 不用命令 | 使用命令 |
 |-----------------|--------------|
-| Caller knows what to call | Caller just calls `execute()` |
-| Caller knows the arguments | Arguments are inside the object |
-| Caller knows error handling | Error handling is inside the object |
-| Polymorphism in the caller | Polymorphism in the command |
-| Tight coupling | Complete decoupling |
+| 调用方知道调用什么 | 只调用 `execute()` |
+| 调用方知道参数 | 参数在对象中 |
+| 调用方知道错误处理 | 错误处理在对象中 |
+| 多态在调用方 | 多态在命令 |
+| 紧耦合 | 完全解耦 |
 
-**The deepest benefit:**
+**最深层优势：**
 
-> **Make the thing being done smart, so the thing doing it can be dumb.**
+> **让被执行的事物更智能，让执行它的事物保持简单。**
 
-This is exactly what Jobs achieve:
-- **Job knows everything**: client factory, error types, callbacks, timeout
-- **Dispatcher knows nothing**: just calls `execute()`
-- **No switch statements** on provider type
-- **No polymorphic dispatch** logic
-- **Uniform interface** for all work types (task, eval, retry)
+Job 正是如此：
+- **Job 了解全部**：工厂、错误类型、回调、超时。
+- **分派器无需了解**：只调用 `execute()`。
+- **无需**按提供商类型 switch。
+- **无需多态分派**逻辑。
+- 所有任务、评估、重试共用**统一接口**。
 
-The Gang of Four lists these benefits:
-- Parameterize objects with operations ✅ (each Job carries its operation)
-- Queue or log requests ✅ (Jobs sit in queue, can be logged)
-- Decouple invoker from receiver ✅ (Daemon doesn't know Experiment)
+四人组列出这些优势：
+- 用操作参数化对象 ✅，每个 Job 携带操作。
+- 排队或记录请求 ✅，Job 可排队和记录。
+- 解耦调用者与接收者 ✅，Daemon 不知道 Experiment。
 
-### Naming Conventions
+<a id="naming-conventions"></a>
+### 命名约定
 
-For the self-executing work unit, we considered several names:
+自执行工作单元曾考虑以下名称：
 
-| Name | Pros | Cons |
+| 名称 | 优点 | 缺点 |
 |------|------|------|
-| **Job** | Simple, universal (Celery, Sidekiq) | Generic |
-| **Task** | Intuitive | Conflicts with `asyncio.Task` |
-| **Command** | Pattern name, accurate | Abstract |
-| **Errand** | Intuitive ("worker runs errands") | Informal |
+| **Job** | 简单通用，如 Celery、Sidekiq | 泛化 |
+| **Task** | 直观 | 与 `asyncio.Task` 冲突 |
+| **Command** | 模式名，准确 | 抽象 |
+| **Errand** | 直观，如工作器跑腿 | 非正式 |
 
-**Recommendation**: Use **Job** for simplicity and familiarity.
+**建议：** 使用 **Job**，简单且熟悉。
 
 ---
 
-## Summary
+<a id="summary"></a>
+## 汇总
 
-### Design Principles Validated
+<a id="design-principles-validated"></a>
+### 已验证的设计原则
 
-| Principle | Status |
+| 原则 | 状态 |
 |-----------|--------|
-| End-to-End: Intelligence at edges | ✅ Experiment is smart, Daemon is dumb |
-| Separation of Constraints | ✅ Rate, concurrency, fairness are orthogonal |
-| State Locality | ✅ State lives in Experiment/DB, not Job |
-| Work Conservation | ✅ Advisor never blocks slots |
-| Minimal Coordination | ✅ Only coordinate through shared rate limits |
-| Information Hiding | ✅ Components know only what they need |
+| 端到端：智能在边缘 | ✅ Experiment 智能，Daemon 简单 |
+| 约束分离 | ✅ 速率、并发、公平正交 |
+| 状态局部性 | ✅ 状态在 Experiment/数据库，不在 Job |
+| 工作守恒 | ✅ Advisor 不阻塞槽位 |
+| 最小协调 | ✅ 仅共享限流协调 |
+| 信息隐藏 | ✅ 组件只知道所需信息 |
 
-### Edge Cases Handled
+<a id="edge-cases-handled"></a>
+### 已处理边界情况
 
-All 17 identified edge cases are handled by the design:
-- Lifecycle (shutdown, cancellation, crash recovery)
-- Resource (memory, throughput, DB failure)
-- Error (poison pill, partial stream, invalid response)
-- Short-circuit (cached, invalid, empty)
-- Eval (failure, different provider)
-- Timing (clock skew, slow tasks)
-- Concurrency (lost callback)
+设计处理了全部 17 个已识别边界情况：
+- 生命周期：关闭、取消、崩溃恢复。
+- 资源：内存、吞吐、数据库故障。
+- 错误：毒丸、部分流、无效响应。
+- 短路：缓存、无效、空数据。
+- 评估：失败、不同提供商。
+- 时间：时钟偏差、慢任务。
+- 并发：回调丢失。
 
-**The design is robust and ready for implementation.**
+**设计稳健，已可实施。**
 
 ---
 
-## Provider Rate Limit Reference
+<a id="provider-rate-limit-reference"></a>
+## 提供商限流参考
 
-This section documents how different LLM providers structure their rate limits, which informs rate limit bucket key construction.
+本节记录不同 LLM 提供商的限流结构，为构造令牌桶键提供依据。
 
-### Summary Table
+<a id="summary-table"></a>
+### 汇总表
 
-| Provider | Rate Limit Scope | Model-Specific? | Recommended Bucket Key |
+| 提供商 | 限流范围 | 区分模型？ | 建议令牌桶键 |
 |----------|-----------------|-----------------|------------------------|
-| **OpenAI** | Per model, per organization | **Yes** | `(api_key, base_url, model_name)` |
-| **Azure OpenAI** | Per deployment | **Yes** | `(endpoint, model_name)` |
-| **AWS Bedrock** | Per model, per region | **Yes** | `(region, model_name, credential)` |
-| **Google Gemini** | Per model, per project | **Yes** | `(api_key, model_name)` |
-| **Anthropic** | Per organization | No (shared pool) | `(api_key)` |
-| **xAI (Grok)** | Per model | **Yes** | `(api_key, model_name)` |
-| **Groq** | Per model, per organization | **Yes** | `(api_key, model_name)` |
-| **DeepSeek** | Per account (queue-based) | No | `(api_key)` |
-| **Qwen (Alibaba)** | Per account | Likely | `(api_key)` |
-| **Ollama** | Local (no limits) | N/A | `(base_url)` |
-| **Fireworks** | Per account (RPM) | No | `(api_key)` |
-| **Mistral** | Per organization | No | `(api_key)` |
-| **Together AI** | Per account | No | `(api_key)` |
-| **Lepton** | Per account (RPM) | No | `(api_key)` |
-| **Cerebras** | Per model | **Yes** | `(api_key, model_name)` |
-| **Replicate** | Per account | No | `(api_key)` |
-| **Baseten** | Per account | No | `(api_key)` |
+| **OpenAI** | 逐模型、逐组织 | **是** | `(api_key, base_url, model_name)` |
+| **Azure OpenAI** | 逐部署 | **是** | `(endpoint, model_name)` |
+| **AWS Bedrock** | 逐模型、逐区域 | **是** | `(region, model_name, credential)` |
+| **Google Gemini** | 逐模型、逐项目 | **是** | `(api_key, model_name)` |
+| **Anthropic** | 逐组织 | 否，共享池 | `(api_key)` |
+| **xAI (Grok)** | 逐模型 | **是** | `(api_key, model_name)` |
+| **Groq** | 逐模型、逐组织 | **是** | `(api_key, model_name)` |
+| **DeepSeek** | 逐账号，基于队列 | 否 | `(api_key)` |
+| **Qwen (Alibaba)** | 逐账号 | 可能 | `(api_key)` |
+| **Ollama** | 本地，无限制 | 不适用 | `(base_url)` |
+| **Fireworks** | 逐账号，RPM | 否 | `(api_key)` |
+| **Mistral** | 逐组织 | 否 | `(api_key)` |
+| **Together AI** | 逐账号 | 否 | `(api_key)` |
+| **Lepton** | 逐账号，RPM | 否 | `(api_key)` |
+| **Cerebras** | 逐模型 | **是** | `(api_key, model_name)` |
+| **Replicate** | 逐账号 | 否 | `(api_key)` |
+| **Baseten** | 逐账号 | 否 | `(api_key)` |
 
-### Key Takeaways
+<a id="key-takeaways"></a>
+### 要点
 
-1. **Model-specific bucketing needed for:** OpenAI, Azure, Bedrock, Google, xAI, Groq, Cerebras
-2. **Organization-wide bucketing sufficient for:** Anthropic, DeepSeek, Qwen, Fireworks, Mistral, Together, Lepton, Replicate, Baseten
-3. **No rate limiting needed for:** Ollama (local)
+1. **需按模型分桶：** OpenAI、Azure、Bedrock、Google、xAI、Groq、Cerebras。
+2. **组织级分桶足够：** Anthropic、DeepSeek、Qwen、Fireworks、Mistral、Together、Lepton、Replicate、Baseten。
+3. **无需限流：** 本地 Ollama。
 
-The primary distinction is whether different models within the same account/credential have **separate quotas** (requiring model in key) or **share a common pool** (API key sufficient).
+主要区别在于同账号或凭证下的不同模型是有**独立配额**，因此键需包含模型，还是**共享池**，只需 API 密钥。
 
-### Provider Details
+<a id="provider-details"></a>
+### 提供商详情
 
-For detailed information on each provider's rate limit structure, tier levels, and sources, see the backup file at `backup/appendix-provider-rate-limits.md`.
+各提供商限流结构、层级和来源的详细信息，见备份文件 `backup/appendix-provider-rate-limits.md`。

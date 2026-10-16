@@ -1,27 +1,35 @@
-# TypeScript Experiments and Evals with Arize Phoenix
+<a id="typescript-experiments-and-evals-with-arize-phoenix"></a>
 
-This is a demo application that demonstrates how to run experiments and evaluations in TypeScript with Arize Phoenix. The application uses Arize Phoenix to manage datasets, run experiments, and evaluate LLM outputs.
+# 使用 Arize Phoenix 进行 TypeScript 实验与评估
 
-## Overview
+此演示应用展示如何通过 Arize Phoenix 在 TypeScript 中运行实验和评估，使用 Arize Phoenix 管理数据集、运行实验并评估 LLM 输出。
 
-The demo consists of two main files:
+<a id="overview"></a>
 
-- `app.ts`: Contains a space knowledge application that retrieves relevant context from a knowledge base using OpenAI
-- `experiment.ts`: Sets up and runs an experiment that evaluates the relevance of the retrieved context
+## 概述
 
-## Required Packages
+演示包含两个主要文件：
 
-To run this demo, you'll need to install the following packages:
+- `app.ts`: 包含一个太空知识应用，使用 OpenAI 从知识库检索相关上下文
+- `experiment.ts`: 配置并运行实验，评估所检索上下文的相关性
+
+<a id="required-packages"></a>
+
+## 所需软件包
+
+运行此演示需要安装以下包：
 
 ```bash
 npm install dotenv openai @arizeai/openinference-instrumentation-openai @ai-sdk/openai @arizeai/phoenix-client @arizeai/phoenix-evals
 ```
 
-## Setup
+<a id="setup"></a>
 
-1. Install the required packages (see above)
+## 配置
 
-2. Create a `.env` file in the root directory with your API keys:
+1. 安装所需包（见上文）
+
+2. 在根目录创建 `.env` 文件并填入 API 密钥：
 
 ```env
 OPENAI_API_KEY=your-openai-api-key
@@ -30,24 +38,28 @@ PHOENIX_ENDPOINT=http://localhost:6006
 PHOENIX_API_KEY=your-phoenix-api-key
 ```
 
-## Running the Demo
+<a id="running-the-demo"></a>
 
-To run the experiment:
+## 运行演示
+
+运行实验：
 
 ```bash
 npx tsx experiment.ts
 ```
 
-## How It Works
+<a id="how-it-works"></a>
 
-1. **app.ts**: Implements a space knowledge retrieval application that:
-   - Uses OpenAI's GPT-4o-mini model to retrieve relevant context from a knowledge base
-   - Returns 1-3 most relevant pieces of information based on a query
+## 工作原理
+
+1. **app.ts**: 实现太空知识检索应用，功能包括：
+   - 使用 OpenAI 的 GPT-4o-mini 模型从知识库检索相关上下文
+   - 根据查询返回最相关的 1～3 条信息
 
 2. **experiment.ts**:
-   - Creates a dataset with space-related questions
-   - Runs the `spaceKnowledgeApplication` function for each question in the dataset
-   - Uses Phoenix Evals to evaluate the retrieved context using the Retrieval Relevance evaluator
-   - Sends the experiment results to Phoenix for analysis
+   - 创建包含太空相关问题的数据集
+   - 为数据集中的每个问题运行 `spaceKnowledgeApplication` 函数
+   - 通过 Phoenix Evals 的检索相关性评估器评估检索到的上下文
+   - 将实验结果发送到 Phoenix 进行分析
 
-The experiment results will be available in Phoenix, where you can analyze the performance of your application and view evaluation metrics.
+实验结果会展示在 Phoenix 中，可在其中分析应用性能并查看评估指标。

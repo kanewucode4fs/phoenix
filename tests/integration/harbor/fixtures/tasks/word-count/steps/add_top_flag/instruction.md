@@ -1,7 +1,7 @@
-Extend `/app/wc.py` with a `--top N` option that reports the most frequent words.
+为 `/app/wc.py` 增加 `--top N` 选项，用于报告出现频率最高的单词。
 
-Requirements:
-- `python3 /app/wc.py <path>` must keep printing the total word count as before.
-- `python3 /app/wc.py --top N <path>` prints the N most frequent words, one per line, formatted as `<word> <count>`.
-- Words are compared case-insensitively and reported in lowercase, with leading and trailing punctuation removed (for example, `Dog.` and `dog` are the same word).
-- Sort by count descending, then by word ascending.
+要求：
+- `python3 /app/wc.py <path>` 必须保持原有行为，输出单词总数。
+- `python3 /app/wc.py --top N <path>` 输出出现频率最高的 N 个单词，每行一个，格式为 `<word> <count>`。
+- 比较单词时不区分大小写，输出时使用小写，并移除首尾标点符号（例如，`Dog.` 和 `dog` 视为同一个单词）。
+- 先按出现次数降序排列，再按单词升序排列。

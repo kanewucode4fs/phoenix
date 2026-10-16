@@ -1,4 +1,12 @@
 Dockerfile
+.git/
+.github/
+.agents/
+.codex/
+.claude/
+.cursor/
+.ruff_cache/
+.vscode/
 **/node_modules/
 **/.venv/
 **/__pycache__/

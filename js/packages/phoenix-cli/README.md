@@ -4,7 +4,7 @@
             <picture>
                 <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg">
                 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix-white.svg">
-                <img alt="Arize Phoenix logo" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
+                <img alt="Arize Phoenix 标志" src="https://raw.githubusercontent.com/Arize-ai/phoenix-assets/refs/heads/main/logos/Phoenix/phoenix.svg" width="100" />
             </picture>
         </a>
         <br>
@@ -14,17 +14,19 @@
 
 <p align="center">
     <a href="https://www.npmjs.com/package/@arizeai/phoenix-cli">
-        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-cli" alt="NPM Version">
+        <img src="https://img.shields.io/npm/v/%40arizeai%2Fphoenix-cli" alt="NPM 版本">
     </a>
     <a href="https://arize.com/docs/phoenix/">
-        <img src="https://img.shields.io/badge/docs-blue?logo=typescript&logoColor=white" alt="Documentation">
+        <img src="https://img.shields.io/badge/docs-blue?logo=typescript&logoColor=white" alt="文档">
     </a>
     <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8e8e8b34-7900-43fa-a38f-1f070bd48c64&page=js/packages/phoenix-cli/README.md" />
 </p>
 
-A command-line interface for [Arize Phoenix](https://github.com/Arize-ai/phoenix). Fetch traces, inspect datasets, query experiments, and access prompts directly from your terminal—or pipe them into AI coding agents like Claude Code, Cursor, Codex, and Gemini CLI.
+[Arize Phoenix](https://github.com/Arize-ai/phoenix) 的命令行接口。直接在终端中获取追踪、检查数据集、查询实验并访问提示词，或通过管道将其传给 Claude Code、Cursor、Codex 和 Gemini CLI 等 AI 编码 Agent。
 
-## Installation
+<a id="installation"></a>
+
+## 安装
 
 ```bash
 npm install -g @arizeai/phoenix-cli
@@ -35,7 +37,9 @@ npx @arizeai/phoenix-cli
 px self update
 ```
 
-## Configuration
+<a id="configuration"></a>
+
+## 配置
 
 ```bash
 export PHOENIX_ENDPOINT=http://localhost:6006
@@ -43,32 +47,28 @@ export PHOENIX_PROJECT=my-project
 export PHOENIX_API_KEY=your-api-key  # if authentication is enabled
 ```
 
-CLI flags (`--endpoint`, `--project`, `--api-key`) override environment variables. For interactive local use, `px auth login` stores an OAuth session in your active profile; the session acts with the permissions of the user who logged in. API keys take precedence when both are configured.
+CLI 标志（`--endpoint`、`--project`、`--api-key`）覆盖环境变量。本地交互使用时，`px auth login` 在当前配置档案中保存 OAuth 会话，该会话以登录用户的权限运行。两者均配置时，API 密钥优先。
 
-| Variable                                 | Description                                                                                    |
+| 变量                                 | 说明                                                                                    |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `PHOENIX_ENDPOINT`                       | Phoenix base URL (canonical)                                                                   |
-| `PHOENIX_COLLECTOR_ENDPOINT`             | Trace-export base URL, usually the same as `PHOENIX_ENDPOINT`; `px` uses it when that is unset |
-| `PHOENIX_HOST`                           | Legacy fallback for the base URL                                                               |
-| `PHOENIX_PROJECT`                        | Project name or ID (canonical)                                                                 |
-| `PHOENIX_PROJECT_NAME`                   | Project name or ID (alias for above)                                                           |
-| `PHOENIX_API_KEY`                        | API key (if auth is enabled)                                                                   |
-| `PHOENIX_CLIENT_HEADERS`                 | Custom headers as JSON string                                                                  |
-| `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES` | Enable CLI delete commands when set to `true`                                                  |
+| `PHOENIX_ENDPOINT`                       | Phoenix 基础 URL（规范配置）                                                                   |
+| `PHOENIX_COLLECTOR_ENDPOINT`             | 追踪导出基础 URL，通常与 `PHOENIX_ENDPOINT` 相同；后者未设置时，`px` 使用此值 |
+| `PHOENIX_HOST`                           | 基础 URL 的旧版回退配置                                                               |
+| `PHOENIX_PROJECT`                        | 项目名称或 ID（规范配置）                                                                 |
+| `PHOENIX_PROJECT_NAME`                   | 项目名称或 ID（上述配置的别名）                                                           |
+| `PHOENIX_API_KEY`                        | API 密钥（启用身份验证时）                                                                   |
+| `PHOENIX_CLIENT_HEADERS`                 | 以 JSON 字符串表示的自定义请求头                                                                  |
+| `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES` | 设为 `true` 时启用 CLI 删除命令                                                  |
 
-Delete commands are disabled by default and require `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES=true`.
+删除命令默认禁用，需要设置 `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES=true`。
 
-The CLI also discovers the nearest `.env.phoenix` file at or above the current
-working directory. Configuration precedence is: CLI flags, process environment,
-active profile, `.env.phoenix`, then built-in defaults. Credentials are resolved
-as one group, so a process API key is never combined with file-provided client
-headers. If a higher-priority credential is paired with an endpoint from the
-file, the CLI warns once and continues. Set
-`PHOENIX_DISCOVER_CONFIG=false` to disable discovery.
+CLI 还会发现当前工作目录或上级目录中最近的 `.env.phoenix` 文件。配置优先级依次为：CLI 标志、进程环境、当前配置档案、`.env.phoenix`、内置默认值。凭证作为一组解析，因此不会将进程 API 密钥与文件提供的客户端请求头混用。若较高优先级凭证与文件端点配对，CLI 会发出一次警告后继续。设置 `PHOENIX_DISCOVER_CONFIG=false` 可禁用发现。
 
-## Profiles
+<a id="profiles"></a>
 
-A profile saves the endpoint, project, API key, and headers for a Phoenix instance under a name like `prod` or `staging`. Activate a profile and every `px` command picks up those settings without re-exporting environment variables. Environment variables and CLI flags still override the active profile, so existing scripts keep working.
+## 配置档案
+
+配置档案以 `prod` 或 `staging` 等名称保存 Phoenix 实例的端点、项目、API 密钥及请求头。激活档案后，每个 `px` 命令都会采用这些设置，无需重新导出环境变量。环境变量和 CLI 标志仍会覆盖当前档案，因此现有脚本继续有效。
 
 ```bash
 px profile create prod --endpoint https://phoenix.example.com --project main \
@@ -80,13 +80,13 @@ px profile edit prod           # open in $EDITOR, validates on save
 px profile delete prod         # remove a profile (--yes to skip prompt)
 ```
 
-Pass `--profile <name>` to `auth login`, `auth logout`, or `auth status` to scope a single invocation to a profile other than the active one.
+向 `auth login`、`auth logout` 或 `auth status` 传入 `--profile <name>`，可仅对本次调用使用当前档案以外的指定档案。
 
-### Editor autocompletion via `$schema`
+<a id="editor-autocompletion-via-schema"></a>
 
-The CLI writes a `$schema` field automatically the first time it creates
-your `settings.json`, so editors like VS Code and JetBrains validate and
-autocomplete the file out of the box:
+### 通过 `$schema` 实现编辑器自动补全
+
+CLI 首次创建 `settings.json` 时会自动写入 `$schema` 字段，使 VS Code 和 JetBrains 等编辑器开箱即可验证及自动补全文件：
 
 ```json
 {
@@ -96,12 +96,9 @@ autocomplete the file out of the box:
 }
 ```
 
-If you remove the line by hand, the CLI won't add it back. The schema
-lives at `schemas/phoenix-cli-settings.json` in the Phoenix repository
-and tracks the published Zod schema. The pointer is currently pinned to
-`main`; we'll switch to a SchemaStore entry once registered.
+如果手动删除该行，CLI 不会重新添加。模式位于 Phoenix 仓库的 `schemas/phoenix-cli-settings.json`，并与已发布的 Zod 模式保持同步。当前指针固定为 `main`；注册后将改用 SchemaStore 条目。
 
-For VS Code project-wide association add to `.vscode/settings.json`:
+要在 VS Code 中设置项目级关联，请添加到 `.vscode/settings.json`：
 
 ```json
 {
@@ -114,14 +111,13 @@ For VS Code project-wide association add to `.vscode/settings.json`:
 }
 ```
 
-## Commands
+<a id="commands"></a>
+
+## 命令
 
 ### `pxi`
 
-Open **PXI** (Phoenix Intelligence), an interactive terminal chat with the Phoenix
-agent. It connects to a running Phoenix instance and is the same server-side agent
-that powers the in-browser assistant — investigate failing traces, iterate on
-prompts, and drive Phoenix from your terminal.
+打开 **PXI**（Phoenix Intelligence），在终端中与 Phoenix Agent 交互式聊天。它连接到运行中的 Phoenix 实例，使用与浏览器助手相同的服务器端 Agent，可从终端调查失败追踪、迭代提示词并操作 Phoenix。
 
 ```bash
 pxi                                                          # uses PHOENIX_ENDPOINT / PHOENIX_API_KEY
@@ -129,19 +125,15 @@ pxi --endpoint http://localhost:6006 --provider OPENAI --model gpt-5.4
 npx -y @arizeai/phoenix-cli pxi                              # run without installing
 ```
 
-`pxi` requires a Phoenix server on version **20.0.0 or newer**. It checks the server
-version at startup and exits with an upgrade message against an older server.
+`pxi` 要求 Phoenix 服务器为 **20.0.0 或更高版本**。启动时会检查服务器版本，若版本较旧则显示升级提示并退出。
 
-Inside the chat, slash commands (`/help`, `/clear`, `/new`, `/temporary`,
-`/sessions`, `/model`, `/compact`, `/exit`) are handled locally. See the
-[PXI documentation](https://arize.com/docs/phoenix/pxi) for the full flag and
-slash-command reference, model setup, and privacy controls.
+聊天中的斜杠命令（`/help`、`/clear`、`/new`、`/temporary`、`/sessions`、`/model`、`/compact`、`/exit`）在本地处理。完整标志和斜杠命令参考、模型配置及隐私控制见 [PXI 文档](https://arize.com/docs/phoenix/pxi)。
 
 ---
 
 ### `px setup`
 
-Wire your app up to Phoenix. Run it from the app root:
+将应用接入 Phoenix。在应用根目录运行：
 
 ```bash
 px setup                                          # interactive
@@ -149,20 +141,12 @@ px setup --endpoint https://phoenix.example.com   # skip the endpoint prompt
 npx -y @arizeai/phoenix-cli setup                 # try without installing
 ```
 
-Setup saves the connection to a gitignored `.env.phoenix`, then optionally
-hands a coding agent (Claude Code, Codex, Cursor, OpenCode) an instrumentation
-task and waits until a real trace appears. After that it can point `px` at the
-new project and install Phoenix skills so the agent can query what you captured.
+配置流程将连接保存到被 Git 忽略的 `.env.phoenix`，然后可选地将插桩任务交给编码 Agent（Claude Code、Codex、Cursor、OpenCode），并等待真实追踪出现。之后可将 `px` 指向新项目并安装 Phoenix 技能，让 Agent 查询已捕获的数据。
 
-Along the way it offers to connect the Phoenix docs MCP server to the agent
-doing the hand-off — through the agent's own CLI where it has one (`claude mcp
-add`), else its per-project config file (`.cursor/mcp.json`, `opencode.json`).
-Taking the offer skips the `.px/docs` download entirely — the agent searches
-the docs on demand instead, which is faster to set up and cheaper in tokens.
-Any failure falls back to the download. Pass `--docs-mcp` to take the offer
-without being asked, `--no-docs-mcp` to never ask.
+过程中会提议将 Phoenix 文档 MCP 服务器连接到接手任务的 Agent：若 Agent 提供 CLI，则通过其 CLI（`claude mcp
+add`）；否则通过项目配置文件（`.cursor/mcp.json`、`opencode.json`）。接受后会完全跳过 `.px/docs` 下载，改由 Agent 按需搜索文档，配置更快且节省 Token。任何失败都会回退到下载。传入 `--docs-mcp` 可无需询问直接接受，传入 `--no-docs-mcp` 则不再询问。
 
-For CI or agents, pass flags instead of answering prompts:
+在 CI 或 Agent 中，传入标志代替回答提示：
 
 ```bash
 # Connection only — write .env.phoenix, no source changes
@@ -175,33 +159,23 @@ px setup --no-input --instrument --agent claude --yolo --language python --forma
 px setup --no-input --instrument --agent claude --yolo --docs-mcp --format raw
 ```
 
-A run that instruments is only a success if a trace actually arrived — the
-agent's own claim that it finished doesn't count. Every output says so, and so
-does the exit code:
+执行插桩的运行只有在追踪确实到达时才算成功，Agent 自称完成不算。所有输出及退出码都会体现这一点：
 
-| Exit | Meaning                                                              |
+| 退出码 | 含义                                                              |
 | ---- | -------------------------------------------------------------------- |
-| `0`  | Verified, registered only, or you chose "verify later" at the prompt |
-| `1`  | Unexpected error                                                     |
-| `2`  | Cancelled                                                            |
-| `3`  | Missing or invalid flags (the error prints the correct invocation)   |
-| `4`  | Not authenticated, or the credentials lack permission                |
-| `5`  | Could not reach the Phoenix endpoint                                 |
-| `6`  | The wait ran out with no trace — tracing is not confirmed working    |
+| `0`  | 已验证、仅注册，或在提示中选择“稍后验证” |
+| `1`  | 意外错误                                                     |
+| `2`  | 已取消                                                            |
+| `3`  | 缺失或无效标志（错误会打印正确调用方式）   |
+| `4`  | 未验证身份，或凭证权限不足                |
+| `5`  | 无法连接 Phoenix 端点                                 |
+| `6`  | 等待超时且未发现追踪，尚未确认追踪正常工作    |
 
-Only a wait that ran out gives `6`. Registering without `--instrument`, and
-answering "Finish setup — I'll verify later" at the timeout prompt, both exit
-`0` — so `px setup && npm run dev` and `set -e` scripts keep working when you
-deliberately defer.
+仅等待超时返回 `6`。不带 `--instrument` 注册，或在超时提示中选择“Finish setup — I'll verify later”，均以 `0` 退出，因此主动延后验证时，`px setup && npm run dev` 和 `set -e` 脚本仍能继续运行。
 
-In `--format json|raw`, `verification` is `verified`, `notVerified`, or
-`deferred`, and is absent when there was nothing to verify; `tracesVerified` is
-the boolean shorthand for `verification == "verified"`. `--format pretty`
-prints a `traces:` line. Don't score a run on the hand-off agent's own exit
-code — it may edit the app correctly and then exit badly, or exit cleanly
-having delivered nothing.
+在 `--format json|raw` 中，`verification` 为 `verified`、`notVerified` 或 `deferred`，无需验证时不存在；`tracesVerified` 是 `verification == "verified"` 的布尔简写。`--format pretty` 打印 `traces:` 行。不要根据接手任务的 Agent 自身退出码评定运行：它可能正确修改应用后异常退出，也可能正常退出却未交付任何内容。
 
-Re-run pieces later with:
+后续可重新运行各部分：
 
 ```bash
 px setup instrument --agent codex   # instrument and verify again
@@ -210,10 +184,7 @@ px setup skills                     # install coding-agent skills only
 
 #### `px setup mcp`
 
-Register the Phoenix **remote MCP server** (`<endpoint>/mcp`) with a coding
-agent, so the agent can search, query, and operate on your Phoenix data. The
-endpoint is inferred from `--endpoint`, the active profile, or `PHOENIX_ENDPOINT` —
-you never re-type it.
+将 Phoenix **远程 MCP 服务器**（`<endpoint>/mcp`）注册到编码 Agent，使其能够搜索、查询和操作 Phoenix 数据。端点从 `--endpoint`、当前配置档案或 `PHOENIX_ENDPOINT` 推断，无需重新输入。
 
 ```bash
 px setup mcp                        # pick scope (global default) + agent, interactively
@@ -221,15 +192,9 @@ px setup mcp --agent codex          # configure one agent
 px setup mcp --agent claude --local # write this repo's config (.mcp.json)
 ```
 
-Supported agents: `claude`, `codex`, `gemini`, `cursor`, `opencode`, `vscode`.
-Where an agent ships an `mcp add` (Claude, Codex, Gemini, VS Code global) the
-CLI drives it; the rest get a merge into their config file (`~/.cursor/mcp.json`,
-`~/.config/opencode/opencode.json`, `.vscode/mcp.json`). Scope is `--global`
-(user-wide, the default) or `--local` (this repo — Codex is global-only).
+支持的 Agent：`claude`、`codex`、`gemini`、`cursor`、`opencode`、`vscode`。Agent 提供 `mcp add` 时（Claude、Codex、Gemini、VS Code 全局配置），CLI 会调用它；其他情况则合并到配置文件（`~/.cursor/mcp.json`、`~/.config/opencode/opencode.json`、`.vscode/mcp.json`）。作用域为 `--global`（用户级，默认）或 `--local`（当前仓库；Codex 仅支持全局）。
 
-Auth defaults to **OAuth**: the config is URL-only and the agent opens Phoenix's
-browser login on first use. For headless clients, pass an API-key bearer header
-with `--header` (repeatable):
+身份验证默认使用 **OAuth**：配置仅包含 URL，Agent 首次使用时打开 Phoenix 浏览器登录。无界面客户端可通过 `--header`（可重复）传入 API 密钥 Bearer 头：
 
 ```bash
 px setup mcp --agent codex --no-input --format raw
@@ -240,20 +205,18 @@ px setup mcp --agent claude --header 'Authorization: Bearer ${PHOENIX_API_KEY}'
 
 ### `px self update`
 
-Check the npm registry for the latest CLI release and update the installed
-global CLI in place when a newer version is available.
+检查 npm 注册表中的最新 CLI 发布，存在新版本时原位更新已安装的全局 CLI。
 
 ```bash
 px self update          # show current/latest and update if needed
 px self update --check  # show current/latest without installing
 ```
 
-Automatic updates are supported for global `npm`, `pnpm`, `bun`, and standard
-`deno install -g` wrapper installs.
+支持自动更新通过全局 `npm`、`pnpm`、`bun` 以及标准 `deno install -g` 包装器安装的 CLI。
 
 ### `px trace list [directory]`
 
-Fetch recent traces from the configured project. All output is JSON.
+从配置的项目获取近期追踪。所有输出均为 JSON。
 
 ```bash
 px trace list --limit 10                          # stdout (pretty)
@@ -264,17 +227,17 @@ px trace list --since 2026-01-13T10:00:00Z       # since ISO timestamp
 px trace list --since 2026-01-13T10:00:00Z --until 2026-01-14T10:00:00Z # time range
 ```
 
-| Option                      | Description                                                 | Default  |
+| 选项                      | 说明                                                 | 默认值  |
 | --------------------------- | ----------------------------------------------------------- | -------- |
-| `[directory]`               | Save traces as JSON files to directory                      | stdout   |
-| `-n, --limit <number>`      | Number of traces (newest first)                             | 10       |
-| `--last-n-minutes <number>` | Only traces from the last N minutes                         | —        |
-| `--since <timestamp>`       | Traces since ISO timestamp                                  | —        |
-| `--until <timestamp>`       | Traces whose spans started before ISO timestamp (exclusive) | —        |
-| `--format <format>`         | `pretty`, `json`, or `raw`                                  | `pretty` |
-| `--no-progress`             | Suppress progress output                                    | —        |
-| `--include-annotations`     | Include trace and span annotations                          | —        |
-| `--include-notes`           | Include trace and span notes                                | —        |
+| `[directory]`               | 将追踪保存为目录中的 JSON 文件                      | stdout   |
+| `-n, --limit <number>`      | 追踪数量（最新优先）                             | 10       |
+| `--last-n-minutes <number>` | 仅最近 N 分钟的追踪                         | —        |
+| `--since <timestamp>`       | 从 ISO 时间戳起的追踪                                  | —        |
+| `--until <timestamp>`       | Span 在 ISO 时间戳之前开始的追踪（不包含该时刻） | —        |
+| `--format <format>`         | `pretty`、`json` 或 `raw`                                  | `pretty` |
+| `--no-progress`             | 关闭进度输出                                    | —        |
+| `--include-annotations`     | 包含追踪和 Span 标注                          | —        |
+| `--include-notes`           | 包含追踪和 Span 笔记                                | —        |
 
 ```bash
 # Find ERROR traces
@@ -292,7 +255,7 @@ px trace list --limit 50 --format raw --no-progress | \
 
 ### `px trace get <trace-id>`
 
-Fetch a single trace by ID.
+按 ID 获取单条追踪。
 
 ```bash
 px trace get abc123def456
@@ -305,7 +268,7 @@ px trace get abc123def456 --include-notes --format raw | jq '{traceNotes: .notes
 
 ### `px trace annotate <trace-id>`
 
-Create or update a human trace annotation by OpenTelemetry trace ID.
+按 OpenTelemetry 追踪 ID 创建或更新人工追踪标注。
 
 ```bash
 px trace annotate abc123def456 --name reviewer --label pass
@@ -318,7 +281,7 @@ px trace annotate abc123def456 --name reviewer --explanation "needs follow-up"
 
 ### `px trace add-note <trace-id>`
 
-Add a note to a trace by OpenTelemetry trace ID.
+按 OpenTelemetry 追踪 ID 为追踪添加笔记。
 
 ```bash
 px trace add-note abc123def456 --text "needs follow-up"
@@ -329,7 +292,7 @@ px trace add-note abc123def456 --text "agent triage complete" --format raw --no-
 
 ### `px trace-annotations delete`
 
-Delete trace annotations for the configured project. Requires `--all` (delete every matching row) **or** both `--start-time` and `--end-time` to bound the delete to a `[start_time, end_time)` window — `--name`, `--identifier`, and `--annotator-kind` are narrowing filters and never authorize the request on their own. Deletes are disabled by default; set `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES=true` first.
+删除配置项目的追踪标注。必须指定 `--all`（删除所有匹配行），**或**同时指定 `--start-time` 和 `--end-time`，将删除限制在 `[start_time, end_time)` 窗口内。`--name`、`--identifier` 和 `--annotator-kind` 只用于缩小范围，绝不能单独授权请求。删除默认禁用，请先设置 `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES=true`。
 
 ```bash
 px trace-annotations delete --identifier "$PHOENIX_CODING_IDENTIFIER" --all -y
@@ -337,13 +300,13 @@ px trace-annotations delete --identifier "$PHOENIX_CODING_IDENTIFIER" --all -y -
 px trace-annotations delete --start-time 2026-01-01T00:00:00Z --end-time 2026-01-02T00:00:00Z -y
 ```
 
-Output (json/raw): `{ deleted: true, target: "trace", filter: { identifier?, name?, annotator_kind?, start_time?, end_time?, all? } }`.
+输出（json/raw）： `{ deleted: true, target: "trace", filter: { identifier?, name?, annotator_kind?, start_time?, end_time?, all? } }`.
 
 ---
 
 ### `px span list [file]`
 
-Fetch spans for the configured project with filtering options. Output is JSON.
+从配置的项目获取 Span，支持过滤选项，输出为 JSON。
 
 ```bash
 px span list --limit 50                                    # stdout (pretty)
@@ -357,23 +320,23 @@ px span list --last-n-minutes 30 --span-kind TOOL RETRIEVER # multiple span kind
 px span list --since 2026-07-01T00:00:00Z --until 2026-07-02T00:00:00Z # time range
 ```
 
-| Option                      | Description                                                                                                                                  | Default  |
+| 选项                      | 说明                                                                                                                                  | 默认值  |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `[file]`                    | Save spans as JSON to file                                                                                                                   | stdout   |
-| `-n, --limit <number>`      | Maximum number of spans (newest first)                                                                                                       | `100`    |
-| `--last-n-minutes <number>` | Only spans from the last N minutes                                                                                                           | —        |
-| `--since <timestamp>`       | Spans since ISO timestamp                                                                                                                    | —        |
-| `--until <timestamp>`       | Spans started before ISO timestamp (exclusive)                                                                                               | —        |
-| `--span-kind <kinds...>`    | Filter by span kind (`LLM`, `CHAIN`, `TOOL`, `RETRIEVER`, `EMBEDDING`, `AGENT`, `RERANKER`, `GUARDRAIL`, `EVALUATOR`, `DECISION`, `UNKNOWN`) | —        |
-| `--status-code <codes...>`  | Filter by status code (`OK`, `ERROR`, `UNSET`)                                                                                               | —        |
-| `--name <names...>`         | Filter by span name(s)                                                                                                                       | —        |
-| `--trace-id <ids...>`       | Filter by trace ID(s)                                                                                                                        | —        |
-| `--span-id <ids...>`        | Filter by OpenTelemetry span ID(s). Requires Phoenix server >= 19.6.0.                                                                       | —        |
-| `--parent-id <id>`          | Filter by parent span ID (use `"null"` for root spans only)                                                                                  | —        |
-| `--include-annotations`     | Include span annotations in the output                                                                                                       | —        |
-| `--include-notes`           | Include span notes in the output                                                                                                             | —        |
-| `--format <format>`         | `pretty`, `json`, or `raw`                                                                                                                   | `pretty` |
-| `--no-progress`             | Suppress progress output                                                                                                                     | —        |
+| `[file]`                    | 将 Span 以 JSON 保存到文件                                                                                                                   | stdout   |
+| `-n, --limit <number>`      | Span 最大数量（最新优先）                                                                                                       | `100`    |
+| `--last-n-minutes <number>` | 仅最近 N 分钟的 Span                                                                                                           | —        |
+| `--since <timestamp>`       | 从 ISO 时间戳起的 Span                                                                                                                    | —        |
+| `--until <timestamp>`       | 在 ISO 时间戳之前开始的 Span（不包含该时刻）                                                                                               | —        |
+| `--span-kind <kinds...>`    | 按 Span 类型过滤 (`LLM`, `CHAIN`, `TOOL`, `RETRIEVER`, `EMBEDDING`, `AGENT`, `RERANKER`, `GUARDRAIL`, `EVALUATOR`, `DECISION`, `UNKNOWN`) | —        |
+| `--status-code <codes...>`  | 按状态码过滤 (`OK`, `ERROR`, `UNSET`)                                                                                               | —        |
+| `--name <names...>`         | 按 Span 名称过滤                                                                                                                       | —        |
+| `--trace-id <ids...>`       | 按追踪 ID 过滤                                                                                                                        | —        |
+| `--span-id <ids...>`        | 按 OpenTelemetry Span ID 过滤。要求 Phoenix 服务器 >= 19.6.0。                                                                       | —        |
+| `--parent-id <id>`          | 按父 Span ID 过滤（使用 `"null"` 表示仅根 Span）                                                                                  | —        |
+| `--include-annotations`     | 输出中包含 Span 标注                                                                                                       | —        |
+| `--include-notes`           | 输出中包含 Span 笔记                                                                                                             | —        |
+| `--format <format>`         | `pretty`、`json` 或 `raw`                                                                                                                   | `pretty` |
+| `--no-progress`             | 关闭进度输出                                                                                                                     | —        |
 
 ```bash
 # Find all ERROR spans
@@ -391,7 +354,7 @@ px span list --parent-id null --format raw --no-progress | jq 'sort_by(.name)'
 
 ### `px span annotate <span-id>`
 
-Create or update a human span annotation by OpenTelemetry span ID.
+按 OpenTelemetry Span ID 创建或更新人工 Span 标注。
 
 ```bash
 px span annotate 7e2f08cb43bbf521 --name reviewer --label pass
@@ -404,7 +367,7 @@ px span annotate 7e2f08cb43bbf521 --name reviewer --explanation "looks good"
 
 ### `px span add-note <span-id>`
 
-Add a note to a span by OpenTelemetry span ID.
+按 OpenTelemetry Span ID 为 Span 添加笔记。
 
 ```bash
 px span add-note 7e2f08cb43bbf521 --text "double-check tool output"
@@ -415,7 +378,7 @@ px span add-note 7e2f08cb43bbf521 --text "verified by agent" --format raw --no-p
 
 ### `px span-annotations delete`
 
-Delete span annotations for the configured project. Same authorization gate as `px trace-annotations delete` — requires `--all` or both `--start-time` and `--end-time`.
+删除配置项目的 Span 标注。授权条件与 `px trace-annotations delete` 相同，要求 `--all` 或同时指定 `--start-time` 和 `--end-time`。
 
 ```bash
 px span-annotations delete --identifier "$PHOENIX_CODING_IDENTIFIER" --all -y
@@ -425,7 +388,7 @@ px span-annotations delete --identifier "$PHOENIX_CODING_IDENTIFIER" --all -y
 
 ### `px dataset list`
 
-List all datasets.
+列出所有数据集。
 
 ```bash
 px dataset list --format raw --no-progress | jq '.[].name'
@@ -435,7 +398,7 @@ px dataset list --format raw --no-progress | jq '.[].name'
 
 ### `px dataset get <dataset-identifier>`
 
-Fetch examples from a dataset.
+从数据集获取示例。
 
 ```bash
 px dataset get my-dataset --format raw | jq '.examples[].input'
@@ -448,7 +411,7 @@ px dataset get my-dataset --file dataset.json
 
 ### `px experiment list --dataset <name-or-id>`
 
-List experiments for a dataset.
+列出数据集的实验。
 
 ```bash
 px experiment list --dataset my-dataset --format raw --no-progress | \
@@ -459,7 +422,7 @@ px experiment list --dataset my-dataset --format raw --no-progress | \
 
 ### `px experiment get <experiment-id>`
 
-Fetch a single experiment with all run data (inputs, outputs, evaluations, trace IDs).
+获取单个实验及全部运行数据（输入、输出、评估、追踪 ID）。
 
 ```bash
 # Find failed runs
@@ -475,7 +438,7 @@ px experiment get RXhwZXJpbWVudDox --format raw --no-progress | \
 
 ### `px prompt list`
 
-List all prompts.
+列出所有提示词。
 
 ```bash
 px prompt list --format raw --no-progress | jq '.[].name'
@@ -485,24 +448,24 @@ px prompt list --format raw --no-progress | jq '.[].name'
 
 ### `px prompt get <prompt-identifier>`
 
-Fetch a prompt. The `text` format is ideal for piping to AI assistants.
+获取提示词。`text` 格式适合通过管道传给 AI 助手。
 
 ```bash
 px prompt get my-evaluator --format text --no-progress | claude -p "Review this prompt"
 px prompt get my-evaluator --tag production --format json | jq '.template'
 ```
 
-| Option              | Description                        | Default  |
+| 选项              | 说明                        | 默认值  |
 | ------------------- | ---------------------------------- | -------- |
-| `--tag <name>`      | Get version by tag                 | —        |
-| `--version <id>`    | Get specific version               | latest   |
-| `--format <format>` | `pretty`, `json`, `raw`, or `text` | `pretty` |
+| `--tag <name>`      | 按标签获取版本                 | —        |
+| `--version <id>`    | 获取指定版本               | 最新版本   |
+| `--format <format>` | `pretty`、`json`、`raw` 或 `text` | `pretty` |
 
 ---
 
 ### `px project list`
 
-List all available Phoenix projects.
+列出所有可用 Phoenix 项目。
 
 ```bash
 px project list                                           # pretty output
@@ -510,17 +473,17 @@ px project list --format raw --no-progress | jq '.[].name'
 px project list --limit 5
 ```
 
-| Option              | Description                         | Default  |
+| 选项              | 说明                         | 默认值  |
 | ------------------- | ----------------------------------- | -------- |
-| `--limit <number>`  | Maximum number of projects per page | —        |
-| `--format <format>` | `pretty`, `json`, or `raw`          | `pretty` |
-| `--no-progress`     | Suppress progress output            | —        |
+| `--limit <number>`  | 每页项目最大数量 | —        |
+| `--format <format>` | `pretty`、`json` 或 `raw`          | `pretty` |
+| `--no-progress`     | 关闭进度输出            | —        |
 
 ---
 
 ### `px project get <name>`
 
-Fetch a single Phoenix project by exact name. Output is a single record (not an array) — JSON and raw modes emit a bare object. On a name miss, exits with `ExitCode.FAILURE` (1) and writes a `StructuredError` JSON envelope to stderr in `--format json|raw`.
+按精确名称获取单个 Phoenix 项目。输出为单条记录（非数组），JSON 和 raw 模式输出裸对象。名称未匹配时，以 `ExitCode.FAILURE`（1）退出，并在 `--format json|raw` 下向 stderr 写入 `StructuredError` JSON 对象。
 
 ```bash
 px project get my-project
@@ -528,19 +491,19 @@ px project get my-project --format raw --no-progress | jq -r '.id'
 px project get my-project --format json
 ```
 
-| Option              | Description                         | Default  |
+| 选项              | 说明                         | 默认值  |
 | ------------------- | ----------------------------------- | -------- |
-| `--format <format>` | `pretty`, `json`, or `raw`          | `pretty` |
-| `--limit <number>`  | Page size for the underlying lookup | `100`    |
-| `--no-progress`     | Suppress progress output            | —        |
+| `--format <format>` | `pretty`、`json` 或 `raw`          | `pretty` |
+| `--limit <number>`  | 底层查询的页面大小 | `100`    |
+| `--no-progress`     | 关闭进度输出            | —        |
 
-Miss-case stderr (raw): `{"error":"Project 'foo' not found","code":"FAILURE","hint":"px project list --format raw"}`.
+未匹配时的 stderr（raw）： `{"error":"Project 'foo' not found","code":"FAILURE","hint":"px project list --format raw"}`.
 
 ---
 
 ### `px session list`
 
-List sessions for a project.
+列出项目会话。
 
 ```bash
 px session list                                            # latest 10 sessions
@@ -549,20 +512,20 @@ px session list --format raw --no-progress | jq '.[].session_id'
 px session list --include-annotations --include-notes --format raw | jq '.[].notes'
 ```
 
-| Option                  | Description                                  | Default  |
+| 选项                  | 说明                                  | 默认值  |
 | ----------------------- | -------------------------------------------- | -------- |
-| `-n, --limit <number>`  | Maximum number of sessions                   | `10`     |
-| `--order <order>`       | Sort order: `asc` or `desc`                  | `desc`   |
-| `--include-annotations` | Include session annotations, excluding notes | —        |
-| `--include-notes`       | Include session notes when present           | —        |
-| `--format <format>`     | `pretty`, `json`, or `raw`                   | `pretty` |
-| `--no-progress`         | Suppress progress output                     | —        |
+| `-n, --limit <number>`  | 会话最大数量                   | `10`     |
+| `--order <order>`       | 排序方向：`asc` 或 `desc`                  | `desc`   |
+| `--include-annotations` | 包含会话标注，不含笔记 | —        |
+| `--include-notes`       | 存在会话笔记时包含笔记           | —        |
+| `--format <format>`     | `pretty`、`json` 或 `raw`                   | `pretty` |
+| `--no-progress`         | 关闭进度输出                     | —        |
 
 ---
 
 ### `px session get <session-id>`
 
-View a session's conversation flow.
+查看会话的对话流程。
 
 ```bash
 px session get my-session-id
@@ -571,19 +534,19 @@ px session get my-session-id --include-annotations --format raw | jq '.session.a
 px session get my-session-id --include-notes --format raw | jq '.session.notes'
 ```
 
-| Option                  | Description                                  | Default  |
+| 选项                  | 说明                                  | 默认值  |
 | ----------------------- | -------------------------------------------- | -------- |
-| `--file <path>`         | Save session to file instead of stdout       | —        |
-| `--include-annotations` | Include session annotations, excluding notes | —        |
-| `--include-notes`       | Include session notes when present           | —        |
-| `--format <format>`     | `pretty`, `json`, or `raw`                   | `pretty` |
-| `--no-progress`         | Suppress progress output                     | —        |
+| `--file <path>`         | 将会话保存到文件，不输出到 stdout       | —        |
+| `--include-annotations` | 包含会话标注，不含笔记 | —        |
+| `--include-notes`       | 存在会话笔记时包含笔记           | —        |
+| `--format <format>`     | `pretty`、`json` 或 `raw`                   | `pretty` |
+| `--no-progress`         | 关闭进度输出                     | —        |
 
 ---
 
 ### `px session annotate <session-id>`
 
-Create or update a human session annotation by GlobalID or user-provided `session_id`.
+按 GlobalID 或用户提供的 `session_id` 创建或更新人工会话标注。
 
 ```bash
 px session annotate my-session-id --name reviewer --label pass
@@ -596,7 +559,7 @@ px session annotate my-session-id --name reviewer --explanation "needs follow-up
 
 ### `px session add-note <session-id>`
 
-Add a note to a session by GlobalID or user-provided `session_id`. Requires Phoenix server `14.17.0` or newer.
+按 GlobalID 或用户提供的 `session_id` 为会话添加笔记。要求 Phoenix 服务器 `14.17.0` 或更高版本。
 
 ```bash
 px session add-note my-session-id --text "needs follow-up"
@@ -607,7 +570,7 @@ px session add-note my-session-id --text "agent triage complete" --format raw --
 
 ### `px session-annotations delete`
 
-Delete session annotations for the configured project. Same authorization gate as the trace/span equivalents — requires `--all` or both `--start-time` and `--end-time`.
+删除配置项目的会话标注。授权条件与追踪/Span 对应命令相同，要求 `--all` 或同时指定 `--start-time` 和 `--end-time`。
 
 ```bash
 px session-annotations delete --identifier "$PHOENIX_CODING_IDENTIFIER" --all -y
@@ -615,11 +578,13 @@ px session-annotations delete --identifier "$PHOENIX_CODING_IDENTIFIER" --all -y
 
 ---
 
-Annotation configs come in three types — `CATEGORICAL` (a fixed set of labels, each with an optional numeric score), `CONTINUOUS` (a numeric range), and `FREEFORM` (free text). The `create`, `get`, `update`, and `delete` commands round out full CRUD alongside `list`.
+标注配置有三种类型：`CATEGORICAL`（固定标签集合，每个标签可选关联数值分数）、`CONTINUOUS`（数值范围）和 `FREEFORM`（自由文本）。`create`、`get`、`update`、`delete` 与 `list` 一起提供完整增删改查。
 
-#### Specifying categorical values
+<a id="specifying-categorical-values"></a>
 
-`create` and `update` accept categorical labels the same way, so you only learn it once. Prefer the repeatable, shell-friendly flag; the JSON form is a bulk/agent alternative.
+#### 指定分类值
+
+`create` 和 `update` 接收分类标签的方式相同，只需学习一次。优先使用可重复、适合 shell 的标志；JSON 形式是适合批量/Agent 的替代方式。
 
 ```bash
 # Repeatable flag: label with an optional score (label=score, or just label)
@@ -629,13 +594,13 @@ Annotation configs come in three types — `CATEGORICAL` (a fixed set of labels,
 --values '[{"label":"good","score":1},{"label":"bad","score":0}]'
 ```
 
-The two forms are mutually exclusive — pass one or the other, not both.
+两种形式互斥，只能传入其中一种。
 
 ---
 
 ### `px annotation-config list`
 
-List annotation configurations defined in your Phoenix instance.
+列出 Phoenix 实例定义的标注配置。
 
 ```bash
 # Show all annotation configs as a table
@@ -648,16 +613,16 @@ px annotation-config list --format raw --no-progress | jq -r '.[].name'
 px annotation-config list --limit 10
 ```
 
-| Option              | Description                | Default  |
+| 选项              | 说明                | 默认值  |
 | ------------------- | -------------------------- | -------- |
-| `--format <format>` | `pretty`, `json`, or `raw` | `pretty` |
-| `--no-progress`     | Suppress progress output   | —        |
+| `--format <format>` | `pretty`、`json` 或 `raw` | `pretty` |
+| `--no-progress`     | 关闭进度输出   | —        |
 
 ---
 
 ### `px annotation-config get <config-identifier>`
 
-Fetch a single annotation configuration by name or ID. The config is written to stdout in the selected `--format` (a single object for `raw`/`json`).
+按名称或 ID 获取单个标注配置，并按选定 `--format` 写入 stdout（`raw`/`json` 为单个对象）。
 
 ```bash
 # Look up a config by name
@@ -670,16 +635,16 @@ px annotation-config get response-quality --format raw --no-progress | jq -r '.i
 px annotation-config get response-quality --format raw --no-progress | jq '.values'
 ```
 
-| Option              | Description                | Default  |
+| 选项              | 说明                | 默认值  |
 | ------------------- | -------------------------- | -------- |
-| `--format <format>` | `pretty`, `json`, or `raw` | `pretty` |
-| `--no-progress`     | Suppress progress output   | —        |
+| `--format <format>` | `pretty`、`json` 或 `raw` | `pretty` |
+| `--no-progress`     | 关闭进度输出   | —        |
 
 ---
 
 ### `px annotation-config create`
 
-Create a new annotation configuration via `POST /v1/annotation_configs`. The created config is written to stdout in the selected `--format`.
+通过 `POST /v1/annotation_configs` 创建新标注配置，并按选定 `--format` 将创建的配置写入 stdout。
 
 ```bash
 # Pass/fail quality rating with scored labels (higher is better)
@@ -702,27 +667,27 @@ px annotation-config create --type CATEGORICAL --name response-quality \
   --format raw --no-progress | jq -r '.id'
 ```
 
-| Option                           | Description                                           | Default  |
+| 选项                           | 说明                                           | 默认值  |
 | -------------------------------- | ----------------------------------------------------- | -------- |
-| `--type <type>`                  | `CATEGORICAL`, `CONTINUOUS`, or `FREEFORM` (required) | —        |
-| `--name <name>`                  | Annotation config name (required)                     | —        |
-| `--description <description>`    | Description                                           | —        |
-| `--optimization-direction <dir>` | `MINIMIZE`, `MAXIMIZE`, or `NONE`                     | `NONE`   |
-| `--value <label[=score]>`        | Categorical label (repeatable; CATEGORICAL configs)   | —        |
-| `--values <json>`                | Categorical values as JSON (CATEGORICAL configs)      | —        |
-| `--lower-bound <number>`         | Lower bound (CONTINUOUS/FREEFORM configs)             | —        |
-| `--upper-bound <number>`         | Upper bound (CONTINUOUS/FREEFORM configs)             | —        |
-| `--threshold <number>`           | Threshold (FREEFORM configs)                          | —        |
-| `--format <format>`              | `pretty`, `json`, or `raw`                            | `pretty` |
-| `--no-progress`                  | Suppress progress output                              | —        |
+| `--type <type>`                  | `CATEGORICAL`、`CONTINUOUS` 或 `FREEFORM`（必填） | —        |
+| `--name <name>`                  | 标注配置名称（必填）                     | —        |
+| `--description <description>`    | 说明                                           | —        |
+| `--optimization-direction <dir>` | `MINIMIZE`、`MAXIMIZE` 或 `NONE`                     | `NONE`   |
+| `--value <label[=score]>`        | 分类标签（可重复；CATEGORICAL 配置）   | —        |
+| `--values <json>`                | JSON 格式的分类值（CATEGORICAL 配置）      | —        |
+| `--lower-bound <number>`         | 下界（CONTINUOUS/FREEFORM 配置）             | —        |
+| `--upper-bound <number>`         | 上界（CONTINUOUS/FREEFORM 配置）             | —        |
+| `--threshold <number>`           | 阈值（FREEFORM 配置）                          | —        |
+| `--format <format>`              | `pretty`、`json` 或 `raw`                            | `pretty` |
+| `--no-progress`                  | 关闭进度输出                              | —        |
 
-`--type` and `--name` are required; a `CATEGORICAL` config also requires at least one value. `--type` and `--optimization-direction` are case-insensitive. Invalid input — including flags that don't apply to the chosen type — exits with `INVALID_ARGUMENT`.
+`--type` 和 `--name` 必填；`CATEGORICAL` 配置还要求至少一个值。`--type` 和 `--optimization-direction` 不区分大小写。输入无效时（包括不适用于所选类型的标志）以 `INVALID_ARGUMENT` 退出。
 
 ---
 
 ### `px annotation-config update <config-identifier>`
 
-Update an annotation configuration by name or ID. Only the fields you pass are changed — the command fetches the existing config, merges your flags, and writes the result back via `PUT /v1/annotation_configs/{id}`. The config `type` is immutable; to change it, delete and recreate the config. The updated config is written to stdout in the selected `--format`.
+按名称或 ID 更新标注配置，仅修改传入字段。命令获取现有配置、合并标志，并通过 `PUT /v1/annotation_configs/{id}` 写回结果。配置的 `type` 不可变；若需修改，必须删除后重新创建。更新后的配置按选定 `--format` 写入 stdout。
 
 ```bash
 # Change only the description; every other field is preserved
@@ -741,26 +706,26 @@ px annotation-config update confidence --lower-bound -1 --upper-bound 1
 px annotation-config update response-quality --description 'Updated' --format raw --no-progress | jq -r '.id'
 ```
 
-| Option                           | Description                                         | Default  |
+| 选项                           | 说明                                         | 默认值  |
 | -------------------------------- | --------------------------------------------------- | -------- |
-| `--name <name>`                  | New name                                            | —        |
-| `--description <description>`    | New description                                     | —        |
-| `--optimization-direction <dir>` | `MINIMIZE`, `MAXIMIZE`, or `NONE`                   | —        |
-| `--value <label[=score]>`        | Categorical label (repeatable; CATEGORICAL configs) | —        |
-| `--values <json>`                | Categorical values as JSON (CATEGORICAL configs)    | —        |
-| `--lower-bound <number>`         | Lower bound (CONTINUOUS/FREEFORM configs)           | —        |
-| `--upper-bound <number>`         | Upper bound (CONTINUOUS/FREEFORM configs)           | —        |
-| `--threshold <number>`           | Threshold (FREEFORM configs)                        | —        |
-| `--format <format>`              | `pretty`, `json`, or `raw`                          | `pretty` |
-| `--no-progress`                  | Suppress progress output                            | —        |
+| `--name <name>`                  | 新名称                                            | —        |
+| `--description <description>`    | 新说明                                     | —        |
+| `--optimization-direction <dir>` | `MINIMIZE`、`MAXIMIZE` 或 `NONE`                   | —        |
+| `--value <label[=score]>`        | 分类标签（可重复；CATEGORICAL 配置） | —        |
+| `--values <json>`                | JSON 格式的分类值（CATEGORICAL 配置）    | —        |
+| `--lower-bound <number>`         | 下界（CONTINUOUS/FREEFORM 配置）           | —        |
+| `--upper-bound <number>`         | 上界（CONTINUOUS/FREEFORM 配置）           | —        |
+| `--threshold <number>`           | 阈值（FREEFORM 配置）                        | —        |
+| `--format <format>`              | `pretty`、`json` 或 `raw`                          | `pretty` |
+| `--no-progress`                  | 关闭进度输出                            | —        |
 
-At least one field flag is required. Invalid input — including flags that don't apply to the config's type (e.g. `--value` on a continuous config) — exits with `INVALID_ARGUMENT`.
+至少需要一个字段标志。输入无效时（包括不适用于配置类型的标志，例如连续型配置使用 `--value`）以 `INVALID_ARGUMENT` 退出。
 
 ---
 
 ### `px annotation-config delete <config-id>`
 
-Delete an annotation configuration by ID. Like all delete commands, this is disabled unless `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES=true` is set, and prompts for confirmation unless `--yes` is passed.
+按 ID 删除标注配置。与所有删除命令一样，未设置 `PHOENIX_CLI_DANGEROUSLY_ENABLE_DELETES=true` 时禁用；未传入 `--yes` 时会要求确认。
 
 ```bash
 # Delete with an interactive confirmation prompt
@@ -773,20 +738,18 @@ px annotation-config delete QW5ub3RhdGlvbkNvbmZpZzoxMjM= --yes
 px annotation-config get response-quality --format raw --no-progress | jq -r '.id' | xargs px annotation-config delete --yes
 ```
 
-| Option          | Description              | Default |
+| 选项          | 说明              | 默认值 |
 | --------------- | ------------------------ | ------- |
-| `-y, --yes`     | Skip confirmation prompt | —       |
-| `--no-progress` | Suppress progress output | —       |
+| `-y, --yes`     | 跳过确认提示 | —       |
+| `--no-progress` | 关闭进度输出 | —       |
 
 ---
 
 ### `px auth login`
 
-Log in with the browser-based OAuth flow and store tokens on the selected profile. The URL is always printed to stderr, so SSH and headless users can open it manually. OAuth CLI sessions act with the permissions of the user who logged in.
+通过浏览器 OAuth 流程登录，并将令牌保存在所选配置档案中。URL 始终打印到 stderr，方便 SSH 和无界面用户手动打开。OAuth CLI 会话以登录用户的权限运行。
 
-The CLI refreshes expiring access tokens automatically for REST, GraphQL, and
-PXI requests. A request rejected with `401` triggers one refresh and retry;
-rotated tokens are persisted back to the selected profile.
+CLI 自动为 REST、GraphQL 和 PXI 请求刷新即将到期的访问令牌。请求被以 `401` 拒绝时，触发一次刷新和重试；轮换后的令牌保存回所选配置档案。
 
 ```bash
 px auth login
@@ -794,18 +757,18 @@ px auth login --no-browser
 px auth login --profile staging --format raw
 ```
 
-| Option              | Description                            | Default  |
+| 选项              | 说明                            | 默认值  |
 | ------------------- | -------------------------------------- | -------- |
-| `--endpoint <url>`  | Phoenix API endpoint                   | —        |
-| `--api-key <key>`   | Phoenix API key                        | —        |
-| `--profile <name>`  | Profile to store OAuth tokens in       | active   |
-| `--no-browser`      | Print URL without opening a browser    | —        |
-| `--no-input`        | Do not prompt for pasted redirect URLs | —        |
-| `--format <format>` | `pretty`, `json`, or `raw`             | `pretty` |
+| `--endpoint <url>`  | Phoenix API 端点                   | —        |
+| `--api-key <key>`   | Phoenix API 密钥                        | —        |
+| `--profile <name>`  | 保存 OAuth 令牌的配置档案       | 当前档案   |
+| `--no-browser`      | 打印 URL，不打开浏览器    | —        |
+| `--no-input`        | 不提示粘贴重定向 URL | —        |
+| `--format <format>` | `pretty`、`json` 或 `raw`             | `pretty` |
 
 ### `px auth logout`
 
-Clear OAuth tokens from the selected profile. Logout best-effort revokes the refresh token on the server and leaves any configured API key untouched.
+清除所选配置档案中的 OAuth 令牌。退出登录会尽力在服务器上撤销刷新令牌，不修改已配置的 API 密钥。
 
 ```bash
 px auth logout
@@ -815,7 +778,7 @@ px auth logout --format raw
 
 ### `px auth status`
 
-Show current Phoenix authentication status, including the configured endpoint, credential source, identity, and OAuth access level/expiry when applicable.
+显示当前 Phoenix 身份验证状态，包括配置端点、凭证来源、身份，以及适用时的 OAuth 访问级别/到期时间。
 
 ```bash
 px auth status
@@ -823,40 +786,40 @@ px auth status --endpoint http://localhost:6006
 px auth status --profile staging --format raw
 ```
 
-| Option              | Description                | Default  |
+| 选项              | 说明                | 默认值  |
 | ------------------- | -------------------------- | -------- |
-| `--endpoint <url>`  | Phoenix API endpoint       | —        |
-| `--api-key <key>`   | Phoenix API key            | —        |
-| `--profile <name>`  | Profile to use             | active   |
-| `--format <format>` | `pretty`, `json`, or `raw` | `pretty` |
+| `--endpoint <url>`  | Phoenix API 端点       | —        |
+| `--api-key <key>`   | Phoenix API 密钥            | —        |
+| `--profile <name>`  | 要使用的配置档案             | 当前档案   |
+| `--format <format>` | `pretty`、`json` 或 `raw` | `pretty` |
 
 ---
 
 ### `px api graphql <query>`
 
-Make authenticated GraphQL queries against the Phoenix API. Output is `{"data": {...}}` JSON — pipe with `jq '.data.<field>'` to extract values. Only queries are permitted; mutations and subscriptions are rejected.
+对 Phoenix API 执行已验证身份的 GraphQL 查询。输出为 `{"data": {...}}` JSON，可通过管道使用 `jq '.data.<field>'` 提取值。仅允许查询，拒绝变更和订阅。
 
 ```bash
 px api graphql '<query>' [--endpoint <url>] [--api-key <key>]
 ```
 
-Preview the exact HTTP request as `curl` without executing it:
+将确切 HTTP 请求预览为 `curl`，但不执行：
 
 ```bash
 px api graphql '{ projects { edges { node { name } } } }' --curl
 px api graphql '{ projects { edges { node { name } } } }' --curl --show-token
 ```
 
-`--curl` prints the equivalent request to stdout and exits without making a network call. Authorization headers are masked by default, including values supplied through `PHOENIX_API_KEY` or `PHOENIX_CLIENT_HEADERS`. Use `--show-token` only when you explicitly need the raw credential in the generated command.
+`--curl` 将等价请求打印到 stdout 后退出，不发起网络调用。授权头默认脱敏，包括通过 `PHOENIX_API_KEY` 或 `PHOENIX_CLIENT_HEADERS` 提供的值。仅在明确需要生成命令包含原始凭证时使用 `--show-token`。
 
-Current scope and behavior:
+当前范围和行为：
 
-- `--curl` is currently implemented for `px api graphql` only.
-- `--curl` prints the request without executing it.
-- `--show-token` is only valid with `--curl`.
-- Authorization masking and header normalization are designed to match the live request behavior used by `fetch`.
+- `--curl` 当前仅支持 `px api graphql`。
+- `--curl` 打印请求，不执行请求。
+- `--show-token` 仅与 `--curl` 一起使用时有效。
+- 授权脱敏和请求头规范化与 `fetch` 实际请求行为保持一致。
 
-Use introspection to discover what fields are available:
+使用内省发现可用字段：
 
 ```bash
 $ px api graphql '{ __schema { queryType { fields { name } } } }' | jq '.data.__schema.queryType.fields[].name'
@@ -877,7 +840,7 @@ $ px api graphql '{ __type(name: "Experiment") { fields { name type { name } } }
 {"name":"averageRunLatencyMs","type":"Float"}
 ```
 
-**Projects:**
+**项目：**
 
 ```bash
 $ px api graphql '{ projects { edges { node { name traceCount tokenCountTotal } } } }' | \
@@ -885,7 +848,7 @@ $ px api graphql '{ projects { edges { node { name traceCount tokenCountTotal } 
 {"name": "default", "traceCount": 1482, "tokenCountTotal": 219083}
 ```
 
-**Datasets:**
+**数据集：**
 
 ```bash
 $ px api graphql '{ datasets { edges { node { name exampleCount experimentCount } } } }' | \
@@ -894,7 +857,7 @@ $ px api graphql '{ datasets { edges { node { name exampleCount experimentCount 
 {"name": "rag-test-cases", "exampleCount": 50, "experimentCount": 1}
 ```
 
-**Experiments:**
+**实验：**
 
 ```bash
 # List experiments per dataset with error rate and avg latency
@@ -919,7 +882,7 @@ $ px api graphql '{
 }' | jq '.. | objects | select(.errorRate? > 0) | {name, errorRate, runCount}'
 ```
 
-**Counts at a glance:**
+**计数概览：**
 
 ```bash
 $ px api graphql '{ projectCount datasetCount promptCount evaluatorCount }'
@@ -930,7 +893,7 @@ $ px api graphql '{ projectCount datasetCount promptCount evaluatorCount }'
 
 ### `px docs fetch`
 
-Download Phoenix documentation markdown files for use by coding agents. Fetches pages from the [llms.txt](https://arize.com/docs/phoenix/llms.txt) index, filtered by workflow category, and writes them to a local directory with auto-generated index files.
+下载 Phoenix 文档 Markdown 文件供编码 Agent 使用。从 [llms.txt](https://arize.com/docs/phoenix/llms.txt) 索引获取页面，按工作流类别过滤，并写入本地目录，同时自动生成索引文件。
 
 ```bash
 px docs fetch                                # fetch default workflows
@@ -940,27 +903,29 @@ px docs fetch --dry-run                      # preview without downloading
 px docs fetch --refresh                      # clear output dir and re-download
 ```
 
-| Option               | Description                                                                                                                                    | Default                                                        |
+| 选项               | 说明                                                                                                                                    | 默认值                                                        |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `--workflow <name>`  | Filter by workflow category (repeatable). Values: `tracing`, `evaluation`, `datasets`, `prompts`, `integrations`, `sdk`, `self-hosting`, `all` | `tracing`, `evaluation`, `datasets`, `prompts`, `integrations` |
-| `--output-dir <dir>` | Output directory for downloaded docs                                                                                                           | `.px/docs`                                                     |
-| `--dry-run`          | Discover links only; do not write files                                                                                                        | `false`                                                        |
-| `--refresh`          | Clear output directory before downloading                                                                                                      | `false`                                                        |
-| `--strict`           | Fail command if any page download fails                                                                                                        | `false`                                                        |
-| `--workers <n>`      | Number of concurrent download workers                                                                                                          | `10`                                                           |
+| `--workflow <name>`  | 按工作流类别过滤（可重复）。取值： `tracing`, `evaluation`, `datasets`, `prompts`, `integrations`, `sdk`, `self-hosting`, `all` | `tracing`, `evaluation`, `datasets`, `prompts`, `integrations` |
+| `--output-dir <dir>` | 下载文档的输出目录                                                                                                           | `.px/docs`                                                     |
+| `--dry-run`          | 仅发现链接，不写入文件                                                                                                        | `false`                                                        |
+| `--refresh`          | 下载前清空输出目录                                                                                                      | `false`                                                        |
+| `--strict`           | 任意页面下载失败时使命令失败                                                                                                        | `false`                                                        |
+| `--workers <n>`      | 并发下载工作线程数                                                                                                          | `10`                                                           |
 
 ---
 
-## JSON output shape
+<a id="json-output-shape"></a>
 
-All commands output JSON. Use `--format raw` for compact JSON and `--no-progress` to suppress stderr when piping:
+## JSON 输出结构
+
+所有命令都输出 JSON。通过管道传递时，使用 `--format raw` 获取紧凑 JSON，并使用 `--no-progress` 关闭 stderr 进度输出：
 
 ```bash
 px trace list --format raw --no-progress | jq ...
 px dataset list --format raw --no-progress | jq ...
 ```
 
-Trace JSON structure:
+追踪 JSON 结构：
 
 ```json
 {
@@ -984,15 +949,17 @@ Trace JSON structure:
 }
 ```
 
-`px api graphql` output always wraps results in `{"data": {...}}`. Pipe with `jq '.data.<field>'` to extract.
+`px api graphql` 输出始终将结果包裹在 `{"data": {...}}` 中，可通过管道使用 `jq '.data.<field>'` 提取。
 
 ---
 
-## Community
+<a id="community"></a>
 
-- 🌍 [Slack community](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g)
-- 📚 [Documentation](https://arize.com/docs/phoenix)
+## 社区
+
+- 🌍 [Slack 社区](https://join.slack.com/t/arize-ai/shared_invite/zt-3r07iavnk-ammtATWSlF0pSrd1DsMW7g)
+- 📚 [文档](https://arize.com/docs/phoenix)
 - 🌟 [GitHub](https://github.com/Arize-ai/phoenix)
-- 🐞 [Report bugs](https://github.com/Arize-ai/phoenix/issues)
+- 🐞 [报告问题](https://github.com/Arize-ai/phoenix/issues)
 - 𝕏 [@ArizePhoenix](https://twitter.com/ArizePhoenix)
 - 💼 [LinkedIn](https://www.linkedin.com/showcase/113218220)

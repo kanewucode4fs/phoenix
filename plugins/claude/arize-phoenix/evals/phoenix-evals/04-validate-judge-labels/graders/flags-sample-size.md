@@ -3,8 +3,8 @@ type: llm
 focus: last_message
 weight: 0.5
 ---
-The user has 80 examples that two analysts labeled by hand as pass/fail, plus their LLM judge's predictions over the same 80, and wants to decide whether the judge is trustworthy.
+用户有 80 个由两位分析人员人工标注为 pass/fail 的示例，以及 LLM 裁判对同一批 80 个示例的预测，希望判断裁判是否可信。
 
-Grade exactly one claim. PASS if the claim below holds, FAIL otherwise. Ignore everything else about the response.
+只评定下面这一条判断条件。回复满足条件则为 PASS，否则为 FAIL；忽略回复中的其他内容。
 
-Claim: The response points out that 80 examples is below the recommended validation set size (about 100 or more), or otherwise warns that 80 examples gives a noisy estimate and recommends labeling more before trusting the result.
+判断条件：回复指出 80 个示例低于推荐的验证集规模（约 100 个或更多），或以其他方式提醒 80 个示例的估计噪声较大，建议在信任结果前增加标注数量。

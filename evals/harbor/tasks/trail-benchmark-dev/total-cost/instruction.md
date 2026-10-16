@@ -1,1 +1,1 @@
-What did the research-assistant run cost in total?
+research-assistant 的运行总费用是多少？

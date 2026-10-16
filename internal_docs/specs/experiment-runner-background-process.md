@@ -1,48 +1,55 @@
-# Experiment Runner Background Process
+<a id="experiment-runner-background-process"></a>
+# 实验运行器后台进程
 
-## Table of Contents
+<a id="table-of-contents"></a>
+## 目录
 
-| # | Section | Focus |
+| # | 章节 | 重点 |
 |---|---------|-------|
-| 1 | [Executive Summary](#executive-summary) | What we built |
-| 2 | [Architecture](#architecture) | Three concepts, data flow |
-| 3 | [Data Model](#data-model) | Schema and state machine |
-| 4 | [Core Components](#core-components) | ExperimentRunner, RunningExperiment, Jobs |
-| 5 | [Design Decisions](#design-decisions) | Major design choices and rationale |
-| 6 | [Lifecycle](#lifecycle) | Start, stop, resume, complete |
-| 7 | [Multi-Replica Coordination](#multi-replica-coordination) | Heartbeat, ownership |
-| 8 | [Error Handling](#error-handling) | Retries, failures, circuit breaker |
-| — | [Appendix: Key Constants](#appendix-key-constants) | Configuration values |
-| — | [Appendix: Related Documents](#appendix-related-documents) | Deep dives and references |
+| 1 | [概览](#executive-summary) | 已实现内容 |
+| 2 | [架构](#architecture) | 三个概念、数据流 |
+| 3 | [数据模型](#data-model) | 结构与状态机 |
+| 4 | [核心组件](#core-components) | ExperimentRunner、RunningExperiment、Job |
+| 5 | [设计决策](#design-decisions) | 主要选择和理由 |
+| 6 | [生命周期](#lifecycle) | 启动、停止、恢复、完成 |
+| 7 | [多副本协调](#multi-replica-coordination) | 心跳、所有权 |
+| 8 | [错误处理](#error-handling) | 重试、失败、熔断 |
+| — | [附录：关键常量](#appendix-key-constants) | 配置值 |
+| — | [附录：相关文档](#appendix-related-documents) | 深入分析与参考 |
 
 ---
 
-## Executive Summary
+<a id="executive-summary"></a>
+## 概览
 
-### What We Built
+<a id="what-we-built"></a>
+### 已实现的功能
 
-A background experiment runner that:
+后台实验运行器具备：
 
-- **Survives UI disconnection** — Experiments continue when browser closes
-- **Recovers from crashes** — Orphaned experiments resume on server restart
-- **Schedules fairly** — Round-robin dispatch across concurrent experiments
-- **Respects rate limits** — Adaptive token buckets, non-blocking checks
-- **Supports stop/resume** — User can stop mid-experiment and resume later
-- **Coordinates across replicas** — Heartbeat-based ownership for PostgreSQL deployments
+- **不受界面断开影响**：浏览器关闭后实验继续。
+- **崩溃恢复**：服务端重启后恢复孤立实验。
+- **公平调度**：并发实验间轮询分派。
+- **遵循限流**：自适应令牌桶，非阻塞检查。
+- **停止/恢复**：允许中途停止，稍后恢复。
+- **跨副本协调**：PostgreSQL 部署采用心跳所有权。
 
-### Key Files
+<a id="key-files"></a>
+### 关键文件
 
-| File | Purpose |
+| 文件 | 用途 |
 |------|---------|
-| `src/phoenix/server/daemons/experiment_runner.py` | Core implementation |
-| `src/phoenix/db/models.py` (ExperimentExecutionConfig) | Schema |
-| `src/phoenix/server/api/mutations/experiment_mutations.py` | GraphQL mutations |
+| `src/phoenix/server/daemons/experiment_runner.py` | 核心实现 |
+| `src/phoenix/db/models.py`（ExperimentExecutionConfig） | 数据库结构 |
+| `src/phoenix/server/api/mutations/experiment_mutations.py` | GraphQL 变更操作 |
 
 ---
 
-## Architecture
+<a id="architecture"></a>
+## 架构
 
-### Three Concepts
+<a id="three-concepts"></a>
+### 三个概念
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -78,7 +85,8 @@ A background experiment runner that:
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Flow
+<a id="data-flow"></a>
+### 数据流
 
 ```
                        ┌─────────────────┐
@@ -109,31 +117,34 @@ Semaphore flow (MAX_CONCURRENT=20):
 
 ---
 
-## Data Model
+<a id="data-model"></a>
+## 数据模型
 
-### ExperimentExecutionConfig Table
+<a id="experimentexecutionconfig-table"></a>
+### ExperimentExecutionConfig 表
 
-| Column | Type | Purpose |
+| 列 | 类型 | 用途 |
 |--------|------|---------|
-| `id` | int (PK, FK→experiments.id) | 1:1 relationship with experiment |
-| `task_config` | JSON | Task configuration (prompt, model, etc.) |
-| `status` | string | Lifecycle state: `RUNNING`, `COMPLETED`, `STOPPED`, `ERROR` |
-| `claimed_at` | datetime? | Non-null = owned by a replica; null = not owned |
-| `claimed_by` | string? | Replica ID that owns this experiment |
-| `cooldown_until` | datetime? | Earliest time the next stop/resume is allowed |
-| `last_error` | string? | Error message for UI display |
-| `created_at` | datetime | When config was created |
+| `id` | int（PK，FK→experiments.id） | 与实验一对一 |
+| `task_config` | JSON | 任务配置，包括提示词和模型等 |
+| `status` | string | 生命周期：`RUNNING`、`COMPLETED`、`STOPPED`、`ERROR` |
+| `claimed_at` | datetime? | 非空表示副本拥有，空表示无所有者 |
+| `claimed_by` | string? | 所属副本 ID |
+| `cooldown_until` | datetime? | 下一次允许停止/恢复的最早时间 |
+| `last_error` | string? | 界面显示的错误消息 |
+| `created_at` | datetime | 配置创建时间 |
 
-**Nuances**:
-- `status` is the canonical lifecycle state, set atomically alongside `claimed_at` in every UPDATE
-- `claimed_at` / `claimed_by` track replica ownership for heartbeat and orphan detection
-- `cooldown_until` stores a future timestamp (`now + cooldown`); the next toggle is blocked until `cooldown_until <= now`
-- `cooldown_until` is only set on user-initiated stop/resume, NOT on initial start or orphan recovery (so first stop isn't blocked)
-- `claimed_by` uses `token_hex(8)` to generate a unique replica ID per server instance
+**细节：**
+- `status` 是权威生命周期状态，每次 UPDATE 都与 `claimed_at` 原子设置。
+- `claimed_at` / `claimed_by` 跟踪副本所有权，用于心跳和孤立检测。
+- `cooldown_until` 保存未来时间（`now + cooldown`），直到 `cooldown_until <= now` 才能再次切换。
+- `cooldown_until` 仅在用户主动停止/恢复时设置，初始启动和孤立恢复不设置，避免阻止首次停止。
+- `claimed_by` 通过 `token_hex(8)` 为每个服务端实例生成唯一副本 ID。
 
-### State Machine
+<a id="state-machine"></a>
+### 状态机
 
-Lifecycle is tracked by `status`, ownership by `claimed_at`:
+`status` 跟踪生命周期，`claimed_at` 跟踪所有权：
 
 ```
         ┌──────────┐
@@ -156,392 +167,420 @@ Lifecycle is tracked by `status`, ownership by `claimed_at`:
               stop)
 ```
 
-All transitions set `status` and `claimed_at` atomically in the same UPDATE.
+所有转换都在同一 UPDATE 中原子设置 `status` 和 `claimed_at`。
 
-**Key insight**: "Completeness" is derived by querying for incomplete work. If none exists, experiment is done. No explicit `completed` state.
+**关键认识：** 通过查询未完成工作判断是否完成。没有未完成工作就已完成，不单独设置 `completed` 状态。
 
-### What's NOT Stored (and Why)
+<a id="whats-not-stored-and-why"></a>
+### 不存储什么，以及原因
 
-| Field | Why Not Stored |
+| 字段 | 不存储原因 |
 |-------|----------------|
-| `pending_task_ids` | Query incomplete runs from DB on resume |
-| `pending_eval_ids` | Query runs with incomplete evaluations from DB on resume |
-| `retry_queue` | Rebuilt from incomplete runs on resume |
-| `used_browser_credentials` | All credentials are ephemeral for security |
+| `pending_task_ids` | 恢复时从数据库查询未完成运行 |
+| `pending_eval_ids` | 恢复时查询评估未完成运行 |
+| `retry_queue` | 恢复时从未完成运行重建 |
+| `used_browser_credentials` | 安全考虑，全部凭证临时存在 |
 
-**Key insight**: Resume queries incomplete runs fresh from the database. No queue state serialization needed—this dramatically simplifies crash recovery.
+**关键认识：** 恢复时重新查询数据库，无需序列化队列，大幅简化崩溃恢复。
 
 ---
 
-## Core Components
+<a id="core-components"></a>
+## 核心组件
 
-### ExperimentRunner (Daemon)
+<a id="experimentrunner-daemon"></a>
+### ExperimentRunner（守护进程）
 
-**What it does**: Singleton daemon that manages all running experiments. Runs as a background task for the lifetime of the server.
+**作用：** 管理所有运行实验的单例守护进程，在服务端整个生命周期作为后台任务运行。
 
-**Responsibilities**:
-1. **Experiment registry** — In-memory dict mapping experiment_id → RunningExperiment
-2. **Fair scheduling** — Round-robin dispatch ordered by `last_served_at` timestamp
-3. **Concurrency control** — Semaphore limits total in-flight jobs across all experiments
-4. **Heartbeat** — Periodically refreshes ownership claims in the database
-5. **Orphan recovery** — On startup (and periodically), claims experiments with stale claims
+**职责：**
+1. **实验注册表**：内存字典映射 experiment_id → RunningExperiment。
+2. **公平调度**：按 `last_served_at` 时间戳轮询。
+3. **并发控制**：信号量限制全部实验的总在途作业数。
+4. **心跳**：定期刷新数据库所有权认领。
+5. **孤立恢复**：启动及周期扫描时认领过期实验。
 
-**Main loop behavior**:
-1. If no experiments registered, sleep until work arrives (event-driven, not polling)
-2. Acquire a semaphore slot (blocks if at max concurrency)
-3. Round-robin through experiments to find one with a ready job
-4. Spawn the job execution as a concurrent task
-5. On completion, callbacks update experiment state and release the semaphore
+**主循环：**
+1. 无注册实验时等待工作事件，而非轮询。
+2. 获取信号量槽位，达到最大并发则阻塞。
+3. 轮询实验，寻找就绪作业。
+4. 以并发任务执行作业。
+5. 完成回调更新实验状态并释放槽位。
 
-**Nuance**: The semaphore is acquired *before* finding a job. If no job is ready (all rate-limited), release the semaphore and sleep briefly before retrying.
+**细节：** 在寻找作业**之前**获取信号量。全部限流导致无就绪作业时，释放信号量并短暂等待后重试。
 
 ### RunningExperiment
 
-**What it does**: In-memory representation of a single running experiment. Exists only while the experiment is actively running on this replica.
+**作用：** 单个运行实验的内存表示，仅在本副本活跃运行期间存在。
 
-**Responsibilities**:
-1. **Queue management** — Task queue, eval queue, retry heap (priority: evals > retries > tasks)
-2. **Rate limit gating** — Checks token bucket *before* returning a job to the daemon
-3. **Callback handling** — Processes job outcomes (success, failure, rate limit, timeout)
-4. **UI streaming** — Maintains subscriber list for real-time chunk streaming
-5. **Completion detection** — When all queues empty and no more work in DB, signals done
+**职责：**
+1. **队列管理**：任务队列、评估队列和重试堆，优先级为评估 > 重试 > 任务。
+2. **限流检查**：向守护进程返回作业**前**检查令牌桶。
+3. **回调处理**：处理成功、失败、限流和超时。
+4. **界面流式输出**：维护订阅者列表，实时发送数据块。
+5. **完成检测**：队列全空且数据库无工作时报告完成。
 
-**Queue priority** (highest to lowest):
-1. **Eval queue** — Evaluations for completed tasks (fast, maintains flow)
-2. **Retry heap** — Jobs ready for retry (sorted by `ready_at` timestamp)
-3. **Task queue** — New tasks from dataset (paginated from DB in batches of 10)
+**队列优先级**从高到低：
+1. **评估队列**：评估已完成任务，快速并维持流程。
+2. **重试堆**：已可重试的作业，按 `ready_at` 排序。
+3. **任务队列**：数据集新任务，从数据库每批 10 个分页加载。
 
-**Nuance**: Tasks are loaded from the database in batches to avoid memory exhaustion on large datasets. The `_task_db_exhausted` flag tracks when all tasks have been loaded.
+**细节：** 分批加载避免大数据集耗尽内存，`_task_db_exhausted` 标记全部任务已加载。
 
-### Jobs (TaskJob / EvalJob)
+<a id="jobs-taskjob--evaljob"></a>
+### 作业（TaskJob / EvalJob）
 
-**What they do**: Self-contained work units that execute LLM calls and invoke callbacks.
+**作用：** 自包含工作单元，执行 LLM 调用并触发回调。
 
-| Job Type | Purpose | Streams to UI? |
+| 作业类型 | 用途 | 向界面流式输出？ |
 |----------|---------|----------------|
-| TaskJob | Run prompt against one dataset example × one repetition | Yes |
-| EvalJob | Run one evaluator against one experiment run | No |
+| TaskJob | 一个数据集示例 × 一次重复运行提示词 | 是 |
+| EvalJob | 一个实验运行执行一个评估器 | 否 |
 
-**Job lifecycle**:
-1. Created with all data needed for execution (no external lookups during execute)
-2. Holds a reference to the parent RunningExperiment for reporting results
-3. Executes within a cancel scope (for clean cancellation on stop)
-4. Calls appropriate method on RunningExperiment based on outcome (success, rate limit, network error, timeout, permanent failure)
+**生命周期：**
+1. 创建时携带全部执行数据，执行期间无需外部查找。
+2. 持有父 RunningExperiment 引用，以报告结果。
+3. 在取消作用域内执行，便于停止时干净取消。
+4. 按成功、限流、网络错误、超时或永久失败，调用 RunningExperiment 对应方法。
 
-**Nuances**:
-- Jobs are stateless—all context is passed at construction time
-- The `retry_count` field tracks how many times this job has been retried
-- Jobs carry their own timeout (default 120s) for hanging LLM calls
-- DB writes within jobs are shielded from cancellation to prevent connection pool corruption
+**细节：**
+- Job 无状态，构造时传入全部上下文。
+- `retry_count` 跟踪已重试次数。
+- 自带超时，默认 120 秒，防止 LLM 调用挂起。
+- 作业内数据库写入屏蔽取消，防止连接池损坏。
 
 ---
 
-## Design Decisions
+<a id="design-decisions"></a>
+## 设计决策
 
-### Advisor Pattern for Rate Limiting
+<a id="advisor-pattern-for-rate-limiting"></a>
+### Advisor 限流模式
 
-**Context**: Jobs need rate limit checks before making LLM calls. Two approaches:
-- **Gatekeeper**: Job checks rate limit inside `execute()`, blocks or fails if limited
-- **Advisor**: Experiment checks rate limit before returning job to daemon
+**背景：** LLM 调用前需限流检查，两种方式：
+- **Gatekeeper**：Job 在 `execute()` 内检查，限流则阻塞或失败。
+- **Advisor**：Experiment 返回 Job 前检查。
 
-**Decision**: Use the Advisor pattern—check capacity in `try_get_ready_job()` before popping a job.
+**决策：** 使用 Advisor，在 `try_get_ready_job()` 弹出作业前检查容量。
 
-**Consequences**:
-- ✅ Daemon never blocks waiting for rate limits
-- ✅ Round-robin fairness preserved—rate-limited experiments are skipped, others proceed
-- ✅ No wasted semaphore slots on rate-limited jobs
-- ⚠️ Rate limit key must be determinable without executing the job
-- ⚠️ Token bucket must be shared across all experiments (not per-experiment)
+**影响：**
+- ✅ Daemon 从不阻塞等待限流。
+- ✅ 轮询公平，跳过限流实验，其余继续。
+- ✅ 不浪费信号量槽位。
+- ⚠️ 必须不执行作业即可确定限流键。
+- ⚠️ 令牌桶跨实验共享，不能逐实验独立。
 
-### Round-Robin Fairness
+<a id="round-robin-fairness"></a>
+### 轮询公平性
 
-**Context**: Multiple experiments may run concurrently. Need to prevent one experiment from monopolizing capacity.
+**背景：** 多实验可并发，需防止单个独占容量。
 
-**Decision**: Use round-robin dispatch ordered by `last_served_at` timestamp. Experiments with older timestamps get priority. New experiments initialize with `datetime.min` (oldest possible).
+**决策：** 按 `last_served_at` 轮询，时间较旧者优先。新实验初始化为最早的 `datetime.min`。
 
-**Mechanism**:
-1. Daemon sorts experiments by `last_served_at` (oldest first)
-2. Iterates through experiments calling `try_get_ready_job()`
-3. First experiment with a ready job (not rate-limited) wins the slot
-4. `last_served_at` updated only when job actually dispatched
+**机制：**
+1. 按 `last_served_at` 从旧到新排序。
+2. 逐实验调用 `try_get_ready_job()`。
+3. 首个有就绪且不限流作业的实验获得槽位。
+4. 仅实际分派时更新 `last_served_at`。
 
-**Key behaviors**:
+**关键行为：**
 
-| Scenario | Behavior | Rationale |
+| 场景 | 行为 | 理由 |
 |----------|----------|-----------|
-| **New experiment joins** | Gets priority (datetime.min) | Immediate UI feedback for user who just clicked Start |
-| **Experiment rate-limited** | Skipped, `last_served_at` unchanged | Doesn't "lose" its turn; checked first next time |
-| **Experiment drops out** | Clean removal, no distortion | Remaining experiments continue fair alternation |
-| **Same provider, different experiments** | Alternate fairly | Token bucket shared, round-robin decides who gets capacity |
+| **新实验加入** | datetime.min 获优先 | 刚点击启动的用户立即得到反馈 |
+| **实验限流** | 跳过，`last_served_at` 不变 | 不丢失轮次，下次优先检查 |
+| **实验退出** | 干净移除，无扭曲 | 其余继续公平交替 |
+| **同提供商不同实验** | 公平交替 | 共享令牌桶，轮询分配容量 |
 
-**Consequences**:
-- ✅ Equal opportunity fairness—each experiment gets proportional slots
-- ✅ Work-conserving—rate-limited experiments don't block others
-- ✅ Graceful join/leave—no fairness distortion on topology changes
-- ⚠️ New experiments temporarily monopolize (by design, for UX)
-- ⚠️ No priority mechanism—can't mark experiments as "urgent"
+**影响：**
+- ✅ 机会均等，各实验按比例获得槽位。
+- ✅ 工作守恒，限流不阻碍其他实验。
+- ✅ 加入退出平稳，拓扑变化不扭曲公平。
+- ⚠️ 新实验会暂时独占，这是体验设计。
+- ⚠️ 无优先级机制，不能标记紧急。
 
-### Heartbeat-Based Ownership (vs. LISTEN/NOTIFY)
+<a id="heartbeat-based-ownership-vs-listennotify"></a>
+### 心跳所有权（对比 LISTEN/NOTIFY）
 
-**Context**: Multiple replicas may run concurrently in PostgreSQL deployments. Need to prevent two replicas from running the same experiment.
+**背景：** PostgreSQL 部署可多副本并行，需防止同一实验同时运行两次。
 
-**Decision**: Use heartbeat-based ownership with `claimed_at` timestamp, not PostgreSQL LISTEN/NOTIFY.
+**决策：** 使用 `claimed_at` 心跳所有权，而非 PostgreSQL LISTEN/NOTIFY。
 
-**Consequences**:
-- ✅ Works with any database (SQLite, PostgreSQL)
-- ✅ Simple to implement and reason about
-- ✅ Orphan recovery is straightforward (stale claims = crashed replica)
-- ⚠️ 10-minute delay before crashed experiments resume (acceptable trade-off)
-- ⚠️ Requires periodic heartbeat loop (every 5 minutes)
+**影响：**
+- ✅ 支持 SQLite、PostgreSQL 等任意数据库。
+- ✅ 简单易实现和理解。
+- ✅ 过期认领即崩溃副本，孤立恢复直接。
+- ⚠️ 崩溃后恢复延迟 10 分钟，可接受取舍。
+- ⚠️ 需每 5 分钟运行心跳。
 
-### No Queue State Persistence
+<a id="no-queue-state-persistence"></a>
+### 不持久化队列状态
 
-**Context**: When an experiment is stopped or the server crashes, we need to resume where we left off. Options:
-- Serialize queue state (pending tasks, retry heap) to database
-- Query incomplete runs from database on resume
+**背景：** 停止或崩溃后需继续，可选：
+- 序列化待处理任务、重试堆等队列状态入库。
+- 恢复时查询未完成运行。
 
-**Decision**: No queue persistence. Resume queries incomplete runs fresh from the database.
+**决策：** 不持久化队列，恢复时重新查询数据库。
 
-**Consequences**:
-- ✅ Dramatically simpler implementation
-- ✅ No schema complexity for queue state
-- ✅ Resume is idempotent—can't have stale queue state
-- ⚠️ Resume may re-query already-completed work (filtered out by query)
-- ⚠️ Retry backoff state is lost (jobs restart at backoff=0)
+**影响：**
+- ✅ 实现显著简化。
+- ✅ 无额外队列结构复杂度。
+- ✅ 幂等恢复，不存在过期队列。
+- ⚠️ 可能重新查询已完成工作，由查询过滤。
+- ⚠️ 丢失退避状态，作业从 backoff=0 重启。
 
-### Separate Circuit Breakers for Tasks and Evals
+<a id="separate-circuit-breakers-for-tasks-and-evals"></a>
+### 任务和评估独立熔断器
 
-**Context**: When an LLM provider is down, individual retries waste time. Need fast failure detection.
+**背景：** 提供商宕机时逐个重试浪费时间，需快速检测。
 
-**Decision**: Implement circuit breakers that trip after 5 consecutive failures. Use separate breakers for tasks and evals.
+**决策：** 连续失败 5 次触发熔断，任务和评估分别设置。
 
-**Consequences**:
-- ✅ Fast failure when provider is down (stops after 5 failures, not 5×N)
-- ✅ Tasks and evals can use different providers—one failing doesn't kill the other
-- ⚠️ One success resets the counter (by design—allows recovery)
-- ⚠️ Circuit doesn't auto-reset with time (experiment stops, user must resume)
+**影响：**
+- ✅ 失败 5 次即停，而非 5×N，快速发现故障。
+- ✅ 不同提供商可独立，一方失败不终止另一方。
+- ⚠️ 一次成功重置计数，这是允许恢复的设计。
+- ⚠️ 不随时间自动重置，实验停止后需用户恢复。
 
-### Catch-and-Retry for Background Loops
+<a id="catch-and-retry-for-background-loops"></a>
+### 后台循环捕获并重试
 
-**Context**: Heartbeat and orphan scan loops run in the same task group as the main dispatch loop. An unhandled exception would crash the entire daemon.
+**背景：** 心跳、孤立扫描与主分派在同一任务组，未处理异常会使整个 Daemon 崩溃。
 
-**Decision**: Wrap loop bodies in try/except, log errors, and retry on next interval.
+**决策：** 循环体用 try/except 包裹，记录错误，下个周期重试。
 
-**Alternatives considered**:
+**考虑过的替代：**
 
-| Option | Behavior | Why not chosen |
+| 选项 | 行为 | 未选原因 |
 |--------|----------|----------------|
-| Stop experiments on failure | Stop all experiments when heartbeat fails | Complex state management; experiments can't make progress |
-| Crash after N failures | Retry N times, then crash daemon | More complex; loses in-flight work |
+| 失败时停止实验 | 心跳失败即停全部实验 | 状态复杂，实验无法推进 |
+| N 次失败后崩溃 | 重试 N 次再终止 Daemon | 更复杂，丢失在途工作 |
 
-**Consequences**:
-- ✅ Simple implementation
-- ✅ Transient DB errors don't kill running experiments
-- ⚠️ Risk of split-brain if heartbeat stays broken (other replicas may steal experiments)
-- ⚠️ Orphan recovery provides eventual consistency if split-brain occurs
+**影响：**
+- ✅ 实现简单。
+- ✅ 暂时数据库错误不终止运行实验。
+- ⚠️ 心跳长期失效可能脑裂，其他副本可能夺取实验。
+- ⚠️ 若脑裂，孤立恢复保证最终一致。
 
 ---
 
-## Lifecycle
+<a id="lifecycle"></a>
+## 生命周期
 
-### Start Experiment
+<a id="start-experiment"></a>
+### 启动实验
 
-**Preconditions**: Experiment config exists, experiment not already running
+**前提：** 配置存在，实验尚未运行。
 
-**Steps**:
-1. **Claim ownership atomically** — Caller (mutation or orphan scan) does `UPDATE ... WHERE claimed_at IS NULL` (or `< cutoff` for orphans) to atomically take ownership
-2. **Re-stamp ownership** — `start_experiment` issues a second unconditional UPDATE to set `claimed_at` and clear `last_error` (no race risk since caller already holds the claim)
-3. **Create in-memory state** — Instantiate RunningExperiment with queues and callbacks
-4. **Register and wake daemon** — Add to registry, set work-available event
+**步骤：**
+1. **原子认领**：调用方，即变更操作或孤立扫描，通过 `UPDATE ... WHERE claimed_at IS NULL`，孤立时用 `< cutoff`，原子取得所有权。
+2. **重写所有权时间**：`start_experiment` 再执行无条件 UPDATE，设置 `claimed_at` 并清除 `last_error`；调用方已认领，无竞态风险。
+3. **创建内存状态**：实例化带队列和回调的 RunningExperiment。
+4. **注册并唤醒**：加入注册表，设置工作可用事件。
 
-**Nuance**: The race-safe claim happens in the **caller** (mutation or orphan scan), not inside `start_experiment`. `start_experiment` itself does not guard against double-start — it relies on the caller to have won the atomic claim first.
+**细节：** 安全认领在**调用方**，而非 `start_experiment` 内。`start_experiment` 自身不防重复启动，依赖调用方先赢得原子认领。
 
-### Stop Experiment
+<a id="stop-experiment"></a>
+### 停止实验
 
-**Actors that can stop an experiment**:
+**可停止实验的执行方：**
 
-| Actor | Trigger | Needs cooldown? |
+| 执行方 | 触发 | 需要冷却？ |
 |-------|---------|-----------------|
-| User (stop button) | GraphQL mutation | Yes (5 seconds) |
-| User (close browser) | Connection close | No |
-| Completion | All work done | No |
-| Circuit breaker | 5 consecutive failures | No |
-| Another replica | Stale claim detected | No |
+| 用户停止按钮 | GraphQL 变更 | 是，5 秒 |
+| 用户关闭浏览器 | 连接关闭 | 否 |
+| 完成 | 全部工作完成 | 否 |
+| 熔断器 | 连续失败 5 次 | 否 |
+| 其他副本 | 检测到过期认领 | 否 |
 
-**Steps** (single atomic UPDATE):
-1. **Guard state + cooldown in WHERE clause** — `WHERE claimed_at IS NOT NULL AND (cooldown_until IS NULL OR cooldown_until <= now)`
-2. **Set all fields atomically** — `SET claimed_at=NULL, claimed_by=NULL, status='STOPPED', cooldown_until=now+5s`
-3. **Diagnose on 0-row update** — SELECT to determine: not found, already stopped (idempotent), or cooldown active
-4. **Remove from registry** — Use `pop()`, not `get()` (critical for race condition prevention)
-5. **Cancel in-flight jobs** — Via anyio cancel scopes
+**步骤**，单次原子 UPDATE：
+1. **WHERE 约束状态与冷却**：`WHERE claimed_at IS NOT NULL AND (cooldown_until IS NULL OR cooldown_until <= now)`。
+2. **原子设置全部字段**：`SET claimed_at=NULL, claimed_by=NULL, status='STOPPED', cooldown_until=now+5s`。
+3. **更新 0 行时诊断**：SELECT 判断不存在、已停止（幂等）或冷却中。
+4. **从注册表移除**：必须用 `pop()`，不用 `get()`，对防竞态至关重要。
+5. **取消在途作业**：通过 anyio 取消作用域。
 
-**Nuances**:
-- `stop()` on RunningExperiment does NOT call `on_done`—caller handles cleanup coordination
-- Must use `pop()` to remove from registry atomically (prevents heartbeat race)
-- Idempotent—safe to call multiple times
+**细节：**
+- RunningExperiment 的 `stop()` 不调用 `on_done`，调用方协调清理。
+- 必须 `pop()` 原子移除，防心跳竞态。
+- 幂等，可安全重复调用。
 
-> **Deep dive**: See [Appendix: Stopping Deep Dive](./experiment-runner-background-process/appendix-stopping-deep-dive.md) for comprehensive analysis.
+> **深入分析：** 见[附录：停止深入分析](./experiment-runner-background-process/appendix-stopping-deep-dive.md)。
 
-### Resume Experiment
+<a id="resume-experiment"></a>
+### 恢复实验
 
-**Preconditions**: Experiment config exists, experiment not currently running (`claimed_at` is NULL)
+**前提：** 配置存在，当前未运行，`claimed_at` 为 NULL。
 
-**Steps**:
-1. **Validate not running** — Check `claimed_at IS NULL`
-2. **Claim and start** — Same as start_experiment
+**步骤：**
+1. **验证未运行**：检查 `claimed_at IS NULL`。
+2. **认领并启动**：同 start_experiment。
 
-**Key insight**: Resume is a general-purpose "reconcile what's missing" operation. It doesn't restore queue state — it queries the database for what's incomplete and fills in the gaps.
+**关键认识：** 恢复是通用的补齐缺失操作。不还原队列，而是查询数据库未完成内容并补齐。
 
-> **Deep dive**: See [Appendix: Resume Deep Dive](./experiment-runner-background-process/appendix-resume-deep-dive.md) for atomic claims and multi-replica races.
+> **深入分析：** 原子认领和多副本竞争见[附录：恢复深入分析](./experiment-runner-background-process/appendix-resume-deep-dive.md)。
 
-### Work Reconstruction
+<a id="work-reconstruction"></a>
+### 工作重建
 
-On start (and resume), the runner reconstructs work from two DB queries:
+启动和恢复时通过两条数据库查询重建工作：
 
-| Query | What it finds | When it runs |
+| 查询 | 查找内容 | 时机 |
 |-------|---------------|-------------|
-| `get_experiment_incomplete_runs_query` | Dataset examples missing successful task runs | Every dispatch cycle until exhausted |
-| `get_runs_with_incomplete_evaluations_query` | Completed runs missing annotations for attached evaluators | When no evals are queued or in-flight |
+| `get_experiment_incomplete_runs_query` | 缺少成功任务运行的数据集示例 | 每轮分派，直到耗尽 |
+| `get_runs_with_incomplete_evaluations_query` | 已完成但缺少附加评估器标注的运行 | 无排队或在途评估时 |
 
-During normal execution, evals are queued **reactively** by `on_task_success` when a task completes — no DB query needed. The eval sweep (`_ensure_eval_buffer`) only runs when no evals are in-flight, which structurally prevents duplicates: by that point, all reactively-queued evals have written their annotations to the DB.
+正常执行时，任务完成由 `on_task_success` **响应式**入队评估，无需查库。评估扫描（`_ensure_eval_buffer`）仅在没有在途评估时运行，结构上避免重复：此时全部响应式入队评估已写入标注。
 
-This design makes resume work for multiple scenarios without special-casing any of them:
+同一设计无需特殊处理即可覆盖：
 
-| Scenario | Task query finds | Eval query finds |
+| 场景 | 任务查询结果 | 评估查询结果 |
 |----------|-----------------|-----------------|
-| **Fresh start** | All examples | Nothing (no runs yet) |
-| **Crash recovery** | Failed/missing tasks | Runs with missing annotations |
-| **New evaluator attached** | Nothing (tasks done) | All runs × new evaluator |
-| **New dataset examples** | New examples | Nothing (no runs yet) |
-| **Retry after error** | Errored tasks | Runs with failed annotations |
+| **新启动** | 全部示例 | 无，尚无运行 |
+| **崩溃恢复** | 失败或缺失任务 | 缺少标注的运行 |
+| **附加新评估器** | 无，任务已完 | 全部运行 × 新评估器 |
+| **新增数据集示例** | 新示例 | 无，尚无运行 |
+| **错误后重试** | 出错任务 | 标注失败的运行 |
 
-### Completion
+<a id="completion"></a>
+### 完成
 
-**Detection**: `has_work()` checks all sources of pending work:
-- Task queue, eval queue, retry heap, in-flight jobs
-- `_task_db_exhausted` — no more incomplete tasks in DB
-- `_eval_db_exhausted` — no more incomplete evals in DB
+**检测：** `has_work()` 检查全部待处理来源：
+- 任务队列、评估队列、重试堆、在途作业。
+- `_task_db_exhausted`，数据库无未完成任务。
+- `_eval_db_exhausted`，数据库无未完成评估。
 
-When `has_work()` returns False, the experiment is complete.
+`has_work()` 返回 False，实验即完成。
 
-**Steps**:
-1. Set `_active = False`
-2. Log completion summary (succeeded/failed counts)
-3. Call `on_done` callback (removes from registry, sets status in DB)
+**步骤：**
+1. 设置 `_active = False`。
+2. 记录成功/失败计数汇总。
+3. 调用 `on_done`，移除注册表并设置数据库状态。
 
 ---
 
-## Multi-Replica Coordination
+<a id="multi-replica-coordination"></a>
+## 多副本协调
 
-### Heartbeat Loop
+<a id="heartbeat-loop"></a>
+### 心跳循环
 
-**Purpose**: Prevent other replicas from stealing experiments we're actively running.
+**目的：** 防止其他副本夺取本副本活跃实验。
 
-**Behavior**:
-- Runs every 5 minutes
-- Updates `claimed_at` for all experiments we own
-- Detects lost ownership (experiment in memory but UPDATE didn't match)
+**行为：**
+- 每 5 分钟运行。
+- 更新拥有的全部实验的 `claimed_at`。
+- 检测丢失所有权，即内存有实验而 UPDATE 未匹配。
 
-**Lost ownership handling**: If an experiment is in memory but heartbeat UPDATE didn't return it, another replica or user took over. Stop the experiment locally (no DB update needed).
+**丢失所有权：** 内存实验未被心跳 UPDATE 返回时，说明其他副本或用户已接管，本地停止，无需更新数据库。
 
-**Nuance**: Heartbeat only updates experiments where `claimed_by` matches our replica ID. This prevents accidentally refreshing experiments we don't own.
+**细节：** 仅更新 `claimed_by` 与当前副本 ID 一致的实验，避免误刷新非自身实验。
 
-### Orphan Recovery
+<a id="orphan-recovery"></a>
+### 孤立恢复
 
-**Purpose**: Resume experiments orphaned by crashed replicas.
+**目的：** 恢复崩溃副本遗留的孤立实验。
 
-**When it runs**:
-1. **At startup** — Immediate recovery of experiments orphaned during downtime
-2. **Periodically** — Every 10-15 minutes (with jitter) to catch orphans from other replicas
+**时机：**
+1. **启动时**：立即恢复停机期间形成的孤立实验。
+2. **周期性**：每 10–15 分钟带抖动扫描，捕捉其他副本遗留。
 
-**Orphan definition**: An experiment where `claimed_at IS NOT NULL` and is older than `STALE_CLAIM_TIMEOUT` (10 minutes). Experiments with `claimed_at IS NULL` are intentionally stopped and are never auto-resumed.
+**定义：** `claimed_at IS NOT NULL` 且早于 `STALE_CLAIM_TIMEOUT`，即 10 分钟。`claimed_at IS NULL` 表示有意停止，绝不自动恢复。
 
-**Steps**:
-1. Query for orphaned experiments (`claimed_at IS NOT NULL AND claimed_at < cutoff`)
-2. For each orphan, attempt atomic claim (UPDATE with WHERE clause)
-3. If claim succeeds, start the experiment
+**步骤：**
+1. 查询孤立实验，`claimed_at IS NOT NULL AND claimed_at < cutoff`。
+2. 对每个实验尝试带 WHERE 的原子认领。
+3. 成功则启动。
 
-**Jitter**: Random 0-5 minute jitter on the periodic scan prevents thundering herd when multiple replicas restart simultaneously.
+**抖动：** 周期扫描随机增加 0–5 分钟，避免多副本同时重启惊群。
 
-**Nuance**: Must start experiments outside the DB session to avoid deadlock (nested transactions).
+**细节：** 必须在数据库会话之外启动实验，避免嵌套事务死锁。
 
-### Race Condition Prevention
+<a id="race-condition-prevention"></a>
+### 防止竞态
 
-| Scenario | Prevention |
+| 场景 | 防护 |
 |----------|------------|
-| Two replicas claim same orphan | Atomic `UPDATE...WHERE...RETURNING` |
-| Stop while heartbeat runs | `stop_experiment` uses `pop()` to remove first |
-| Resume while already running | Check `claimed_at IS NULL` before resume |
-| Rapid stop/resume toggling | 5-second cooldown on user toggles (not initial start) |
-| Job callback after stop | Check `_active` flag in all callbacks |
-| Orphan recovery deadlock | Start experiments outside DB session |
+| 两副本认领同一孤立实验 | 原子 `UPDATE...WHERE...RETURNING` |
+| 心跳期间停止 | `stop_experiment` 先 `pop()` 移除 |
+| 已运行时恢复 | 先检查 `claimed_at IS NULL` |
+| 快速停止/恢复 | 用户切换冷却 5 秒，初次启动不冷却 |
+| 停止后的作业回调 | 全部检查 `_active` |
+| 孤立恢复死锁 | 数据库会话外启动 |
 
-### Concurrency Invariants
+<a id="concurrency-invariants"></a>
+### 并发不变量
 
-| Invariant | Enforcement |
+| 不变量 | 保证机制 |
 |-----------|-------------|
-| Status change → remove from registry | All stop paths use `pop()` not `get()` |
-| No nested transactions on same row | Call `start_experiment()` outside session |
-| Only one replica owns an experiment | Atomic `UPDATE...WHERE...RETURNING` |
-| Stopped experiments don't queue work | Check `_active` in all callbacks |
-| Job completion is clean | Let in-flight jobs finish, don't abort mid-flight |
+| 状态变化 → 从注册表移除 | 全部停止路径用 `pop()`，不用 `get()` |
+| 同一行无嵌套事务 | 会话外调用 `start_experiment()` |
+| 仅一副本拥有实验 | 原子 `UPDATE...WHERE...RETURNING` |
+| 停止后不入队工作 | 全部回调检查 `_active` |
+| 作业正常结束 | 允许在途完成，不中途终止 |
 
 ---
 
-## Error Handling
+<a id="error-handling"></a>
+## 错误处理
 
-### Error Categories
+<a id="error-categories"></a>
+### 错误分类
 
-| Category | Examples | Action | Retry? |
+| 类别 | 示例 | 操作 | 重试？ |
 |----------|----------|--------|--------|
-| **Rate limit** | 429 status, `UnavailableTokensError` | Requeue with backoff, update token bucket | Yes (unlimited) |
-| **Transient** | Timeout, connection error, SQLAlchemyError | Requeue with backoff | Yes (up to 3) |
-| **Permanent** | 400 status, invalid API key, bad request | Mark failed | No |
+| **限流** | 429、`UnavailableTokensError` | 退避入队并更新令牌桶 | 是，不限次数 |
+| **暂时性** | 超时、连接错误、SQLAlchemyError | 退避入队 | 是，最多 3 次 |
+| **永久性** | 400、无效 API 密钥、错误请求 | 标记失败 | 否 |
 
-### Retry Policy
+<a id="retry-policy"></a>
+### 重试策略
 
-**Formula**: `backoff = base_delay × 2^(retry_count - 1)`
+**公式：** `backoff = base_delay × 2^(retry_count - 1)`
 
-| Retry | Delay |
+| 重试 | 延迟 |
 |-------|-------|
-| 1 | 1 second |
-| 2 | 2 seconds |
-| 3 | 4 seconds |
+| 1 | 1 秒 |
+| 2 | 2 秒 |
+| 3 | 4 秒 |
 
-After 3 retries, transient errors become permanent failures.
+重试 3 次后，暂时性错误转为永久失败。
 
-**Rate limit handling**: Rate limit errors don't count toward the retry limit—they're requeued indefinitely with exponential backoff. The token bucket is also notified to slow down future requests.
+**限流处理：** 不计入重试上限，以指数退避无限入队，同时通知令牌桶降低后续请求速率。
 
-### Circuit Breaker
+<a id="circuit-breaker"></a>
+### 熔断器
 
-**Purpose**: When an LLM provider is down, detect quickly and stop wasting retries.
+**目的：** 快速发现提供商故障，停止浪费重试。
 
-**Behavior**:
-- Tracks consecutive failures
-- Trips after 5 consecutive failures
-- One success resets the counter
-- When tripped: notify UI subscribers, close streams, stop experiment
+**行为：**
+- 跟踪连续失败。
+- 5 次后触发。
+- 一次成功重置。
+- 触发时通知界面订阅者、关闭流并停止实验。
 
-**Why separate breakers for tasks and evals**: They may use different LLM providers. A broken eval provider shouldn't stop task execution if the task provider is healthy.
+**为何分离任务与评估熔断器：** 可能使用不同提供商。评估提供商故障，不应阻止健康提供商执行任务。
 
-### UI Error Communication
+<a id="ui-error-communication"></a>
+### 界面错误通知
 
-**When circuit trips**:
-1. Send error payload to all subscribers
-2. Close streams (triggers clean EndOfStream on client)
-3. Clear subscriber list
-4. Stop experiment
-5. Record error in `last_error` field
+**熔断时：**
+1. 向全部订阅者发送错误载荷。
+2. 关闭流，客户端正常触发 EndOfStream。
+3. 清空订阅者。
+4. 停止实验。
+5. 写入 `last_error`。
 
-**Nuance**: Must close streams explicitly—just sending an error payload doesn't end the subscription.
+**细节：** 必须显式关闭流，仅发错误不会结束订阅。
 
 ---
 
 ## GraphQL API
 
-### ExperimentJob Type
+<a id="experimentjob-type"></a>
+### ExperimentJob 类型
 
-The `ExperimentJob` type exposes experiment lifecycle state via a `status` enum:
+`ExperimentJob` 通过 `status` 枚举暴露生命周期：
 
 ```graphql
 enum ExperimentJobStatus {
@@ -560,97 +599,108 @@ type ExperimentJob implements Node {
 }
 ```
 
-The `Experiment` type has an optional `backgroundJob: ExperimentJob` field. It's null for client-operated experiments (submitted via the Python SDK) and non-null for server-managed experiments (started from the playground).
+`Experiment` 有可选 `backgroundJob: ExperimentJob`。客户端通过 Python SDK 提交的实验为 null；Playground 启动、服务端管理的实验非 null。
 
-### Mutations
+<a id="mutations"></a>
+### 变更操作
 
-- `stopExperiment(experimentId: ID!)` → `StopExperimentPayload` — atomic UPDATE with cooldown guard
-- `resumeExperiment(experimentId: ID!)` → `ResumeExperimentPayload` — atomic UPDATE with cooldown guard
-- `deleteExperiments(input: DeleteExperimentsInput!)` — calls `stop_experiment()` before DELETE to avoid FK violations
-
----
-
-## Frontend: Navigation Dialog
-
-When a user navigates away from the playground while an experiment is running, a dialog is shown. The behavior depends on whether the experiment is ephemeral:
-
-### Ephemeral Experiments
-
-Ephemeral experiments stop on subscription disconnect (the `finally` block in the subscription calls `stop_experiment` when `is_ephemeral=True`).
-
-**Dialog**: "Your experiment will stop if you leave this page. Stay to let it finish."
-- **Stay** (primary) — cancel navigation
-- **Leave** — navigate away, experiment stops on disconnect
-
-### Non-Ephemeral Experiments
-
-Non-ephemeral experiments continue running in the background via the daemon.
-
-**Dialog**: "Your experiment will keep running in the background."
-- **Stay** — cancel navigation
-- **Stop and delete** (danger) — delete the experiment, then navigate
-- **Keep running** (primary) — navigate away, daemon continues
+- `stopExperiment(experimentId: ID!)` → `StopExperimentPayload`：带冷却保护的原子 UPDATE。
+- `resumeExperiment(experimentId: ID!)` → `ResumeExperimentPayload`：带冷却保护的原子 UPDATE。
+- `deleteExperiments(input: DeleteExperimentsInput!)`：DELETE 前调用 `stop_experiment()`，避免外键冲突。
 
 ---
 
-## Appendix: Key Constants
+<a id="frontend-navigation-dialog"></a>
+## 前端：导航对话框
 
-| Constant | Value | Purpose |
+运行期间离开 Playground 时显示对话框，行为取决于是否临时实验：
+
+<a id="ephemeral-experiments"></a>
+### 临时实验
+
+临时实验在订阅断开时停止。订阅 `finally` 块在 `is_ephemeral=True` 时调用 `stop_experiment`。
+
+**对话框：** “离开本页将停止实验，请停留等待完成。”
+- **停留**，主操作：取消导航。
+- **离开**：导航离开，断开连接后停止。
+
+<a id="non-ephemeral-experiments"></a>
+### 非临时实验
+
+通过守护进程在后台继续运行。
+
+**对话框：** “实验将在后台继续运行。”
+- **停留**：取消导航。
+- **停止并删除**，危险操作：先删除再离开。
+- **继续运行**，主操作：离开，守护进程继续。
+
+---
+
+<a id="appendix-key-constants"></a>
+## 附录：关键常量
+
+| 常量 | 值 | 用途 |
 |----------|-------|---------|
-| `MAX_CONCURRENT` | 20 | Global concurrency slots |
-| `POLL_INTERVAL` | 0.1s | Seconds between dispatch attempts |
-| `MAX_CONSECUTIVE_ERRORS` | 50 | Stop daemon after this many consecutive internal errors (catches programming bugs) |
-| `STALE_CLAIM_TIMEOUT` | 10 min | When to consider a claim stale (from config) |
-| `HEARTBEAT_INTERVAL` | 5 min | How often to refresh claims (`STALE_CLAIM_TIMEOUT / 2`) |
-| `ORPHAN_SCAN_INTERVAL` | 10 min | Base interval for orphan scan (`= STALE_CLAIM_TIMEOUT`) |
-| `ORPHAN_SCAN_JITTER` | 0-1 min | Random jitter to avoid thundering herd (`STALE_CLAIM_TIMEOUT × 0.1`) |
-| `max_retries` | 3 | Per-job retry limit |
-| `base_backoff_seconds` | 1.0 | Initial retry delay |
-| `_task_batch_size` | 10 | Tasks loaded per DB query |
-| `circuit_breaker_threshold` | 5 | Consecutive failures before trip |
-| `job_timeout` | 120s (TaskJob), 60s (EvalJob) | Default timeout for LLM calls |
-| `shield_timeout` | 30s | Timeout for shielded DB writes |
+| `MAX_CONCURRENT` | 20 | 全局并发槽位 |
+| `POLL_INTERVAL` | 0.1s | 分派尝试间隔 |
+| `MAX_CONSECUTIVE_ERRORS` | 50 | 内部连续错误达到该数停止守护进程，捕获程序缺陷 |
+| `STALE_CLAIM_TIMEOUT` | 10 min | 认领过期阈值，来自配置 |
+| `HEARTBEAT_INTERVAL` | 5 min | 刷新频率，`STALE_CLAIM_TIMEOUT / 2` |
+| `ORPHAN_SCAN_INTERVAL` | 10 min | 扫描基础间隔，`= STALE_CLAIM_TIMEOUT` |
+| `ORPHAN_SCAN_JITTER` | 0-1 min | 防惊群抖动，`STALE_CLAIM_TIMEOUT × 0.1` |
+| `max_retries` | 3 | 逐作业重试上限 |
+| `base_backoff_seconds` | 1.0 | 初始重试延迟 |
+| `_task_batch_size` | 10 | 每次查库加载任务数 |
+| `circuit_breaker_threshold` | 5 | 连续失败熔断阈值 |
+| `job_timeout` | 120s (TaskJob), 60s (EvalJob) | 默认 LLM 超时 |
+| `shield_timeout` | 30s | 屏蔽取消的写库超时 |
 
-## Appendix: File References
+<a id="appendix-file-references"></a>
+## 附录：文件参考
 
-| Concept | File |
+| 概念 | 文件 |
 |---------|------|
-| ExperimentRunner daemon | `experiment_runner.py` |
+| ExperimentRunner 守护进程 | `experiment_runner.py` |
 | RunningExperiment | `experiment_runner.py` |
 | TaskJob / EvalJob | `experiment_runner.py` |
-| Token bucket registry | `experiment_runner.py` |
-| DB model | `models.py` |
-| Status type (`Literal`) | `db/types/experiment_config.py` |
-| Stop/Resume mutations | `experiment_mutations.py` |
-| GraphQL ExperimentJob type | `api/types/ExperimentJob.py` |
-| Navigation dialog | `pages/playground/ConfirmExperimentNavigationDialog.tsx` |
-| Experiments table (status column) | `pages/experiments/ExperimentsTable.tsx` |
-| Action menu (stop/resume) | `components/experiment/ExperimentActionMenu.tsx` |
+| 令牌桶注册表 | `experiment_runner.py` |
+| 数据库模型 | `models.py` |
+| 状态类型（`Literal`） | `db/types/experiment_config.py` |
+| 停止/恢复变更 | `experiment_mutations.py` |
+| GraphQL ExperimentJob 类型 | `api/types/ExperimentJob.py` |
+| 导航对话框 | `pages/playground/ConfirmExperimentNavigationDialog.tsx` |
+| 实验表格状态列 | `pages/experiments/ExperimentsTable.tsx` |
+| 操作菜单，停止/恢复 | `components/experiment/ExperimentActionMenu.tsx` |
 
-## Appendix: Related Documents
+<a id="appendix-related-documents"></a>
+## 附录：相关文档
 
-### Lifecycle (State Transitions)
+<a id="lifecycle-state-transitions"></a>
+### 生命周期（状态转换）
 
-| Document | Purpose | When to Read |
+| 文档 | 用途 | 阅读时机 |
 |----------|---------|--------------|
-| [Lifecycle](./experiment-runner-background-process/appendix-lifecycle.md) | Overview with patterns and timelines | First read |
-| [Stopping Deep Dive](./experiment-runner-background-process/appendix-stopping-deep-dive.md) | Formal analysis: 5 actors, proofs, checklist | When modifying stop logic |
-| [Resume Deep Dive](./experiment-runner-background-process/appendix-resume-deep-dive.md) | Formal analysis: atomic claims, cooldown | When modifying resume logic |
+| [生命周期](./experiment-runner-background-process/appendix-lifecycle.md) | 模式和时间线概览 | 首先阅读 |
+| [停止深入分析](./experiment-runner-background-process/appendix-stopping-deep-dive.md) | 形式化分析：5 类执行方、证明和清单 | 修改停止逻辑时 |
+| [恢复深入分析](./experiment-runner-background-process/appendix-resume-deep-dive.md) | 形式化分析：原子认领、冷却 | 修改恢复逻辑时 |
 
-### Rate Limiting
+<a id="rate-limiting"></a>
+### 限流
 
-| Document | Purpose | When to Read |
+| 文档 | 用途 | 阅读时机 |
 |----------|---------|--------------|
-| [Rate Limiting](./experiment-runner-background-process/appendix-rate-limiting.md) | Design + provider reference | Rate limit changes |
+| [限流](./experiment-runner-background-process/appendix-rate-limiting.md) | 设计及提供商参考 | 修改限流时 |
 
-### Reference Documents
+<a id="reference-documents"></a>
+### 参考文档
 
-| Document | Purpose |
+| 文档 | 用途 |
 |----------|---------|
-| [FAQ](./experiment-runner-background-process/appendix-faq.md) | "Why" questions about constants and architecture |
-| [Schema Design](./experiment-runner-background-process/appendix-schema.md) | Schema design decisions |
-| [Error Types](./experiment-runner-background-process/appendix-error-types.md) | Provider SDK error hierarchies |
+| [常见问题](./experiment-runner-background-process/appendix-faq.md) | 常量和架构的原因 |
+| [结构设计](./experiment-runner-background-process/appendix-schema.md) | 数据库结构决策 |
+| [错误类型](./experiment-runner-background-process/appendix-error-types.md) | 提供商 SDK 错误层级 |
 
-### Backup (Original Files)
+<a id="backup-original-files"></a>
+### 备份（原始文件）
 
-Original unmerged files are preserved in `experiment-runner-background-process/backup/`.
+原始未合并文件保留在 `experiment-runner-background-process/backup/`。

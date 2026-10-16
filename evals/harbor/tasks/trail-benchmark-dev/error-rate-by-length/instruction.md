@@ -1,1 +1,1 @@
-In research-assistant, do longer agent runs go wrong more often? Compare traces with fewer than 15 spans against traces with 40 or more, and give each group's error rate as a percentage of its spans.
+在 research-assistant 中，智能体运行越长是否越容易出错？比较少于 15 个跨度（span）的追踪记录与包含 40 个及以上跨度的追踪记录，分别给出两组的错误率，以错误跨度占该组全部跨度的百分比表示。

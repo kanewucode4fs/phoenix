@@ -5,7 +5,7 @@ allowed_tools: [Skill, Read]
 runs: 3
 tags: [phoenix-cli]
 ---
-Since about 9am today roughly half the traces in my Phoenix project `research-agent` are erroring. It was fine all week. Below is a dump of the last couple of hours of traces, trimmed to the id, status, duration and start time, then the full detail for one of the errored ones. You can't reach my Phoenix from here. What is going on, is it my agent's fault, and how do I measure how many traces this hit?
+今天大约上午 9 点开始，我的 Phoenix 项目 `research-agent` 中约有一半追踪记录出错，本周此前一直正常。下面是最近几小时的追踪记录导出，仅保留 ID、状态、耗时和开始时间，随后附上一条出错记录的完整详情。你无法从这里访问我的 Phoenix。发生了什么，是智能体本身的问题吗？如何测量受影响的追踪记录数量？
 
 ```json
 [

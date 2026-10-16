@@ -1,51 +1,56 @@
-# Cloud LLM Authentication Methods
+<a id="cloud-llm-authentication-methods"></a>
+# 云端 LLM 认证方法
 
-A comprehensive technical reference for authentication patterns when integrating with cloud-hosted Large Language Models (LLMs), specifically Azure OpenAI and AWS Bedrock.
+本文是集成云托管大语言模型（LLM）时认证模式的完整技术参考，重点介绍 Azure OpenAI 和 AWS Bedrock。
 
-## Table of Contents
+<a id="table-of-contents"></a>
+## 目录
 
-1. [Executive Summary](#executive-summary)
-2. [Azure OpenAI Authentication](#azure-openai-authentication)
-   - [Authentication Methods Overview](#azure-authentication-methods-overview)
-   - [API Key Authentication](#azure-api-key-authentication)
-   - [Azure AD Token Provider (Service Principal)](#azure-ad-token-provider-service-principal)
-   - [DefaultAzureCredential (Default Credentials)](#defaultazurecredential-default-credentials)
-   - [SDK Implementation Details](#azure-sdk-implementation-details)
-3. [AWS Bedrock Authentication](#aws-bedrock-authentication)
-   - [Authentication Methods Overview](#aws-authentication-methods-overview)
-   - [Access Keys Authentication](#access-keys-authentication)
-   - [Default Credential Chain](#aws-default-credential-chain)
-   - [SDK Implementation Details](#aws-sdk-implementation-details)
-4. [Phoenix Implementation](#phoenix-implementation)
-   - [Data Model](#data-model)
-   - [Client Factory Pattern](#client-factory-pattern)
-5. [Production Readiness Assessment](#production-readiness-assessment)
-6. [Future Considerations](#future-considerations)
-7. [References](#references)
+1. [概览](#executive-summary)
+2. [Azure OpenAI 认证](#azure-openai-authentication)
+   - [认证方法概览](#azure-authentication-methods-overview)
+   - [API 密钥认证](#azure-api-key-authentication)
+   - [Azure AD token 提供器（服务主体）](#azure-ad-token-provider-service-principal)
+   - [DefaultAzureCredential（默认凭证）](#defaultazurecredential-default-credentials)
+   - [SDK 实现详情](#azure-sdk-implementation-details)
+3. [AWS Bedrock 认证](#aws-bedrock-authentication)
+   - [认证方法概览](#aws-authentication-methods-overview)
+   - [访问密钥认证](#access-keys-authentication)
+   - [默认凭证链](#aws-default-credential-chain)
+   - [SDK 实现详情](#aws-sdk-implementation-details)
+4. [Phoenix 实现](#phoenix-implementation)
+   - [数据模型](#data-model)
+   - [客户端工厂模式](#client-factory-pattern)
+5. [生产就绪评估](#production-readiness-assessment)
+6. [未来考虑](#future-considerations)
+7. [参考资料](#references)
 
 ---
 
-## Executive Summary
+<a id="executive-summary"></a>
+## 概览
 
-Phoenix supports three authentication methods for Azure OpenAI and two for AWS Bedrock:
+Phoenix 为 Azure OpenAI 支持三种认证方式，为 AWS Bedrock 支持两种：
 
-| Provider | Auth Method | Use Case | Production Ready |
+| 提供商 | 认证方式 | 场景 | 生产就绪 |
 |----------|-------------|----------|------------------|
-| **Azure OpenAI** | `api_key` | Simple deployments with API keys | ✅ |
-| **Azure OpenAI** | `ad_token_provider` | Service principal with client secret | ✅ |
-| **Azure OpenAI** | `default_credentials` | Managed Identity, Azure CLI, env vars | ✅ |
-| **AWS Bedrock** | `access_keys` | Explicit IAM credentials | ✅ |
-| **AWS Bedrock** | `default_credentials` | IAM roles, env vars, config files | ✅ |
+| **Azure OpenAI** | `api_key` | 使用 API 密钥的简单部署 | ✅ |
+| **Azure OpenAI** | `ad_token_provider` | 使用客户端密钥的服务主体 | ✅ |
+| **Azure OpenAI** | `default_credentials` | 托管身份、Azure CLI、环境变量 | ✅ |
+| **AWS Bedrock** | `access_keys` | 显式 IAM 凭证 | ✅ |
+| **AWS Bedrock** | `default_credentials` | IAM 角色、环境变量、配置文件 | ✅ |
 
-These methods cover 80%+ of real-world deployment scenarios. Advanced patterns (user-assigned managed identity, cross-account assume-role) can be added based on customer demand.
+这些方法覆盖 80% 以上实际部署场景。用户分配托管身份、跨账号角色扮演等高级模式，可按客户需求添加。
 
 ---
 
-## Azure OpenAI Authentication
+<a id="azure-openai-authentication"></a>
+## Azure OpenAI 认证
 
-### Azure Authentication Methods Overview
+<a id="azure-authentication-methods-overview"></a>
+### Azure 认证方法概览
 
-Azure OpenAI supports three primary authentication mechanisms, each suited for different deployment scenarios:
+Azure OpenAI 支持三种主要认证机制，分别适用于不同部署场景：
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -74,22 +79,23 @@ Azure OpenAI supports three primary authentication mechanisms, each suited for d
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Azure API Key Authentication
+<a id="azure-api-key-authentication"></a>
+### Azure API 密钥认证
 
-The simplest authentication method. Azure OpenAI resources can generate API keys from the Azure Portal.
+最简单的认证方法。可在 Azure Portal 为 Azure OpenAI 资源生成 API 密钥。
 
-**When to use:**
-- Quick prototyping and development
-- Simple deployments without Azure AD integration
-- Scenarios where key rotation is manageable
+**适用场景：**
+- 快速原型和开发。
+- 不集成 Azure AD 的简单部署。
+- 可妥善管理密钥轮换的场景。
 
-**Environment Variables:**
-- `AZURE_OPENAI_API_KEY` - The API key
-- `AZURE_OPENAI_ENDPOINT` - The resource endpoint (e.g., `https://my-resource.openai.azure.com`)
+**环境变量：**
+- `AZURE_OPENAI_API_KEY`：API 密钥。
+- `AZURE_OPENAI_ENDPOINT`：资源端点，例如 `https://my-resource.openai.azure.com`。
 
-**SDK Behavior:**
+**SDK 行为：**
 
-The OpenAI Python SDK's `AzureOpenAI` client checks for credentials in this order:
+OpenAI Python SDK 的 `AzureOpenAI` 客户端按以下顺序检查凭证：
 
 ```python
 # From openai-python src/openai/lib/azure.py lines 192-201
@@ -107,27 +113,28 @@ if api_key is None and azure_ad_token is None and azure_ad_token_provider is Non
     )
 ```
 
-> **Source:** [openai/openai-python `azure.py` L192-201](https://github.com/openai/openai-python/blob/722d3fffb82e9150a16da01e432b70d126ca5254/src/openai/lib/azure.py#L192-L201)
+> **来源：** [openai/openai-python `azure.py` L192-201](https://github.com/openai/openai-python/blob/722d3fffb82e9150a16da01e432b70d126ca5254/src/openai/lib/azure.py#L192-L201)
 
-### Azure AD Token Provider (Service Principal)
+<a id="azure-ad-token-provider-service-principal"></a>
+### Azure AD token 提供器（服务主体）
 
-For production workloads requiring Azure AD authentication with explicit service principal credentials.
+适合需要显式服务主体凭证进行 Azure AD 认证的生产负载。
 
-**When to use:**
-- Production deployments with service-to-service authentication
-- CI/CD pipelines
-- Scenarios requiring explicit credential management
-- Multi-tenant applications
+**适用场景：**
+- 服务间认证的生产部署。
+- CI/CD 流水线。
+- 需要显式凭证管理的场景。
+- 多租户应用。
 
-**Required Credentials:**
-- `tenant_id` - Azure AD tenant ID
-- `client_id` - Application (client) ID
-- `client_secret` - Client secret value
-- `scope` - OAuth scope (default: `https://cognitiveservices.azure.com/.default`)
+**必需凭证：**
+- `tenant_id`：Azure AD 租户 ID。
+- `client_id`：应用或客户端 ID。
+- `client_secret`：客户端密钥值。
+- `scope`：OAuth scope，默认 `https://cognitiveservices.azure.com/.default`。
 
-**How it works:**
+**工作原理：**
 
-The `ClientSecretCredential` from `azure-identity` authenticates with Azure AD and returns tokens:
+`azure-identity` 的 `ClientSecretCredential` 向 Azure AD 认证并返回 token：
 
 ```python
 # From azure-sdk-for-python azure/identity/_credentials/client_secret.py line 9
@@ -135,9 +142,9 @@ class ClientSecretCredential(ClientCredentialBase):
     """Authenticates as a service principal using a client secret."""
 ```
 
-> **Source:** [Azure/azure-sdk-for-python `client_secret.py` L9](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/client_secret.py#L9)
+> **来源：** [Azure/azure-sdk-for-python `client_secret.py` L9](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/client_secret.py#L9)
 
-The `get_bearer_token_provider` function wraps the credential to provide a callable that returns bearer tokens:
+`get_bearer_token_provider` 包装凭证，提供返回 bearer token 的可调用对象：
 
 ```python
 # From azure-sdk-for-python azure/identity/_bearer_token_provider.py lines 17-46
@@ -166,21 +173,22 @@ def get_bearer_token_provider(credential: TokenProvider, *scopes: str) -> Callab
     return wrapper
 ```
 
-> **Source:** [Azure/azure-sdk-for-python `_bearer_token_provider.py` L17-46](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_bearer_token_provider.py#L17-L46)
+> **来源：** [Azure/azure-sdk-for-python `_bearer_token_provider.py` L17-46](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_bearer_token_provider.py#L17-L46)
 
-### DefaultAzureCredential (Default Credentials)
+<a id="defaultazurecredential-default-credentials"></a>
+### DefaultAzureCredential（默认凭证）
 
-The recommended approach for production workloads that need to work across multiple environments without code changes.
+对于需要无需修改代码即可跨环境运行的生产负载，这是推荐方式。
 
-**When to use:**
-- Production deployments on Azure (VMs, App Service, AKS, Functions)
-- Local development with Azure CLI authentication
-- Kubernetes with Azure Workload Identity
-- Scenarios requiring environment-agnostic code
+**适用场景：**
+- Azure 上的生产部署，如虚拟机、App Service、AKS、Functions。
+- 使用 Azure CLI 认证的本地开发。
+- 使用 Azure Workload Identity 的 Kubernetes。
+- 需要环境无关代码的场景。
 
-**Credential Chain Order:**
+**凭证链顺序：**
 
-`DefaultAzureCredential` tries these credential sources in order, stopping at the first successful one:
+`DefaultAzureCredential` 依次尝试这些来源，遇到首个成功项即停止：
 
 ```python
 # From azure-sdk-for-python azure/identity/_credentials/default.py lines 60-82
@@ -205,11 +213,11 @@ class DefaultAzureCredential(ChainedTokenCredential):
     """
 ```
 
-> **Source:** [Azure/azure-sdk-for-python `default.py` L60-82](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/default.py#L60-L82)
+> **来源：** [Azure/azure-sdk-for-python `default.py` L60-82](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/default.py#L60-L82)
 
-**Environment Variables for EnvironmentCredential:**
+**EnvironmentCredential 环境变量：**
 
-The first provider in the chain, `EnvironmentCredential`, checks for service principal credentials:
+凭证链首个提供器 `EnvironmentCredential` 检查服务主体凭证：
 
 ```python
 # From azure-sdk-for-python azure/identity/_credentials/environment.py lines 24-48
@@ -234,11 +242,11 @@ class EnvironmentCredential:
     """
 ```
 
-> **Source:** [Azure/azure-sdk-for-python `environment.py` L24-48](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/environment.py#L24-L48)
+> **来源：** [Azure/azure-sdk-for-python `environment.py` L24-48](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/environment.py#L24-L48)
 
-**Managed Identity:**
+**托管身份：**
 
-When running on Azure infrastructure, `ManagedIdentityCredential` automatically detects the hosting environment:
+在 Azure 基础设施上运行时，`ManagedIdentityCredential` 自动检测宿主环境：
 
 ```python
 # From azure-sdk-for-python azure/identity/_credentials/managed_identity.py lines 48-71
@@ -256,13 +264,14 @@ class ManagedIdentityCredential:
     """
 ```
 
-> **Source:** [Azure/azure-sdk-for-python `managed_identity.py` L48-71](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/managed_identity.py#L48-L71)
+> **来源：** [Azure/azure-sdk-for-python `managed_identity.py` L48-71](https://github.com/Azure/azure-sdk-for-python/blob/f7ef11846bd79d4cb36349b2d917a7b92f1fc03a/sdk/identity/azure-identity/azure/identity/_credentials/managed_identity.py#L48-L71)
 
-### Azure SDK Implementation Details
+<a id="azure-sdk-implementation-details"></a>
+### Azure SDK 实现详情
 
-**OpenAI Python SDK Azure Client:**
+**OpenAI Python SDK Azure 客户端：**
 
-The `AzureOpenAI` client accepts three mutually exclusive authentication options:
+`AzureOpenAI` 接受三种互斥认证选项：
 
 ```python
 # From openai-python src/openai/lib/azure.py lines 151-171
@@ -288,17 +297,19 @@ def __init__(
     """
 ```
 
-> **Source:** [openai/openai-python `azure.py` L151-171](https://github.com/openai/openai-python/blob/722d3fffb82e9150a16da01e432b70d126ca5254/src/openai/lib/azure.py#L151-L171)
+> **来源：** [openai/openai-python `azure.py` L151-171](https://github.com/openai/openai-python/blob/722d3fffb82e9150a16da01e432b70d126ca5254/src/openai/lib/azure.py#L151-L171)
 
-**Key insight:** The `api_key` parameter accepts `Callable[[], str]`, which allows passing a token provider function. This is how Phoenix integrates `get_bearer_token_provider` with the OpenAI client.
+**关键认识：** `api_key` 接受 `Callable[[], str]`，允许传入 token 提供器函数。Phoenix 因此能将 `get_bearer_token_provider` 与 OpenAI 客户端集成。
 
 ---
 
-## AWS Bedrock Authentication
+<a id="aws-bedrock-authentication"></a>
+## AWS Bedrock 认证
 
-### AWS Authentication Methods Overview
+<a id="aws-authentication-methods-overview"></a>
+### AWS 认证方法概览
 
-AWS uses a standardized credential provider chain across all SDKs:
+AWS 在所有 SDK 中使用标准化凭证提供器链：
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -331,24 +342,25 @@ AWS uses a standardized credential provider chain across all SDKs:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Access Keys Authentication
+<a id="access-keys-authentication"></a>
+### 访问密钥认证
 
-Explicit IAM credentials for scenarios requiring direct credential management.
+显式 IAM 凭证，适用于需要直接管理凭证的情况。
 
-**When to use:**
-- CI/CD pipelines with IAM user credentials
-- Cross-account access with STS temporary credentials
-- Scenarios where IAM roles are not available
-- Testing and development
+**适用场景：**
+- 使用 IAM 用户凭证的 CI/CD。
+- 使用 STS 临时凭证的跨账号访问。
+- IAM 角色不可用的场景。
+- 测试和开发。
 
-**Required Credentials:**
-- `aws_access_key_id` - IAM access key ID
-- `aws_secret_access_key` - IAM secret access key
-- `aws_session_token` - (Optional) Session token for temporary credentials
+**必需凭证：**
+- `aws_access_key_id`：IAM 访问密钥 ID。
+- `aws_secret_access_key`：IAM 私有访问密钥。
+- `aws_session_token`：可选，临时凭证会话 token。
 
-**SDK Behavior:**
+**SDK 行为：**
 
-The `EnvProvider` in botocore reads credentials from environment variables:
+botocore 的 `EnvProvider` 从环境变量读取凭证：
 
 ```python
 # From botocore/credentials.py lines 1185-1194
@@ -364,20 +376,21 @@ class EnvProvider(CredentialProvider):
     ACCOUNT_ID = "AWS_ACCOUNT_ID"
 ```
 
-> **Source:** [boto/botocore `credentials.py` L1185-1194](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/credentials.py#L1185-L1194)
+> **来源：** [boto/botocore `credentials.py` L1185-1194](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/credentials.py#L1185-L1194)
 
-### AWS Default Credential Chain
+<a id="aws-default-credential-chain"></a>
+### AWS 默认凭证链
 
-The recommended approach for production workloads that automatically discovers credentials from the environment.
+推荐用于生产负载，可自动从环境发现凭证。
 
-**When to use:**
-- EC2 instances with IAM roles
-- Lambda functions
-- ECS tasks with task roles
-- EKS pods with IRSA (IAM Roles for Service Accounts)
-- Local development with AWS CLI profiles
+**适用场景：**
+- 带 IAM 角色的 EC2 实例。
+- Lambda 函数。
+- 带任务角色的 ECS 任务。
+- 使用 IRSA，即服务账号 IAM 角色的 EKS Pod。
+- 使用 AWS CLI 配置档案的本地开发。
 
-**Credential Chain Implementation:**
+**凭证链实现：**
 
 ```python
 # From botocore/credentials.py lines 113-152
@@ -421,11 +434,11 @@ post_profile = [
 providers = pre_profile + profile_providers + post_profile
 ```
 
-> **Source:** [boto/botocore `credentials.py` L113-152](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/credentials.py#L113-L152)
+> **来源：** [boto/botocore `credentials.py` L113-152](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/credentials.py#L113-L152)
 
-**AssumeRole Provider:**
+**AssumeRole 提供器：**
 
-For cross-account access or role chaining:
+用于跨账号访问或角色链：
 
 ```python
 # From botocore/credentials.py lines 1535-1548
@@ -439,11 +452,12 @@ class AssumeRoleProvider(CredentialProvider):
     EXPIRY_WINDOW_SECONDS = 60 * 15
 ```
 
-> **Source:** [boto/botocore `credentials.py` L1535-1548](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/credentials.py#L1535-L1548)
+> **来源：** [boto/botocore `credentials.py` L1535-1548](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/credentials.py#L1535-L1548)
 
-### AWS SDK Implementation Details
+<a id="aws-sdk-implementation-details"></a>
+### AWS SDK 实现详情
 
-Phoenix uses `aioboto3` for async Bedrock client creation:
+Phoenix 使用 `aioboto3` 异步创建 Bedrock 客户端：
 
 ```python
 # Explicit credentials
@@ -458,15 +472,17 @@ session = aioboto3.Session(
 session = aioboto3.Session(region_name=region_name)
 ```
 
-> **Source:** [aio-libs/aioboto3](https://github.com/aio-libs/aioboto3/blob/37216db0083e28511c4d82931855f8af2b1b102b/aioboto3/session.py)
+> **来源：** [aio-libs/aioboto3](https://github.com/aio-libs/aioboto3/blob/37216db0083e28511c4d82931855f8af2b1b102b/aioboto3/session.py)
 
-### AWS Bearer Token Authentication (Unsupported)
+<a id="aws-bearer-token-authentication-unsupported"></a>
+### AWS bearer token 认证（不支持）
 
-AWS Bedrock supports bearer token authentication via the `AWS_BEARER_TOKEN_BEDROCK` environment variable. However, **explicit bearer token passthrough is not currently supported** due to architectural limitations in botocore's token resolution system.
+AWS Bedrock 支持通过 `AWS_BEARER_TOKEN_BEDROCK` 环境变量进行 bearer token 认证。但由于 botocore token 解析系统的架构限制，**目前不支持显式透传 bearer token**。
 
-#### The Problem
+<a id="the-problem"></a>
+#### 问题
 
-Unlike credentials (`aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`) which can be passed explicitly to `Session()`, bearer tokens have no equivalent parameter:
+`aws_access_key_id`、`aws_secret_access_key`、`aws_session_token` 等凭证可显式传给 `Session()`，bearer token 却没有对应参数：
 
 ```python
 # ✅ Credentials CAN be passed explicitly
@@ -482,9 +498,10 @@ session = aioboto3.Session(
 )
 ```
 
-#### Root Cause: Hardwired Token Resolution
+<a id="root-cause-hardwired-token-resolution"></a>
+#### 根因：固定的 token 解析
 
-The bearer token is resolved internally by botocore during `create_client()`, with no injection point for explicit tokens:
+botocore 在 `create_client()` 内部解析 bearer token，没有显式 token 注入点：
 
 ```python
 # From botocore/session.py lines 847-1042
@@ -504,9 +521,9 @@ def create_client(
     )
 ```
 
-> **Source:** [boto/botocore `session.py` L847-1042](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/session.py#L847-L1042)
+> **来源：** [boto/botocore `session.py` L847-1042](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/session.py#L847-L1042)
 
-The `get_auth_token()` method uses a token provider chain with only two providers:
+`get_auth_token()` 使用仅含两个提供器的 token 链：
 
 ```python
 # From botocore/tokens.py lines 46-51
@@ -518,9 +535,9 @@ def create_token_resolver(session):
     return TokenProviderChain(providers=providers)
 ```
 
-> **Source:** [boto/botocore `tokens.py` L46-51](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/tokens.py#L46-L51)
+> **来源：** [boto/botocore `tokens.py` L46-51](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/tokens.py#L46-L51)
 
-The `ScopedEnvTokenProvider` specifically looks for environment variables named `AWS_BEARER_TOKEN_{SERVICE}`:
+`ScopedEnvTokenProvider` 专门查找 `AWS_BEARER_TOKEN_{SERVICE}` 环境变量：
 
 ```python
 # From botocore/utils.py lines 3616-3628
@@ -539,35 +556,40 @@ def _get_bearer_env_var_name(signing_name):
     return f"AWS_BEARER_TOKEN_{bearer_name}"
 ```
 
-> **Source:** [boto/botocore `utils.py` L3616-3628](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/utils.py#L3616-L3628)
+> **来源：** [boto/botocore `utils.py` L3616-3628](https://github.com/boto/botocore/blob/52799594121c562b4e293bc10aef49b49b037864/botocore/utils.py#L3616-L3628)
 
-#### Why This Matters
+<a id="why-this-matters"></a>
+#### 影响
 
-This limitation means:
+此限制意味着：
 
-1. **Cannot accept bearer tokens from frontend** - No way to pass user-provided tokens through the client creation pipeline
-2. **Cannot store bearer tokens in custom provider config** - Even if stored in the database, there's no mechanism to inject them
-3. **Environment-only support** - Bearer tokens only work if `AWS_BEARER_TOKEN_BEDROCK` is set in the server's environment
+1. **无法接受前端 bearer token**：不能通过客户端创建流水线传入用户 token。
+2. **无法在自定义提供商中存储 bearer token 以供使用**：即使保存在数据库，也无机制注入。
+3. **仅支持环境变量**：只有服务端设置 `AWS_BEARER_TOKEN_BEDROCK` 才能使用。
 
-#### Potential Workarounds (Not Recommended)
+<a id="potential-workarounds-not-recommended"></a>
+#### 潜在替代方法（不推荐）
 
-| Workaround | Problem |
+| 替代方法 | 问题 |
 |------------|---------|
-| Temporarily set env var | Race conditions in concurrent server |
-| Custom token provider injection | Requires monkey-patching botocore internals |
-| Fork botocore/aiobotocore | Maintenance burden |
+| 临时设置环境变量 | 并发服务端存在竞态 |
+| 注入自定义 token 提供器 | 需要猴子补丁修改 botocore 内部 |
+| 派生 botocore/aiobotocore | 维护负担 |
 
-#### Current Status
+<a id="current-status"></a>
+#### 当前状态
 
-For now, AWS Bedrock bearer token authentication is only supported when `AWS_BEARER_TOKEN_BEDROCK` is already present in the server's environment. Explicit bearer token configuration via the UI or API is not feasible without upstream changes to botocore.
+目前只有服务端环境已设置 `AWS_BEARER_TOKEN_BEDROCK` 时才支持 AWS Bedrock bearer token 认证。没有 botocore 上游修改，通过界面或 API 显式配置不可行。
 
 ---
 
-## Phoenix Implementation
+<a id="phoenix-implementation"></a>
+## Phoenix 实现
 
-### Data Model
+<a id="data-model"></a>
+### 数据模型
 
-Phoenix uses a discriminated union pattern for authentication methods:
+Phoenix 采用带判别字段的联合类型表示认证方式：
 
 ```python
 class AuthenticationMethodApiKey(BaseModel):
@@ -588,7 +610,7 @@ class AuthenticationMethodDefaultCredentials(BaseModel):
     type: Literal["default_credentials"] = "default_credentials"
 ```
 
-**Azure Authentication Union:**
+**Azure 认证联合类型：**
 
 ```python
 # Discriminated union with Pydantic
@@ -600,7 +622,7 @@ AzureOpenAIAuthenticationMethod = Annotated[
 ]
 ```
 
-**AWS Authentication Union:**
+**AWS 认证联合类型：**
 
 ```python
 # Discriminated union with Pydantic
@@ -611,11 +633,12 @@ AWSBedrockAuthenticationMethod = Annotated[
 ```
 
 
-### Client Factory Pattern
+<a id="client-factory-pattern"></a>
+### 客户端工厂模式
 
-Phoenix uses a factory pattern to create fresh clients with proper credential handling:
+Phoenix 使用工厂模式创建新客户端，并正确处理凭证：
 
-**Azure OpenAI with DefaultAzureCredential:**
+**Azure OpenAI 使用 DefaultAzureCredential：**
 
 ```python
 elif method.type == "default_credentials":
@@ -641,7 +664,7 @@ elif method.type == "default_credentials":
 ```
 
 
-**AWS Bedrock with Default Credentials:**
+**AWS Bedrock 使用默认凭证：**
 
 ```python
 elif method.type == "default_credentials":
@@ -661,37 +684,40 @@ elif method.type == "default_credentials":
 
 ---
 
-## Production Readiness Assessment
+<a id="production-readiness-assessment"></a>
+## 生产就绪评估
 
-### Coverage Analysis
+<a id="coverage-analysis"></a>
+### 覆盖分析
 
-| Scenario | Azure | AWS | Status |
+| 场景 | Azure | AWS | 状态 |
 |----------|-------|-----|--------|
-| Local development with CLI auth | ✅ `default_credentials` | ✅ `default_credentials` | Covered |
-| Simple API key deployment | ✅ `api_key` | N/A | Covered |
-| Service principal (explicit) | ✅ `ad_token_provider` | ✅ `access_keys` | Covered |
-| EC2/VM with IAM role | ✅ `default_credentials` | ✅ `default_credentials` | Covered |
-| ECS/EKS with task role | ✅ `default_credentials` | ✅ `default_credentials` | Covered |
-| Lambda with execution role | ✅ `default_credentials` | ✅ `default_credentials` | Covered |
-| Azure App Service with MI | ✅ `default_credentials` | N/A | Covered |
-| User-assigned Managed Identity | ⚠️ Partial | N/A | Gap |
-| Cross-account assume-role | N/A | ⚠️ Not explicit | Gap |
-| Certificate-based auth | ❌ Not supported | N/A | Gap |
+| CLI 认证的本地开发 | ✅ `default_credentials` | ✅ `default_credentials` | 已覆盖 |
+| 简单 API 密钥部署 | ✅ `api_key` | 不适用 | 已覆盖 |
+| 显式服务主体 | ✅ `ad_token_provider` | ✅ `access_keys` | 已覆盖 |
+| EC2/虚拟机 IAM 角色 | ✅ `default_credentials` | ✅ `default_credentials` | 已覆盖 |
+| ECS/EKS 任务角色 | ✅ `default_credentials` | ✅ `default_credentials` | 已覆盖 |
+| Lambda 执行角色 | ✅ `default_credentials` | ✅ `default_credentials` | 已覆盖 |
+| Azure App Service 托管身份 | ✅ `default_credentials` | 不适用 | 已覆盖 |
+| 用户分配托管身份 | ⚠️ 部分 | 不适用 | 待补齐 |
+| 跨账号角色扮演 | 不适用 | ⚠️ 未显式提供 | 待补齐 |
+| 证书认证 | ❌ 不支持 | 不适用 | 待补齐 |
 
-### Gaps and Future Considerations
+<a id="gaps-and-future-considerations"></a>
+### 不足和未来考虑
 
-**1. User-Assigned Managed Identity (Azure)**
+**1. 用户分配托管身份（Azure）**
 
-Currently, `DefaultAzureCredential` uses system-assigned identity by default. For user-assigned identity, the `managed_identity_client_id` parameter would need to be exposed:
+目前 `DefaultAzureCredential` 默认使用系统分配身份。支持用户分配身份需暴露 `managed_identity_client_id`：
 
 ```python
 # Would require:
 DefaultAzureCredential(managed_identity_client_id="client-id-of-user-assigned-mi")
 ```
 
-**2. Cross-Account Assume Role (AWS)**
+**2. 跨账号角色扮演（AWS）**
 
-The current `default_credentials` relies on profile configuration for assume-role. Explicit assume-role support would require:
+当前 `default_credentials` 依赖配置档案实现角色扮演。显式支持需要：
 
 ```python
 # Would require STS client and role ARN:
@@ -700,54 +726,62 @@ sts_client.assume_role(
 )
 ```
 
-**3. Scope Customization (Azure)**
+**3. 自定义 scope（Azure）**
 
-The scope is currently hardcoded to `https://cognitiveservices.azure.com/.default`. This is correct for Azure OpenAI but may need parameterization for other Azure AI services.
+当前 scope 硬编码为 `https://cognitiveservices.azure.com/.default`。对 Azure OpenAI 正确，但其他 Azure AI 服务可能需参数化。
 
-### Security Best Practices
+<a id="security-best-practices"></a>
+### 安全最佳实践
 
-| Practice | Implementation Status |
+| 实践 | 实现状态 |
 |----------|----------------------|
-| No secrets in code | ✅ Secrets stored in database with encryption |
-| Credential isolation | ✅ `without_env_vars()` prevents env var leakage |
-| Least privilege | ⚠️ User responsibility (documentation needed) |
-| Credential rotation | ⚠️ Supported but not enforced |
-| Audit logging | ⚠️ Not implemented |
+| 代码中不含密钥 | ✅ 在数据库加密存储 |
+| 凭证隔离 | ✅ `without_env_vars()` 防止环境变量泄漏 |
+| 最小权限 | ⚠️ 用户负责，需文档 |
+| 凭证轮换 | ⚠️ 支持但不强制 |
+| 审计日志 | ⚠️ 未实现 |
 
 ---
 
-## Future Considerations
+<a id="future-considerations"></a>
+## 未来考虑
 
-### Short-term Improvements
+<a id="short-term-improvements"></a>
+### 短期改进
 
-1. **Add `managed_identity_client_id` parameter** for Azure user-assigned identity support
-2. **Document least privilege IAM policies** for AWS Bedrock access
-3. **Add credential validation** on save to catch misconfigurations early
+1. **添加 `managed_identity_client_id` 参数**，支持 Azure 用户分配身份。
+2. **说明最小权限 IAM 策略**，用于 AWS Bedrock 访问。
+3. **保存时验证凭证**，提前发现错误配置。
 
-### Medium-term Improvements
+<a id="medium-term-improvements"></a>
+### 中期改进
 
-1. **Explicit assume-role support** for AWS cross-account scenarios
-2. **Certificate-based authentication** for Azure service principals
-3. **Credential health checks** to detect expiring or invalid credentials
+1. **显式角色扮演支持**，面向 AWS 跨账号场景。
+2. **证书认证**，用于 Azure 服务主体。
+3. **凭证健康检查**，检测即将过期或无效凭证。
 
-### Long-term Considerations
+<a id="long-term-considerations"></a>
+### 长期考虑
 
-1. **Vault integration** (HashiCorp Vault, AWS Secrets Manager, Azure Key Vault)
-2. **Credential rotation automation**
-3. **Audit logging** for credential usage
+1. **密钥保管库集成**，如 HashiCorp Vault、AWS Secrets Manager、Azure Key Vault。
+2. **自动轮换凭证**。
+3. **凭证使用审计日志**。
 
 ---
 
-## References
+<a id="references"></a>
+## 参考资料
 
-### Official Documentation
+<a id="official-documentation"></a>
+### 官方文档
 
-- [Azure Identity client library for Python](https://learn.microsoft.com/en-us/python/api/overview/azure/identity-readme)
-- [DefaultAzureCredential usage guidance](https://learn.microsoft.com/en-us/azure/developer/python/sdk/authentication/credential-chains)
-- [AWS SDK credentials configuration](https://docs.aws.amazon.com/sdkref/latest/guide/standardized-credentials.html)
-- [AWS IAM best practices](https://aws.amazon.com/iam/resources/best-practices/)
+- [Azure Identity Python 客户端库](https://learn.microsoft.com/en-us/python/api/overview/azure/identity-readme)
+- [DefaultAzureCredential 使用指引](https://learn.microsoft.com/en-us/azure/developer/python/sdk/authentication/credential-chains)
+- [AWS SDK 凭证配置](https://docs.aws.amazon.com/sdkref/latest/guide/standardized-credentials.html)
+- [AWS IAM 最佳实践](https://aws.amazon.com/iam/resources/best-practices/)
 
-### SDK Source Code
+<a id="sdk-source-code"></a>
+### SDK 源码
 
 - [openai/openai-python](https://github.com/openai/openai-python) - `722d3fffb82e9150a16da01e432b70d126ca5254`
 - [Azure/azure-sdk-for-python](https://github.com/Azure/azure-sdk-for-python) - `f7ef11846bd79d4cb36349b2d917a7b92f1fc03a`

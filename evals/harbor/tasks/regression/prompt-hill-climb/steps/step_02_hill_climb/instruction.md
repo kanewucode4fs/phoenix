@@ -1,4 +1,2 @@
-Now find a system prompt that gets every example in "banking_saas_dataset_clean" right.
-Run the empty prompt first as a baseline experiment. Then iterate: each prompt version is
-its own experiment on the dataset, scored by the evaluator. Stop once an experiment
-passes all 28 examples.
+现在找到一个能正确处理 "banking_saas_dataset_clean" 中每个示例的系统提示词。
+先运行空提示词，作为基线实验。然后迭代：每个提示词版本都在该数据集上运行独立实验，并由评估器评分。一旦某次实验通过全部 28 个示例，就停止。

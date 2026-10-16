@@ -1,29 +1,35 @@
-# Phoenix OTEL Reference
+<a id="phoenix-otel-reference"></a>
 
-Welcome to the Phoenix OTEL reference documentation. This package provides a lightweight wrapper around OpenTelemetry primitives with Phoenix-aware defaults and tracing decorators for common GenAI patterns. `arize-phoenix-otel` simplifies OpenTelemetry configuration for Phoenix users by providing:
+# Phoenix OTEL 参考文档
 
-- Phoenix-aware defaults for common OpenTelemetry primitives
-- Automatic configuration from environment variables 
-- Drop-in replacements for OTel classes with enhanced functionality
-- Simplified tracing setup with the `register()` function
-- Tracing decorators for GenAI patterns
+欢迎阅读 Phoenix OTEL 参考文档。此包提供对 OpenTelemetry 基础能力的轻量封装，带有适合 Phoenix 的默认值以及常见 GenAI 模式的追踪装饰器。`arize-phoenix-otel` 通过以下功能简化 Phoenix 用户的 OpenTelemetry 配置：
 
-The key components include:
+- 常见 OpenTelemetry 基础能力的 Phoenix 默认配置
+- 从环境变量自动配置
+- 功能增强的 OTel 类直接替代实现
+- 通过 `register()` 函数简化追踪配置
+- GenAI 模式的追踪装饰器
 
-- **[Register](api/register)** - Simple setup and configuration with `register()`
-- **[TracerProvider](api/provider)** - Phoenix-aware tracer provider
-- **[Span Processors](api/processors)** - Batch and simple span processors
-- **[Exporters](api/exporters)** - HTTP and gRPC span exporters
+主要组件包括：
 
-## Installation
+- **[注册](api/register)**：通过 `register()` 简单完成初始化和配置
+- **[TracerProvider](api/provider)**：适配 Phoenix 的追踪提供程序
+- **[Span 处理器](api/processors)**：批处理和简单 Span 处理器
+- **[导出器](api/exporters)**：HTTP 和 gRPC Span 导出器
+
+<a id="installation"></a>
+
+## 安装
 
 ```bash
 pip install arize-phoenix-otel
 ```
 
-## Quick Start
+<a id="quick-start"></a>
 
-The simplest way to get started is with the `register()` function:
+## 快速开始
+
+最简单的入门方式是使用 `register()` 函数：
 
 ```python
 from phoenix.otel import register
@@ -32,9 +38,11 @@ from phoenix.otel import register
 tracer_provider = register(auto_instrument=True)
 ```
 
-This is all you need to get started using OpenTelemetry with Phoenix! The `register()` function defaults to sending spans to an endpoint at `http://localhost` using gRPC. With `auto_instrument=True`, your AI/ML libraries are automatically traced
+只需这些即可开始在 Phoenix 中使用 OpenTelemetry！`register()` 默认使用 gRPC 将 Span 发送到 `http://localhost` 端点。设置 `auto_instrument=True` 后，会自动追踪 AI/ML 库
 
-### Basic Configuration
+<a id="basic-configuration"></a>
+
+### 基本配置
 
 ```python
 from phoenix.otel import register
@@ -45,9 +53,11 @@ tracer_provider = register(
 )
 ```
 
-### Automatic Instrumentation (Recommended)
+<a id="automatic-instrumentation-recommended"></a>
 
-For the best experience with minimal setup, enable automatic instrumentation by setting `auto_instrument=True`. This automatically instruments popular AI/ML libraries like OpenAI, Anthropic, LangChain, LlamaIndex, and many others:
+### 自动插桩（推荐）
+
+为以最少配置获得最佳体验，请设置 `auto_instrument=True` 启用自动插桩。这会自动为 OpenAI、Anthropic、LangChain、LlamaIndex 等常见 AI/ML 库插桩：
 
 ```python
 from phoenix.otel import register
@@ -67,7 +77,7 @@ response = client.chat.completions.create(  # This will be automatically traced
 )
 ```
 
-**Note**: `auto_instrument=True` only works if the corresponding OpenInference instrumentation libraries are installed. For example, to automatically trace OpenAI calls, you need `openinference-instrumentation-openai` installed:
+**注意**：只有安装对应的 OpenInference 插桩库时，`auto_instrument=True` 才生效。例如，要自动追踪 OpenAI 调用，需要安装 `openinference-instrumentation-openai`：
 
 ```bash
 pip install openinference-instrumentation-openai
@@ -75,9 +85,9 @@ pip install openinference-instrumentation-langchain  # For LangChain
 pip install openinference-instrumentation-llama-index  # For LlamaIndex
 ```
 
-See the [OpenInference repository](https://github.com/Arize-ai/openinference) for the complete list of available instrumentation packages.
+可用插桩包的完整列表见 [OpenInference 仓库](https://github.com/Arize-ai/openinference)。
 
-**Production Tip**: For production deployments, set `batch=True` to improve performance by batching spans before sending them to the collector. Spans are exported in the background, so your application won't be blocked:
+**生产提示**：生产部署请设置 `batch=True`，在发送到收集器前对 Span 批处理以提升性能。Span 在后台导出，不会阻塞应用：
 
 ```python
 tracer_provider = register(
@@ -86,9 +96,11 @@ tracer_provider = register(
 )
 ```
 
-## Authentication
+<a id="authentication"></a>
 
-If the `PHOENIX_API_KEY` environment variable is set, `register()` will automatically add an `authorization` header to each span payload.
+## 身份验证
+
+如果设置了 `PHOENIX_API_KEY` 环境变量，`register()` 会自动为每个 Span 载荷添加 `authorization` 头。
 
 ```python
 # Set environment variable
@@ -99,13 +111,17 @@ from phoenix.otel import register
 tracer_provider = register()  # Automatically uses API key for auth
 ```
 
-## Endpoint Configuration
+<a id="endpoint-configuration"></a>
 
-There are two ways to configure the collector endpoint:
+## 端点配置
 
-### Using Environment Variables
+有两种收集器端点配置方式：
 
-If you're setting the `PHOENIX_COLLECTOR_ENDPOINT` environment variable, `register()` will automatically try to send spans to your Phoenix server using gRPC.
+<a id="using-environment-variables"></a>
+
+### 使用环境变量
+
+如果设置 `PHOENIX_COLLECTOR_ENDPOINT` 环境变量，`register()` 会自动尝试通过 gRPC 向 Phoenix 服务器发送 Span。
 
 ```bash
 export PHOENIX_COLLECTOR_ENDPOINT=https://your-phoenix.com:6006
@@ -117,9 +133,11 @@ from phoenix.otel import register
 tracer_provider = register()
 ```
 
-### Specifying the Endpoint Directly
+<a id="specifying-the-endpoint-directly"></a>
 
-When passing in the `endpoint` argument, **you must specify the fully qualified endpoint**. For example, to export spans via HTTP to localhost, use Phoenix's HTTP collector endpoint: `http://localhost:6006/v1/traces`. The default gRPC endpoint is different: `http://localhost:4317`.
+### 直接指定端点
+
+传入 `endpoint` 参数时，**必须指定完整端点**。例如，通过 HTTP 向本地主机导出 Span 时，请使用 Phoenix HTTP 收集器端点：`http://localhost:6006/v1/traces`。默认 gRPC 端点则不同：`http://localhost:4317`。
 
 ```python
 from phoenix.otel import register
@@ -131,11 +149,13 @@ tracer_provider = register(endpoint="http://localhost:6006/v1/traces")
 tracer_provider = register(endpoint="http://localhost:9999", protocol="grpc")
 ```
 
-The `protocol` argument can be used to enforce the OTLP transport protocol regardless of the endpoint specified. Valid protocols are: "http/protobuf" and "grpc".
+无论指定何种端点，均可用 `protocol` 参数强制指定 OTLP 传输协议。有效协议为："http/protobuf" 和 "grpc"。
 
-## Drop-in Replacement for OTel Primitives
+<a id="drop-in-replacement-for-otel-primitives"></a>
 
-For more granular tracing configuration, Phoenix OTEL wrappers can be used as drop-in replacements for OpenTelemetry primitives:
+## 直接替代 OTel 基础组件
+
+需要更精细的追踪配置时，可用 Phoenix OTEL 封装直接替代 OpenTelemetry 基础组件：
 
 ```python
 from opentelemetry import trace as trace_api
@@ -148,9 +168,11 @@ tracer_provider.add_span_processor(span_processor)
 trace_api.set_tracer_provider(tracer_provider)
 ```
 
-### Simplified Configuration with Endpoint Inference
+<a id="simplified-configuration-with-endpoint-inference"></a>
 
-Wrappers have Phoenix-aware defaults to greatly simplify the OpenTelemetry configuration process. A special `endpoint` keyword argument can be passed to either a `TracerProvider`, `SimpleSpanProcessor` or `BatchSpanProcessor` to automatically infer which `SpanExporter` to use:
+### 通过端点推断简化配置
+
+封装提供适合 Phoenix 的默认值，大幅简化 OpenTelemetry 配置过程。可向 `TracerProvider`、`SimpleSpanProcessor` 或 `BatchSpanProcessor` 传入专用 `endpoint` 关键字参数，以自动推断使用哪个 `SpanExporter`：
 
 ```python
 from phoenix.otel import TracerProvider
@@ -159,13 +181,17 @@ from phoenix.otel import TracerProvider
 tracer_provider = TracerProvider(endpoint="http://localhost:4317")
 ```
 
-## Span Processors
+<a id="span-processors"></a>
 
-### Multiple Span Processors
+## Span 处理器
 
-The `phoenix.otel` TracerProvider automatically creates a default span processor that sends spans to the Phoenix collector endpoint. By default, adding a new span processor will replace this auto-created processor.
+<a id="multiple-span-processors"></a>
 
-To keep the default processor alongside new ones, pass `replace_default_processor=False`:
+### 多个 Span 处理器
+
+`phoenix.otel` TracerProvider 自动创建默认 Span 处理器，将 Span 发送到 Phoenix 收集器端点。默认情况下，添加新 Span 处理器会替换这个自动创建的处理器。
+
+要同时保留默认处理器和新处理器，请传入 `replace_default_processor=False`：
 
 ```python
 from phoenix.otel import TracerProvider, BatchSpanProcessor
@@ -180,7 +206,9 @@ tracer_provider.add_span_processor(BatchSpanProcessor())
 tracer_provider.add_span_processor(BatchSpanProcessor(), replace_default_processor=False)
 ```
 
-### Batch Processing
+<a id="batch-processing"></a>
+
+### 批处理
 
 ```python
 from phoenix.otel import TracerProvider, BatchSpanProcessor
@@ -190,7 +218,9 @@ batch_processor = BatchSpanProcessor()
 tracer_provider.add_span_processor(batch_processor)
 ```
 
-### Custom GRPC Endpoints
+<a id="custom-grpc-endpoints"></a>
+
+### 自定义 gRPC 端点
 
 ```python
 from phoenix.otel import TracerProvider, BatchSpanProcessor, GRPCSpanExporter
@@ -202,7 +232,9 @@ batch_processor = BatchSpanProcessor(
 tracer_provider.add_span_processor(batch_processor)
 ```
 
-## Resource Configuration
+<a id="resource-configuration"></a>
+
+## 资源配置
 
 ```python
 from opentelemetry import trace as trace_api
@@ -212,9 +244,11 @@ tracer_provider = TracerProvider(resource=Resource({PROJECT_NAME: "my-project"})
 trace_api.set_tracer_provider(tracer_provider)
 ```
 
-## Advanced Configuration
+<a id="advanced-configuration"></a>
 
-Both `register()` and `TracerProvider` accept all the same keyword arguments as the standard OpenTelemetry `TracerProvider`, allowing you to configure advanced features like custom ID generators, sampling, and span limits.
+## 高级配置
+
+`register()` 和 `TracerProvider` 均接收标准 OpenTelemetry `TracerProvider` 的全部同类关键字参数，可配置自定义 ID 生成器、采样、Span 限制等高级功能。
 
 ```python
 from opentelemetry.sdk.extension.aws.trace import AwsXRayIdGenerator
@@ -234,17 +268,21 @@ tracer_provider = TracerProvider(
 )
 ```
 
-## Environment Variables
+<a id="environment-variables"></a>
 
-The package recognizes these Phoenix-specific environment variables for automatic configuration:
+## 环境变量
 
-- `PHOENIX_COLLECTOR_ENDPOINT`: Collector endpoint URL (e.g., `https://your-phoenix.com:6006`)
-- `PHOENIX_PROJECT_NAME`: Project name for spans (e.g., `my-llm-app`)
-- `PHOENIX_API_KEY`: User or system key
-- `PHOENIX_GRPC_PORT`: gRPC port override (defaults to 4317)
-- `PHOENIX_CLIENT_HEADERS`: Additional headers for requests (e.g., `Authorization=Bearer token,custom-header=value`)
+此包识别以下 Phoenix 专用环境变量进行自动配置：
 
-### Environment Variable Examples
+- `PHOENIX_COLLECTOR_ENDPOINT`: 收集器端点 URL（如 `https://your-phoenix.com:6006`）
+- `PHOENIX_PROJECT_NAME`: Span 项目名称（如 `my-llm-app`）
+- `PHOENIX_API_KEY`: 用户或系统密钥
+- `PHOENIX_GRPC_PORT`: 覆盖 gRPC 端口（默认 4317）
+- `PHOENIX_CLIENT_HEADERS`: 附加请求头（如 `Authorization=Bearer token,custom-header=value`）
+
+<a id="environment-variable-examples"></a>
+
+### 环境变量示例
 
 ```bash
 # Local Phoenix server (default)
@@ -264,11 +302,13 @@ export PHOENIX_CLIENT_HEADERS="Authorization=Bearer your-api-key,custom-header=v
 export PHOENIX_GRPC_PORT="9999"
 ```
 
-When these environment variables are set, `register()` and Phoenix OTEL components will automatically use them for configuration.
+设置这些环境变量后，`register()` 和 Phoenix OTEL 组件会自动使用它们进行配置。
 
-## Using Decorators
+<a id="using-decorators"></a>
 
-Phoenix provides helpful decorators to make manual instrumentation easier. After setting up your tracer, you can instrument functions with simple decorators:
+## 使用装饰器
+
+Phoenix 提供便捷的装饰器，简化手动插桩。配置追踪器后，可通过简单装饰器为函数插桩：
 
 ```python
 from phoenix.otel import register
@@ -285,22 +325,28 @@ def process_data(input_text: str) -> str:
 result = process_data("hello world")  # This call will be traced
 ```
 
-### OpenInference Span Kinds
+<a id="openinference-span-kinds"></a>
 
-Phoenix decorators support different span kinds that correspond to common AI application patterns:
+### OpenInference Span 类型
 
-- **Chains**: For sequential operations and workflows
-- **Agents**: For autonomous AI agents
-- **Tools**: For function calls and tool usage
-- **LLMs**: For language model interactions
-- **Retrievers**: For retrieval operations
-- **Embeddings**: For embedding generation
+Phoenix 装饰器支持多种 Span 类型，对应常见 AI 应用模式：
 
-### Chains
+- **链**：用于顺序操作和工作流
+- **Agent**：用于自主 AI Agent
+- **工具**：用于函数调用和工具使用
+- **LLM**：用于语言模型交互
+- **检索器**：用于检索操作
+- **嵌入**：用于生成嵌入
 
-Use `@tracer.chain` for sequential operations and workflows:
+<a id="chains"></a>
 
-#### Using Decorators
+### 链
+
+使用 `@tracer.chain` 追踪顺序操作和工作流：
+
+<a id="using-decorators-1"></a>
+
+#### 使用装饰器
 
 ```python
 @tracer.chain
@@ -314,7 +360,9 @@ def process_document(document: str) -> str:
 result = process_document("hello world")
 ```
 
-#### Using Context Managers
+<a id="using-context-managers"></a>
+
+#### 使用上下文管理器
 
 ```python
 def process_document_manual(document: str) -> str:
@@ -325,11 +373,15 @@ def process_document_manual(document: str) -> str:
         return processed
 ```
 
-### Agents
+<a id="agents"></a>
 
-Use `@tracer.agent` for autonomous AI agents:
+### Agent
 
-#### Using Decorators
+使用 `@tracer.agent` 追踪自主 AI Agent：
+
+<a id="using-decorators-2"></a>
+
+#### 使用装饰器
 
 ```python
 @tracer.agent
@@ -339,7 +391,9 @@ def ai_agent(query: str) -> str:
     return response
 ```
 
-#### Using Context Managers
+<a id="using-context-managers-1"></a>
+
+#### 使用上下文管理器
 
 ```python
 def ai_agent_manual(query: str) -> str:
@@ -350,11 +404,15 @@ def ai_agent_manual(query: str) -> str:
         return response
 ```
 
-### Tools
+<a id="tools"></a>
 
-Use `@tracer.tool` for function calls and tool usage:
+### 工具
 
-#### Using Decorators
+使用 `@tracer.tool` 追踪函数调用和工具使用：
+
+<a id="using-decorators-3"></a>
+
+#### 使用装饰器
 
 ```python
 @tracer.tool
@@ -369,7 +427,9 @@ def search_database(query: str) -> list:
     return [f"Result 1 for {query}", f"Result 2 for {query}"]
 ```
 
-#### Using Context Managers
+<a id="using-context-managers-2"></a>
+
+#### 使用上下文管理器
 
 ```python
 def get_weather_manual(city: str) -> str:
@@ -380,11 +440,15 @@ def get_weather_manual(city: str) -> str:
         return weather
 ```
 
-### LLMs
+<a id="llms"></a>
 
-Use `@tracer.llm` for language model interactions with custom input/output processing:
+### LLM
 
-#### Using Decorators with Processing Functions
+使用 `@tracer.llm` 追踪带自定义输入/输出处理的语言模型交互：
+
+<a id="using-decorators-with-processing-functions"></a>
+
+#### 使用带处理函数的装饰器
 
 ```python
 from typing import Dict, List, Optional
@@ -444,7 +508,9 @@ response = invoke_llm(
 )
 ```
 
-#### Using Context Managers for LLMs
+<a id="using-context-managers-for-llms"></a>
+
+#### 为 LLM 使用上下文管理器
 
 ```python
 from opentelemetry.trace import Status, StatusCode
@@ -490,9 +556,11 @@ def invoke_llm_manual(messages, model, temperature=None):
             raise
 ```
 
-### Retrievers and Embeddings
+<a id="retrievers-and-embeddings"></a>
 
-Use `@tracer.retriever` and `@tracer.embedding` for retrieval and embedding operations:
+### 检索器与嵌入
+
+使用 `@tracer.retriever` 和 `@tracer.embedding` 追踪检索和嵌入操作：
 
 ```python
 @tracer.retriever
@@ -507,11 +575,15 @@ def generate_embedding(text: str) -> List[float]:
     return [0.1, 0.2, 0.3, 0.4, 0.5]
 ```
 
-### Additional Features
+<a id="additional-features"></a>
 
-#### Suppress Tracing
+### 其他功能
 
-Use the `suppress_tracing()` context manager to temporarily disable tracing:
+<a id="suppress-tracing"></a>
+
+#### 暂停追踪
+
+使用 `suppress_tracing()` 上下文管理器临时禁用追踪：
 
 ```python
 from phoenix.otel import suppress_tracing
@@ -521,9 +593,11 @@ with suppress_tracing():
     result = my_function("input")
 ```
 
-#### Adding Context Attributes
+<a id="adding-context-attributes"></a>
 
-Use `using_attributes()` to add context attributes to spans:
+#### 添加上下文属性
+
+使用 `using_attributes()` 为 Span 添加上下文属性：
 
 ```python
 from phoenix.otel import using_attributes
@@ -533,9 +607,11 @@ with using_attributes(session_id="123", user_id="user456"):
     result = my_function("input")
 ```
 
-For more detailed examples and advanced usage patterns, see the [Phoenix tracing documentation](https://arize.com/docs/phoenix/tracing/how-to-tracing/setup-tracing/instrument-python).
+更多详细示例和高级用法见 [Phoenix 追踪文档](https://arize.com/docs/phoenix/tracing/how-to-tracing/setup-tracing/instrument-python)。
 
-## API Reference
+<a id="api-reference"></a>
+
+## API 参考
 
 ```{toctree}
 :maxdepth: 2
@@ -547,9 +623,11 @@ api/exporters
 api/settings
 ```
 
-## External Links
+<a id="external-links"></a>
 
-- [Main Phoenix Documentation](https://arize.com/docs/phoenix)
-- [Python Reference](https://arize-phoenix.readthedocs.io/)
-- [GitHub Repository](https://github.com/Arize-ai/phoenix)
-- [PyPI Package](https://pypi.org/project/arize-phoenix-otel/) 
+## 外部链接
+
+- [Phoenix 主文档](https://arize.com/docs/phoenix)
+- [Python 参考文档](https://arize-phoenix.readthedocs.io/)
+- [GitHub 仓库](https://github.com/Arize-ai/phoenix)
+- [PyPI 软件包](https://pypi.org/project/arize-phoenix-otel/)

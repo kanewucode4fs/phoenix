@@ -5,7 +5,7 @@ allowed_tools: [Skill, Read]
 runs: 3
 tags: [phoenix-cli]
 ---
-Support is annoyed: HelpBot (Phoenix project `helpbot-prod`) keeps handing trivial questions to humans. "What's your refund window" is literally the first FAQ entry in our knowledge base (30 days, no questions asked), and the bot escalated it anyway. Here's the full trace for one of those escalations. You can't reach my Phoenix from here. Why is it doing this, and how do I see how often it's happening?
+客服团队很不满：HelpBot（Phoenix 项目 `helpbot-prod`）不断将简单问题转给人工处理。“退款期限是多久”就是知识库中第一条常见问题（30 天内，无需理由），机器人却仍然将其升级处理。下面是一条此类升级处理的完整追踪记录。你无法从这里访问我的 Phoenix。它为什么这样做？如何查看这种情况发生的频率？
 
 ```json
 {

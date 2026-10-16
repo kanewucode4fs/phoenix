@@ -1,89 +1,103 @@
-# TRAJECT-Bench + LangGraph
+<a id="traject-bench--langgraph"></a>
 
-A single-turn tool-calling agent built with LangGraph, instrumented with OpenInference, running [TRAJECT-Bench](https://huggingface.co/datasets/Jnnamchi/traject-bench) tasks. This contrasts with the tau-bench examples on every dimension: single-turn (not multi-turn), mock tools (not live DB mutations), parallel and sequential tool patterns (not conversational).
+# TRAJECT-Bench 与 LangGraph 示例
 
-## What This Does
+这是使用 LangGraph 构建的单轮工具调用 Agent，通过 OpenInference 埋点，运行 [TRAJECT-Bench](https://huggingface.co/datasets/Jnnamchi/traject-bench) 任务。它与 tau-bench 示例在各方面均不同：单轮而非多轮、模拟工具而非真实数据库变更、并行和顺序工具模式而非对话模式。
 
-Runs an agent through TRAJECT-Bench tasks that test tool selection, parameter accuracy, and execution ordering. Tasks span multiple domains (e-commerce, travel, finance) and come in two types:
+<a id="what-this-does"></a>
 
-- **Parallel**: Multiple independent tool calls that can execute in any order
-- **Sequential**: Tool calls with dependencies — output from one feeds into the next
+## 功能说明
 
-Tools are dynamically created per task from the dataset's definitions, returning pre-recorded outputs when invoked. This isolates the agent's tool-calling behavior from external API variability.
+运行 Agent 执行 TRAJECT-Bench 任务，测试工具选择、参数准确性和执行顺序。任务覆盖电商、旅行、金融等多个领域，分为两类：
 
-## Architecture
+- **并行**：多个独立工具调用，可按任意顺序执行
+- **顺序**：工具调用具有依赖关系，前一个调用的输出作为下一个调用的输入
+
+工具根据数据集定义为每个任务动态创建，调用时返回预先记录的输出，从而将 Agent 的工具调用行为与外部 API 的不确定性隔离。
+
+<a id="architecture"></a>
+
+## 架构
 
 ```
-                                  Agent Framework (traced)
+                                  Agent 框架（追踪）
                                   +------------------------------+
-  Task query (single turn) -----> | LangGraph StateGraph         |
-                                  |   "agent" node (ChatOpenAI)  |
-                                  |   "tools" node (ToolNode)    |
+  任务查询（单轮） -----> | LangGraph StateGraph         |
+                                  |   "agent" 节点 (ChatOpenAI)  |
+                                  |   "tools" 节点 (ToolNode)    |
                                   |   parallel_tool_calls=True/  |
-                                  |     False per task type      |
-                                  |   | LLM spans                |
-                                  |   | TOOL spans               |
+                                  |     False，依据任务类型      |
+                                  |   | LLM span                |
+                                  |   | TOOL span               |
                                   +------------------------------+
                                            | OTel/OTLP
                                            v
                                   +------------------+
-                                  | Phoenix (local)  |
+                                  | Phoenix（本地）  |
                                   | localhost:6006   |
                                   +------------------+
 ```
 
-Unlike tau-bench, a **fresh graph is created per task** because each task has different tools. The graph is invoked once with a system prompt (task description + available tool names) and the task query. The agent loops internally (agent → tools → agent) until it produces a final answer.
+与 tau-bench 不同，由于各任务工具不同，**每个任务都会创建全新的图**。图使用系统提示词（任务描述和可用工具名称）及任务查询调用一次。Agent 在内部循环（agent → tools → agent），直到生成最终回答。
 
-Span tree for a typical task:
+典型任务的 span 树：
 
 ```
-LangGraph (auto)                        ← graph execution
-  ChatOpenAI (auto, LLM)               ← initial LLM call with system + user message
-  <tool_1> (auto, TOOL)                ← first tool call
-  <tool_2> (auto, TOOL)                ← second tool call (parallel tasks)
-  ChatOpenAI (auto, LLM)               ← follow-up with tool results → final answer
+LangGraph （自动）                        ← 图执行
+  ChatOpenAI （自动，LLM）               ← 包含系统和用户消息的初始 LLM 调用
+  <tool_1> （自动，TOOL）                ← 第一次工具调用
+  <tool_2> （自动，TOOL）                ← 第二次工具调用（并行任务）
+  ChatOpenAI （自动，LLM）               ← 携带工具结果的后续调用 → 最终回答
 ```
 
-### Key differences from the tau-bench examples
+<a id="key-differences-from-the-tau-bench-examples"></a>
 
-- **No conversation loop** — single query in, tool calls, final answer out.
-- **Dynamic tools** — mock functions created from dataset definitions per task, not static tool code.
-- **Parallel tool calls** — parallel tasks enable `parallel_tool_calls=True`, so the LLM can request multiple tools in one response. This shows up as sibling TOOL spans in the trace.
-- **No simulated user** — no external user interaction.
+### 与 tau-bench 示例的主要区别
 
-## Usage
+- **没有对话循环** — 输入单个查询，调用工具，输出最终回答。
+- **动态工具** — 为每个任务根据数据集定义创建模拟函数，不使用静态工具代码。
+- **并行工具调用** — 并行任务启用 `parallel_tool_calls=True`，因此 LLM 可以在一次响应中请求多个工具，在追踪中表现为同级 TOOL span。
+- **没有模拟用户** — 不涉及外部用户交互。
 
-From the `examples/agents/` directory:
+<a id="usage"></a>
+
+## 使用方法
+
+在 `examples/agents/` 目录中执行：
 
 ```bash
-# Run all 9 selected tasks
+# 运行选定的全部 9 个任务
 python -m traject_bench_langgraph
 
-# Run specific tasks
+# 运行指定任务
 python -m traject_bench_langgraph --tasks parallel_simple:0 sequential:1
 
-# Run without Phoenix
+# 不使用 Phoenix
 python -m traject_bench_langgraph --no-phoenix
 ```
 
-> **Note**: The first run downloads the TRAJECT-Bench dataset from HuggingFace (~small download). Subsequent runs use the cached version.
+> **说明**：首次运行会从 HuggingFace 下载 TRAJECT-Bench 数据集（下载量较小）。后续运行使用缓存版本。
 
-## File Structure
+<a id="file-structure"></a>
 
-| File | Purpose |
+## 文件结构
+
+| 文件 | 用途 |
 |------|---------|
-| `agent.py` | Per-task LangGraph `StateGraph` creation and single-turn execution |
-| `tools.py` | Dynamic mock tool factory — creates LangChain `@tool` functions from dataset definitions |
-| `phoenix_setup.py` | OpenInference `LangChainInstrumentor` + Phoenix OTLP setup |
-| `tasks.py` / `tasks_scaled.py` | Task loading from HuggingFace dataset (handles field name inconsistencies) |
-| `run.py` | CLI entry point |
+| `agent.py` | 为每个任务创建 LangGraph `StateGraph` 并执行单轮任务 |
+| `tools.py` | 动态模拟工具工厂，根据数据集定义创建 LangChain `@tool` 函数 |
+| `phoenix_setup.py` | OpenInference `LangChainInstrumentor` 和 Phoenix OTLP 设置 |
+| `tasks.py` / `tasks_scaled.py` | 从 HuggingFace 数据集加载任务，处理字段名称不一致 |
+| `run.py` | CLI 入口 |
 
-## How Mock Tools Work
+<a id="how-mock-tools-work"></a>
 
-Each TRAJECT-Bench task defines its tools as JSON: name, description, parameters, and expected output. `tools.py` dynamically creates a LangChain `@tool` function for each:
+## 模拟工具工作原理
 
-1. Tool name is sanitized (e.g., `"Wayfair: reviews/list"` → `"wayfair_reviews_list"`)
-2. The function accepts a `parameters` dict and returns the pre-recorded `executed_output`
-3. Docstrings include the tool description and parameter specs
+每个 TRAJECT-Bench 任务以 JSON 定义其工具，包含名称、描述、参数和预期输出。`tools.py` 为每个工具动态创建 LangChain `@tool` 函数：
 
-This means the tools always return the "correct" output — the evaluation focus is on whether the agent calls the right tools with the right parameters in the right order, not on handling real API responses.
+1. 清理工具名称（例如 `"Wayfair: reviews/list"` → `"wayfair_reviews_list"`）
+2. 函数接收 `parameters` 字典，并返回预先记录的 `executed_output`
+3. 文档字符串包含工具描述和参数规范
+
+这意味着工具始终返回“正确”输出，评估重点是 Agent 是否以正确顺序、正确参数调用正确工具，而非处理真实 API 响应。

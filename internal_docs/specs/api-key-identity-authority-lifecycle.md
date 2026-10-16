@@ -1,183 +1,145 @@
-# API Key Identity, Authority, and Lifecycle Model
+<a id="api-key-identity-authority-and-lifecycle-model"></a>
 
-## Purpose
+# API 密钥身份、权限与生命周期模型
 
-Phoenix exposes API-key management through REST and GraphQL. This document defines who may
-issue, inspect, use, and revoke each kind of key. Equivalent operations grant the same
-authority on both surfaces, even when REST and GraphQL represent a denial differently.
+<a id="purpose"></a>
 
-This is a normative policy model. Authorization is derived from independently evaluated
-facts about the credential, principal, action, resource, and environment; route names and
-current implementation structure are not policy inputs.
+## 目的
 
-## Terminology
+Phoenix 通过 REST 和 GraphQL 提供 API 密钥管理。本文定义谁可以签发、查看、使用和撤销每类密钥。两个接口上等价的操作授予相同权限，即使 REST 和 GraphQL 对拒绝的表示方式不同。
 
-- **Credential:** Evidence presented to authenticate a request, such as an access token,
-  user API key, SYSTEM API key, or `PHOENIX_ADMIN_SECRET`.
-- **Principal:** The identity established by a credential. A principal may be a human user,
-  the internal system user, or an unauthenticated caller.
-- **Credential kind:** How the caller authenticated. Credential kind is independent of
-  identity and role.
-- **Human principal:** A human user authenticated by either a session or a user API key.
-- **Human session:** A human principal authenticated by an access token rather than a user
-  API key.
-- **Authority:** What the principal may do. Human authority comes from current database
-  role. The admin secret receives configured bootstrap authority.
-- **Admin authority:** Authority held by an `ADMIN`-role human principal or the
-  admin-secret principal. A policy may further restrict an operation by credential kind.
-- **User API key:** A key owned by a human user. It is also called a personal key where an
-  API surface uses that name.
-- **System API key:** A workload key owned by the internal SYSTEM user. It does not have
-  admin authority.
-- **Resource class:** Whether a stored key is a user key or system key, derived from its
-  owner's current database role rather than its URL or GlobalID type name.
-- **Owner operation:** An action on a human principal's own user keys.
-- **Administrative operation:** An action performed through admin authority, such as
-  organization-wide inventory or cross-user revocation.
-- **Inventory:** A cross-owner list that includes enough owner metadata to identify and
-  administer a key. It never includes the bearer secret.
-- **Fail closed:** Deny when the required identity, authority, resource classification, or
-  environmental precondition cannot be established.
+这是一个规范性策略模型。授权来自对凭证、主体、操作、资源和环境事实的独立评估；路由名称和当前实现结构不是策略输入。
 
-## Decision Summary
+<a id="terminology"></a>
 
-Threat-model references use `D1` through `D9` to refer to these decisions.
+## 术语
 
-1. **D1 — Workload authority.** A **system API key is a non-admin workload credential**.
-   It is not equivalent to `PHOENIX_ADMIN_SECRET`.
-2. **D2 — System-key administration.** Only admins may create, list, or revoke system API
-   keys.
-3. **D3 — Workload isolation.** System API keys cannot manage credentials.
-4. **D4 — Session personal self-service.** An authenticated human session, including a
-   viewer session, may create, list, and revoke the user's API keys. A new key inherits the
-   user's current database role and cannot increase that role's authority.
-5. **D5 — API-key personal self-service.** A user API key may list and revoke its owner's
-   user keys. It cannot issue a replacement on either surface. (GraphQL retained
-   transitive issuance for compatibility through Phoenix 18.)
-6. **D6 — User-key administration.** `ADMIN`-role human principals may inventory and revoke
-   any human user's API keys. `PHOENIX_ADMIN_SECRET` has the same administrative revocation
-   authority.
-7. **D7 — System-key issuance.** System-key issuance requires an `ADMIN` human session or
-   `PHOENIX_ADMIN_SECRET` on both surfaces; API keys cannot issue credentials. (GraphQL
-   retained issuance by an `ADMIN`-role user key for compatibility through Phoenix 18.)
-8. **D8 — Authentication required.** Credential management fails closed when
-   authentication is disabled.
-9. **D9 — Complete authorization.** Authorization checks credential kind, principal
-   identity and authority, action, and resource class; no one dimension is sufficient by
-   itself.
+- **凭证：**用于验证请求身份的证据，例如访问令牌、用户 API 密钥、SYSTEM API 密钥或 `PHOENIX_ADMIN_SECRET`。
+- **主体：**凭证确立的身份。主体可以是真人用户、内部系统用户或未经身份验证的调用方。
+- **凭证类型：**调用方如何完成身份验证。凭证类型独立于身份和角色。
+- **真人主体：**通过会话或用户 API 密钥完成身份验证的真人用户。
+- **真人会话：**通过访问令牌而非用户 API 密钥完成身份验证的真人主体。
+- **权限：**主体可以做什么。真人权限来自当前数据库角色。管理员密钥获得配置的引导权限。
+- **管理员权限：**角色为 `ADMIN` 的真人主体或管理员密钥主体持有的权限。策略可以进一步按凭证类型限制操作。
+- **用户 API 密钥：**真人用户拥有的密钥。在采用该名称的 API 接口上，也称为个人密钥。
+- **系统 API 密钥：**内部 SYSTEM 用户拥有的工作负载密钥，不具备管理员权限。
+- **资源类别：**存储的密钥属于用户密钥还是系统密钥，根据所有者当前数据库角色推导，而非根据 URL 或 GlobalID 类型名称。
+- **所有者操作：**对真人主体自己的用户密钥执行的操作。
+- **管理操作：**通过管理员权限执行的操作，例如组织范围清单或跨用户撤销。
+- **清单：**跨所有者的列表，包含足够的所有者元数据以识别和管理密钥，绝不包含持有者秘密值。
+- **失败时关闭：**无法确定所需身份、权限、资源分类或环境前提时拒绝操作。
 
-## How Decisions Are Derived
+<a id="decision-summary"></a>
 
-For each request, ask five separate questions:
+## 决策汇总
 
-1. **How did the caller authenticate?** Human session, user API key, SYSTEM API key, admin
-   secret, or no credential.
-2. **Whom does the credential represent?** A human user, the internal system user, or no
-   authenticated identity.
-3. **What authority does that principal have now?** Current database role, configured
-   bootstrap authority, or workload authority.
-4. **What action is requested?** Owner self-service, administrative management, credential
-   issuance, or workload/data-plane use.
-5. **What resource and environment are involved?** Key class, ownership, authentication
-   mode, read-only mode, and storage state.
+威胁模型通过 `D1` 到 `D9` 引用这些决策。
 
-These dimensions must not be collapsed. In particular, a SYSTEM API key and
-`PHOENIX_ADMIN_SECRET` share the internal system-user identity but have different credential
-kinds and authority.
+1. **D1——工作负载权限。** **系统 API 密钥是非管理员工作负载凭证**，不等同于 `PHOENIX_ADMIN_SECRET`。
+2. **D2——系统密钥管理。**只有管理员可以创建、列出或撤销系统 API 密钥。
+3. **D3——工作负载隔离。**系统 API 密钥不能管理凭证。
+4. **D4——会话个人自助。**已通过身份验证的真人会话，包括 viewer 会话，可以创建、列出和撤销该用户的 API 密钥。新密钥继承用户当前数据库角色，不能增加该角色的权限。
+5. **D5——API 密钥个人自助。**用户 API 密钥可以列出和撤销其所有者的用户密钥，但不能在任一接口上签发替代密钥。（截至 Phoenix 18，GraphQL 为兼容性保留了传递签发。）
+6. **D6——用户密钥管理。**角色为 `ADMIN` 的真人主体可以清点和撤销任何真人用户的 API 密钥。`PHOENIX_ADMIN_SECRET` 拥有相同的管理撤销权限。
+7. **D7——系统密钥签发。**两个接口上的系统密钥签发都要求 `ADMIN` 真人会话或 `PHOENIX_ADMIN_SECRET`；API 密钥不能签发凭证。（截至 Phoenix 18，GraphQL 为兼容性保留了由 `ADMIN` 角色用户密钥签发的能力。）
+8. **D8——必须启用身份验证。**禁用身份验证时，凭证管理失败时关闭。
+9. **D9——完整授权。**授权检查凭证类型、主体身份与权限、操作以及资源类别，任何单一维度都不足以决定授权。
 
-Two consistency checks catch contradictory or incomplete policies:
+<a id="how-decisions-are-derived"></a>
 
-- **Privilege dominance:** If a principal may perform a broad destructive action but not a
-  narrower one, the narrower denial needs an independent reason.
-- **Threat completeness:** A mitigation must interrupt the complete attack path. Preventing
-  escalation does not, by itself, prevent an attacker from preserving existing authority.
+## 决策推导方式
 
-Security conflicts converge on fail-closed behavior: workload credentials are excluded
-from credential management, credential classes cannot be crossed by relabeling an ID,
-unauthorized revocation does not disclose key existence, and credential management fails
-closed without authentication.
+对每个请求，分别回答五个问题：
 
-Product capabilities follow Phoenix's documented UX. Viewer key self-service and admin
-cross-user revocation are deliberate capabilities. They do not increase a principal's
-role: viewer keys remain viewer keys, and admins already hold organization-wide
-control-plane authority.
+1. **调用方如何完成身份验证？**真人会话、用户 API 密钥、SYSTEM API 密钥、管理员密钥，还是没有凭证。
+2. **凭证代表谁？**真人用户、内部系统用户，还是没有已验证身份。
+3. **该主体目前拥有什么权限？**当前数据库角色、配置的引导权限，或工作负载权限。
+4. **请求执行什么操作？**所有者自助、行政管理、凭证签发，或工作负载/数据平面使用。
+5. **涉及什么资源和环境？**密钥类别、所有权、身份验证模式、只读模式和存储状态。
 
-## Threat Model
+不得将这些维度合并。尤其是，SYSTEM API 密钥与 `PHOENIX_ADMIN_SECRET` 共享内部系统用户身份，但凭证类型和权限不同。
 
-The design addresses the following threats. Each maps to a policy response; not every risk
-can be eliminated without removing the corresponding issuance capability.
+两个一致性检查可以发现相互矛盾或不完整的策略：
 
-| Threat | Description | Policy response |
+- **权限支配：**如果主体可以执行范围广泛的破坏性操作，却不能执行范围更窄的操作，那么后者的拒绝需要独立理由。
+- **威胁完整性：**缓解措施必须打断完整攻击路径。防止权限提升本身，并不能阻止攻击者保留现有权限。
+
+安全冲突统一采用失败时关闭的行为：工作负载凭证不能管理凭证，不能通过重新标记 ID 跨越凭证类别，未经授权的撤销不披露密钥是否存在，未启用身份验证时凭证管理失败时关闭。
+
+产品能力遵循 Phoenix 文档记录的用户体验。viewer 密钥自助和管理员跨用户撤销是刻意提供的能力，不会提升主体角色：viewer 密钥仍然是 viewer 密钥，而管理员本就拥有组织范围的控制平面权限。
+
+<a id="threat-model"></a>
+
+## 威胁模型
+
+该设计处理以下威胁，每项都对应一个策略响应；若不移除相应签发能力，并非所有风险都能消除。
+
+| 威胁 | 描述 | 策略响应 |
 |---|---|---|
-| Workload-to-control-plane escalation | A leaked or stolen SYSTEM-role key is used to manage credentials, users, or settings. | SYSTEM keys are workload credentials and credential-management operations deny them by default (D1, D3, D9). |
-| Privilege persistence | A compromised user API key mints a same-role replacement and outlives revocation of the original. | Both surfaces deny API-key-authenticated issuance, so revoking the compromised key is effective containment for that credential (D5). Replacements minted through legacy GraphQL issuance before the Phoenix 19 upgrade may still exist; inventory the affected user's keys when the compromise predates the upgrade. |
-| Issuance-origin compromise | A compromised human session or admin secret uses legitimate issuance authority to create durable credentials. | Issued keys have bounded authority and are independently inventoried and revoked. Invalidating the issuer does not by itself revoke keys already issued (D4, D5, D7). |
-| Peer-credential tampering | One system credential enumerates or revokes other system credentials because all system keys share the internal system-user owner. | Ownership alone is never sufficient; system-key management requires admin authority on a SYSTEM resource (D2, D9). |
-| Key-ID enumeration | Revoke or delete endpoints are probed to learn which key IDs exist. | Unauthorized, missing, and wrong-class targets return one indistinguishable denial. |
-| Resource-class confusion | A client-supplied GlobalID is relabeled to cross the user/system boundary in the shared table. | Resource class is derived from the owner's database role, not the presented type name (D9). |
-| Credential issuance without identity | A bearer credential is minted while authentication is disabled, outliving the current configuration. | All credential management fails closed without authentication (D8). |
+| 工作负载向控制平面提权 | 泄漏或被盗的 SYSTEM 角色密钥用于管理凭证、用户或设置。 | SYSTEM 密钥是工作负载凭证，凭证管理操作默认拒绝它们（D1、D3、D9）。 |
+| 权限持久化 | 被攻陷的用户 API 密钥签发相同角色的替代密钥，在原密钥被撤销后继续存在。 | 两个接口均拒绝通过 API 密钥身份验证进行签发，因此撤销被攻陷密钥能有效遏制该凭证（D5）。Phoenix 19 升级前通过旧版 GraphQL 签发的替代密钥可能仍存在；如果入侵发生在升级前，应清点受影响用户的密钥。 |
+| 签发源被攻陷 | 被攻陷的真人会话或管理员密钥利用合法签发权限创建持久凭证。 | 已签发密钥权限受限，并被独立清点和撤销。使签发者失效本身不会撤销已签发的密钥（D4、D5、D7）。 |
+| 同级凭证篡改 | 因为所有系统密钥共享内部系统用户所有者，一个系统凭证枚举或撤销其他系统凭证。 | 仅凭所有权永远不够；管理系统密钥要求针对 SYSTEM 资源具备管理员权限（D2、D9）。 |
+| 密钥 ID 枚举 | 探测撤销或删除端点，以了解哪些密钥 ID 存在。 | 未授权、缺失和类别错误的目标均返回无法区分的拒绝结果。 |
+| 资源类别混淆 | 对客户端提供的 GlobalID 重新标记，以跨越共享表中的用户/系统边界。 | 资源类别来自所有者的数据库角色，而非提交的类型名称（D9）。 |
+| 无身份签发凭证 | 禁用身份验证时签发持有者凭证，其存续期超出当前配置。 | 未启用身份验证时，所有凭证管理均失败时关闭（D8）。 |
 
-## Identity and Credential Model
+<a id="identity-and-credential-model"></a>
 
-### Principals
+## 身份与凭证模型
 
-| Principal | Representation | Authority |
+<a id="principals"></a>
+
+### 主体
+
+| 主体 | 表示 | 权限 |
 |---|---|---|
-| Human session | `PhoenixUser` authenticated by an access token | Current database role; may issue a user key |
-| User-key holder | `PhoenixUser` authenticated by a user API key | Current database role; credential issuance denied |
-| System-key holder | `PhoenixUser` authenticated by a SYSTEM-role API key | Non-admin workload access |
-| Admin-secret principal | `PhoenixSystemUser` authenticated by `PHOENIX_ADMIN_SECRET` | Bootstrap/admin access; may issue system keys |
-| Unauthenticated caller | No authenticated `PhoenixUser` | No credential-management access |
+| 真人会话 | 通过访问令牌验证身份的 `PhoenixUser` | 当前数据库角色；可签发用户密钥 |
+| 用户密钥持有者 | 通过用户 API 密钥验证身份的 `PhoenixUser` | 当前数据库角色；拒绝凭证签发 |
+| 系统密钥持有者 | 通过 SYSTEM 角色 API 密钥验证身份的 `PhoenixUser` | 非管理员工作负载访问 |
+| 管理员密钥主体 | 通过 `PHOENIX_ADMIN_SECRET` 验证身份的 `PhoenixSystemUser` | 引导/管理员访问；可签发系统密钥 |
+| 未经身份验证的调用方 | 没有已验证身份的 `PhoenixUser` | 无凭证管理访问权限 |
 
-A SYSTEM-role API key and the admin-secret principal both refer to the internal system
-user, but they are not equivalent. A SYSTEM-role API key becomes an ordinary `PhoenixUser`
-whose `is_admin` property is false. `PHOENIX_ADMIN_SECRET` creates a
-`PhoenixSystemUser` whose `is_admin` property is true.
+SYSTEM 角色 API 密钥与管理员密钥主体都指向内部系统用户，但并不等价。SYSTEM 角色 API 密钥成为普通 `PhoenixUser`，其 `is_admin` 属性为 false。`PHOENIX_ADMIN_SECRET` 创建 `PhoenixSystemUser`，其 `is_admin` 属性为 true。
 
-Code and documentation use **SYSTEM-role API key** and **admin-secret principal**
-explicitly; the ambiguous phrase "system user" does not imply administrator authority.
+代码和文档明确使用 **SYSTEM 角色 API 密钥**与**管理员密钥主体**；含糊的“系统用户”一词不意味着管理员权限。
 
-### User API Keys
+<a id="user-api-keys"></a>
 
-A user API key is associated with a human user and acts on that user's behalf. Creation
-uses the user's current database role and requires a human session on both surfaces. The
-owner may list and revoke the key; an admin may inventory and revoke it as a control-plane
-operation.
+### 用户 API 密钥
 
-### System API Keys
+用户 API 密钥关联真人用户，代表该用户执行操作。两个接口上创建密钥均使用用户当前数据库角色，并要求真人会话。所有者可以列出和撤销密钥；管理员可以将清点和撤销作为控制平面操作。
 
-A system API key is associated with the internal system user rather than a human. It is
-intended for service-to-service and automated workloads. Admins create and revoke system
-keys, but using a system key does not grant admin authority. In practice a system key has
-ordinary non-viewer data-plane access—for example it can read projects and ingest traces—
-but is rejected from admin-only routes such as `/v1/users`. See
-`docs/phoenix/self-hosting/features/authentication.mdx` for the per-role REST access
-tables.
+<a id="system-api-keys"></a>
 
-### Control Plane and Data Plane
+### 系统 API 密钥
 
-- **Control-plane operations** manage identities, credentials, users, and settings.
-- **Data-plane operations** use Phoenix resources, such as ingesting traces or querying
-  projects.
+系统 API 密钥关联内部系统用户，而非真人，用于服务间通信和自动化工作负载。管理员创建和撤销系统密钥，但使用系统密钥不会获得管理员权限。实践中，系统密钥拥有普通非 viewer 的数据平面访问权限，例如读取项目和摄取追踪，但会被 `/v1/users` 等仅限管理员的路由拒绝。各角色的 REST 访问表参见 `docs/phoenix/self-hosting/features/authentication.mdx`。
 
-System keys are data-plane credentials. Managing system keys is a control-plane action.
-New control-plane operations deny workload credentials by default and must explicitly name
-every admitted credential kind.
+<a id="control-plane-and-data-plane"></a>
 
-## Authorization Principles
+### 控制平面与数据平面
 
-### Authentication does not imply authorization
+- **控制平面操作**管理身份、凭证、用户和设置。
+- **数据平面操作**使用 Phoenix 资源，例如摄取追踪或查询项目。
 
-Possession of a key establishes the request principal. It does not grant permission to
-manage that key or related keys. Every credential-management operation authorizes the
-principal, action, and resource.
+系统密钥是数据平面凭证。管理系统密钥属于控制平面操作。新增控制平面操作默认拒绝工作负载凭证，必须显式列明允许的每种凭证类型。
 
-### Workload identity is not administrative identity
+<a id="authorization-principles"></a>
 
-"System" describes whom a credential represents, not how much authority it carries.
-Treating every ingestion or automation credential as an administrator would turn a
-data-plane secret into a control-plane secret and substantially increase the impact of a
-leak.
+## 授权原则
+
+<a id="authentication-does-not-imply-authorization"></a>
+
+### 身份验证不意味着授权
+
+持有密钥会确立请求主体，但不会授予管理该密钥或相关密钥的权限。每项凭证管理操作都要针对主体、操作和资源进行授权。
+
+<a id="workload-identity-is-not-administrative-identity"></a>
+
+### 工作负载身份不是管理身份
+
+“系统”描述凭证代表谁，并不描述它携带多少权限。将每个摄取或自动化凭证都视为管理员，会把数据平面秘密变成控制平面秘密，大幅增加泄漏的影响。
 
 ```text
 PHOENIX_ADMIN_SECRET / ADMIN user
@@ -188,281 +150,205 @@ SYSTEM-role API key
         └── may not administer keys
 ```
 
-### Delegation is explicit
+<a id="delegation-is-explicit"></a>
 
-A credential cannot implicitly mint a durable replacement, transform itself into another
-principal class, or create a credential with greater authority.
+### 委托必须显式
 
-- Both surfaces deny issuance by every API key.
-- A SYSTEM-role key cannot transform itself into a human-role key through a personal-key
-  operation.
-- A human session may create a user key as explicit delegation to a durable credential; the
-  new key uses current server-side role state.
-- An `ADMIN` human session or the configured admin secret may create a system key as an
-  explicit control-plane operation.
+凭证不能隐式签发持久的替代凭证、将自身转换为另一主体类别，或创建权限更大的凭证。
 
-Through Phoenix 18, GraphQL retained a compatibility behavior that was authority-bounded
-but transitive: a compromised user key could preserve access by issuing a replacement
-before revocation. Role inheritance prevented privilege escalation, but it did not contain
-persistence. As of Phoenix 19, both surfaces enforce the explicit, non-transitive model:
-human sessions and the admin secret are issuance origins, while API keys issued by those
-origins cannot issue another key.
+- 两个接口均拒绝任何 API 密钥进行签发。
+- SYSTEM 角色密钥不能通过个人密钥操作将自身转换为真人角色密钥。
+- 真人会话可以创建用户密钥，作为向持久凭证的显式委托；新密钥使用服务端当前角色状态。
+- `ADMIN` 真人会话或配置的管理员密钥可以通过显式控制平面操作创建系统密钥。
 
-The admin secret is a root bootstrap authority, so compromise can create persistent
-workload credentials. Rotating the secret contains future use but does not revoke
-previously issued SYSTEM keys; those keys must be inventoried and revoked independently.
+截至 Phoenix 18，GraphQL 保留了一种权限有界但可传递的兼容行为：被攻陷的用户密钥可以在撤销前签发替代密钥，保留访问权限。角色继承阻止了权限提升，却没有遏制持久化。从 Phoenix 19 起，两个接口都实施显式、不可传递模型：真人会话和管理员密钥是签发源，而这些来源签发的 API 密钥不能再签发其他密钥。
 
-### Shared ownership is not sufficient authorization
+管理员密钥是根引导权限，因此被攻陷后可以创建持久的工作负载凭证。轮换该秘密值可遏制未来使用，但不会撤销之前签发的 SYSTEM 密钥；这些密钥必须独立清点和撤销。
 
-Phoenix stores user and system API keys in one `api_keys` table. System keys share the
-single internal system-user owner. Consequently, this check is unsafe by itself:
+<a id="shared-ownership-is-not-sufficient-authorization"></a>
+
+### 共享所有权不足以授权
+
+Phoenix 将用户与系统 API 密钥存储在同一个 `api_keys` 表中。系统密钥共享唯一的内部系统用户所有者。因此，仅凭以下检查是不安全的：
 
 ```text
 key.user_id == caller.identity
 ```
 
-For a SYSTEM principal, it would treat every system key as the caller's own. Credential
-authorization therefore incorporates:
+对于 SYSTEM 主体，这会把每个系统密钥都视为调用方自己的密钥。因此，凭证授权包含：
 
-1. the caller's credential kind;
-2. the caller's identity and current authority;
-3. the action being requested;
-4. the key owner's role, which defines the resource class; and
-5. ownership or admin authority, where applicable.
+1. 调用方的凭证类型；
+2. 调用方的身份与当前权限；
+3. 所请求的操作；
+4. 定义资源类别的密钥所有者角色；以及
+5. 适用时的所有权或管理员权限。
 
-URL paths, GraphQL fields, and client-supplied GlobalID type names are presentation
-boundaries, not trusted resource classification.
+URL 路径、GraphQL 字段及客户端提供的 GlobalID 类型名称属于表示边界，不能作为可信的资源分类依据。
 
-### Revocation does not disclose existence
+<a id="revocation-does-not-disclose-existence"></a>
 
-An `ADMIN`-role human principal or the admin-secret principal can revoke a compromised
-human user's key even when the owner is unavailable. An unauthorized caller receives the
-same external result as a caller naming a missing or wrong-class key. This prevents key-ID
-existence probing.
+### 撤销不披露是否存在
 
-### Viewer self-service is explicit
+即使所有者无法操作，`ADMIN` 角色真人主体或管理员密钥主体也可以撤销被攻陷真人用户的密钥。未经授权的调用方收到的外部结果，与指定缺失密钥或错误类别密钥的调用方相同，从而防止探测密钥 ID 是否存在。
 
-Viewer is a read-only data role, not a prohibition on self-service security operations.
-Creating a viewer key preserves viewer authority, and revoking one's own key reduces risk.
-REST therefore exempts personal API-key create and revoke operations from its general
-viewer write restriction.
+<a id="viewer-self-service-is-explicit"></a>
 
-### Credential management requires authentication
+### viewer 自助必须显式
 
-Without authentication Phoenix has no authenticated principal to own or authorize a
-credential. Every REST API-key route fails closed. GraphQL personal mutations have an
-explicit authentication-enabled permission; admin-gated GraphQL fields fail closed through
-their admin permission.
+viewer 是只读数据角色，并不禁止安全操作自助。创建 viewer 密钥保持 viewer 权限，撤销自己的密钥则降低风险。因此，REST 将个人 API 密钥创建和撤销操作排除在通用 viewer 写入限制之外。
 
-## Capability Matrix
+<a id="credential-management-requires-authentication"></a>
 
-"Own user key" refers only to a key owned by a non-SYSTEM user. The split between session and API-key credentials is intentional: role alone does not determine issuance authority.
+### 凭证管理要求身份验证
 
-| Operation | Session VIEWER | Session MEMBER | Session ADMIN | User key VIEWER | User key MEMBER | User key ADMIN | SYSTEM key | Admin secret | Auth disabled |
+未启用身份验证时，Phoenix 没有可拥有凭证或授权凭证的已验证主体。每个 REST API 密钥路由都失败时关闭。GraphQL 个人 mutation 具有显式的身份验证已启用权限要求；管理员限制的 GraphQL 字段则通过管理员权限要求实现失败时关闭。
+
+<a id="capability-matrix"></a>
+
+## 能力矩阵
+
+“自己的用户密钥”仅指非 SYSTEM 用户拥有的密钥。会话凭证与 API 密钥凭证的区别是刻意设计的：角色本身不决定签发权限。
+
+| 操作 | 会话 VIEWER | 会话 MEMBER | 会话 ADMIN | 用户密钥 VIEWER | 用户密钥 MEMBER | 用户密钥 ADMIN | SYSTEM 密钥 | 管理员密钥 | 身份验证禁用 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Create own user key | ✅ Allow | ✅ Allow | ✅ Allow | ❌ Deny | ❌ Deny | ❌ Deny | ❌ Deny | ❌ Deny | ❌ Deny |
-| List own user keys | ✅ Allow | ✅ Allow | ✅ Allow | ✅ Allow | ✅ Allow | ✅ Allow | Empty¹ | Empty¹ | ❌ Deny |
-| Revoke own user key | ✅ Allow | ✅ Allow | ✅ Allow | ✅ Allow | ✅ Allow | ✅ Allow | ❌ Deny | ❌ Deny | ❌ Deny |
-| List all users' keys | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ✅ Allow | ❌ Deny |
-| Revoke another user's key | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ✅ Allow | ❌ Deny |
-| Create system key | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ❌ Deny | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny |
-| List system keys | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ✅ Allow | ❌ Deny |
-| Revoke system key | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ❌ Deny | ✅ Allow | ❌ Deny | ✅ Allow | ❌ Deny |
+| 创建自己的用户密钥 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ❌ 拒绝 | ❌ 拒绝 | ❌ 拒绝 | ❌ 拒绝 | ❌ 拒绝 | ❌ 拒绝 |
+| 列出自己的用户密钥 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ✅ 允许 | 空¹ | 空¹ | ❌ 拒绝 |
+| 撤销自己的用户密钥 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ✅ 允许 | ❌ 拒绝 | ❌ 拒绝 | ❌ 拒绝 |
+| 列出所有用户的密钥 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 |
+| 撤销其他用户的密钥 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 |
+| 创建系统密钥 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ❌ 拒绝 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 |
+| 列出系统密钥 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 |
+| 撤销系统密钥 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 | ✅ 允许 | ❌ 拒绝 |
 
-The admin-secret principal has no personal identity separate from the internal system user,
-so it has no owner branch for personal-key operations. Its independently configured admin
-authority nevertheless admits the administrative branches for inventory, cross-user
-revocation, and system-key management. This matches Phoenix's bootstrap-admin model while
-keeping a SYSTEM API key, which shares the identity but not the authority, excluded.
+管理员密钥主体没有独立于内部系统用户的个人身份，因此个人密钥操作中不存在它的所有者分支。不过，其独立配置的管理员权限允许它进入清单、跨用户撤销和系统密钥管理的管理分支。这符合 Phoenix 的引导管理员模型，同时排除共享身份但不共享权限的 SYSTEM API 密钥。
 
-¹ Both surfaces return an empty collection: REST responds `200` with no keys and GraphQL
-returns an empty `viewer { apiKeys }` field. A system-backed principal owns no user-class
-keys, so the truthful result is an empty list rather than an error, and a client can list
-personal keys through either surface interchangeably. See
-[REST and GraphQL Equivalence](#rest-and-graphql-equivalence).
+¹ 两个接口都返回空集合：REST 返回 `200` 且不包含密钥，GraphQL 返回空的 `viewer { apiKeys }` 字段。以系统身份为基础的主体不拥有用户类别密钥，因此如实的结果是空列表，而非错误；客户端可以交替通过任一接口列出个人密钥。参见 [REST 与 GraphQL 等价性](#rest-and-graphql-equivalence)。
 
-Deployment mode applies after the principal/resource decision:
+在主体/资源决策之后应用部署模式：
 
-| Mode | REST | GraphQL |
+| 模式 | REST | GraphQL |
 |---|---|---|
-| Normal | Capability matrix applies | Capability matrix applies |
-| Authentication disabled | All credential management denied | All credential management denied |
-| Read-only | Entire `/v1` API disabled, including queries | Queries allowed by matrix; mutations denied |
-| Storage locked | Queries and revocation allowed by matrix; issuance denied | Queries and revocation allowed by matrix; issuance denied |
+| 正常 | 适用能力矩阵 | 适用能力矩阵 |
+| 禁用身份验证 | 拒绝所有凭证管理 | 拒绝所有凭证管理 |
+| 只读 | 禁用整个 `/v1` API，包括查询 | 按矩阵允许查询；拒绝 mutation |
+| 存储锁定 | 按矩阵允许查询和撤销；拒绝签发 | 按矩阵允许查询和撤销；拒绝签发 |
 
-Read-only mode intentionally has transport-level availability semantics: Phoenix disables
-the REST API as a whole, while GraphQL continues to serve queries. Storage lock is instead
-a capacity-recovery condition, so revocation remains available on both surfaces.
+只读模式刻意采用传输层可用性语义：Phoenix 整体禁用 REST API，而 GraphQL 继续提供查询。存储锁定则是容量恢复条件，因此两个接口都继续提供撤销。
 
-## Credential Classification and Ownership
+<a id="credential-classification-and-ownership"></a>
 
-API keys do not have a separate persisted kind column. Resource class is derived from the
-owner's current database role:
+## 凭证分类与所有权
 
-- owner role `SYSTEM` → system API key;
-- owner role `ADMIN`, `MEMBER`, or `VIEWER` → user API key.
+API 密钥没有独立持久化的类型列。资源类别根据所有者当前数据库角色推导：
 
-Shared DB-backed policy functions resolve principal role and key owner role for both REST
-and GraphQL. Personal owner operations require a human identity and a non-SYSTEM resource.
-Administrative user-key operations require admin authority and a non-SYSTEM resource.
-System-key operations require admin authority and a SYSTEM resource. Issuance additionally
-checks credential kind and role: both surfaces deny issuance by every API key.
+- 所有者角色为 `SYSTEM` → 系统 API 密钥；
+- 所有者角色为 `ADMIN`、`MEMBER` 或 `VIEWER` → 用户 API 密钥。
 
-This design keeps the established lifecycle in which system credentials survive deletion
-of the admin who created them. Distinct service principals per workload were considered
-but not adopted because they would require new identity, attribution, migration, and
-lifecycle semantics. Explicit credential and resource classification provides the needed
-isolation without changing persistence.
+共享的数据库支持策略函数为 REST 和 GraphQL 解析主体角色及密钥所有者角色。个人所有者操作要求真人身份和非 SYSTEM 资源。管理性用户密钥操作要求管理员权限和非 SYSTEM 资源。系统密钥操作要求管理员权限和 SYSTEM 资源。签发还要检查凭证类型和角色：两个接口都拒绝任何 API 密钥进行签发。
 
-## REST and GraphQL Equivalence
+该设计保留既有生命周期：创建系统凭证的管理员被删除后，系统凭证仍然存在。曾考虑为每个工作负载提供独立服务主体，但未采用，因为这需要新的身份、归属、迁移和生命周期语义。显式凭证与资源分类在不改变持久化方式的前提下，提供了所需隔离。
 
-REST and GraphQL make the same authorization decision for equivalent operations:
+<a id="rest-and-graphql-equivalence"></a>
 
-- The same credential kind, principal, action, and resource class must produce the same
-  authorization decision.
-- A principal backed by the internal system user owns no user-class keys, so listing its
-  personal collection returns empty on both surfaces: REST responds `200` with no keys and
-  GraphQL returns an empty `viewer { apiKeys }` field. A client can therefore swap surfaces
-  without handling a rejection on one and an empty list on the other. Neither surface
-  exposes user keys, and the system user's own keys (which are system keys) are never
-  returned here.
-- Unauthorized, missing, and wrong-class revocation targets use the same non-enumerating
-  external result within each surface.
-- URL paths, field names, and client-supplied GlobalID type names describe presentation.
-  Database ownership determines resource class.
+## REST 与 GraphQL 等价性
 
-Transport availability is separate from resource authority. In read-only mode Phoenix
-intentionally disables the entire REST `/v1` API while continuing to serve GraphQL queries;
-this deployment-mode boundary is not an authorization difference between equivalent
-operations that are available on both surfaces.
+REST 与 GraphQL 对等价操作作出相同授权决策：
 
-Equivalent authority does not require identical error taxonomy:
+- 相同的凭证类型、主体、操作和资源类别必须产生相同的授权决策。
+- 以内部系统用户为基础的主体不拥有用户类别密钥，因此两个接口列出其个人集合时都返回空：REST 返回 `200` 且不包含密钥，GraphQL 返回空的 `viewer { apiKeys }` 字段。因此客户端可以切换接口，无需在一端处理拒绝、另一端处理空列表。两个接口都不在此暴露用户密钥，也绝不会返回系统用户自己的密钥（它们属于系统密钥）。
+- 对未授权、缺失和类别错误的撤销目标，每个接口内部都采用相同、不可用于枚举的外部结果。
+- URL 路径、字段名称和客户端提供的 GlobalID 类型名称描述的是表示形式；数据库所有权决定资源类别。
 
-| Scenario | REST | GraphQL | Rationale |
+传输可用性与资源权限相互独立。在只读模式下，Phoenix 刻意禁用整个 REST `/v1` API，同时继续提供 GraphQL 查询；这一部署模式边界，不是两个接口均可用的等价操作之间的授权差异。
+
+权限等价并不要求错误分类完全相同：
+
+| 场景 | REST | GraphQL | 原因 |
 |---|---|---|---|
-| SYSTEM key invokes personal-key mutation | `403 Forbidden` before target lookup | `NotFound` or `Unauthorized`, depending on the mutation | Categorical credential-kind denial; REST does not inspect the target and therefore leaks no target existence |
-| API key invokes an issuance mutation | `403 Forbidden` | `Unauthorized` | Credential issuance starts from a session or admin-secret origin |
-| Admin secret creates a personal key | `403 Forbidden` | `Unauthorized` | The internal system user has no human owner branch |
-| Unauthorized cross-user revocation | `404 Not Found` | `NotFound` | Missing and unauthorized targets are intentionally indistinguishable |
-| GlobalID has the wrong presentation type or malformed encoding | `422 Unprocessable Entity` | GraphQL `errors` response | Request shape is invalid before resource authorization |
-| GlobalID presentation is valid but the database key has the wrong resource class | `404 Not Found` | `NotFound` | Resource classification is database-derived and non-enumerating |
+| SYSTEM 密钥调用个人密钥 mutation | 在查找目标前返回 `403 Forbidden` | 根据 mutation 返回 `NotFound` 或 `Unauthorized` | 按凭证类型直接拒绝；REST 不检查目标，因此不泄漏目标是否存在 |
+| API 密钥调用签发 mutation | `403 Forbidden` | `Unauthorized` | 凭证签发源自会话或管理员密钥 |
+| 管理员密钥创建个人密钥 | `403 Forbidden` | `Unauthorized` | 内部系统用户没有真人所有者分支 |
+| 未授权的跨用户撤销 | `404 Not Found` | `NotFound` | 刻意使缺失与未授权目标无法区分 |
+| GlobalID 表示类型错误或编码格式错误 | `422 Unprocessable Entity` | GraphQL `errors` 响应 | 在资源授权前，请求形状已经无效 |
+| GlobalID 表示有效，但数据库密钥的资源类别错误 | `404 Not Found` | `NotFound` | 资源分类由数据库推导，且不可用于枚举 |
 
-Client code may depend on each surface's documented error contract, but it must not infer
-different authority from these representational differences.
+客户端代码可以依赖各接口文档规定的错误约定，但不得根据这些表示差异推断权限不同。
 
-## Surface Enforcement
+<a id="surface-enforcement"></a>
+
+## 各接口的强制约束
+
+<a id="rest"></a>
 
 ### REST
 
-All routes require authentication to be enabled.
+所有路由都要求启用身份验证。
 
-| Route | Policy |
+| 路由 | 策略 |
 |---|---|
-| `GET /v1/user/api_keys` | Lists the caller's own user keys; a system-backed principal receives an empty collection |
-| `POST /v1/user/api_keys` | Human session creates a key with current DB role; API keys denied |
-| `DELETE /v1/user/api_keys/{id}` | Owner, `ADMIN`-role human principal, or admin-secret principal revokes a non-SYSTEM key |
-| `GET /v1/users/api_keys` | Admin inventories all non-SYSTEM keys with owner metadata |
-| `GET /v1/system/api_keys` | Admin lists SYSTEM keys |
-| `POST /v1/system/api_keys` | `ADMIN` human session or admin-secret principal creates a SYSTEM key; API keys denied |
-| `DELETE /v1/system/api_keys/{id}` | Admin revokes a SYSTEM key |
+| `GET /v1/user/api_keys` | 列出调用方自己的用户密钥；以系统身份为基础的主体收到空集合 |
+| `POST /v1/user/api_keys` | 真人会话使用当前数据库角色创建密钥；拒绝 API 密钥 |
+| `DELETE /v1/user/api_keys/{id}` | 所有者、`ADMIN` 角色真人主体或管理员密钥主体撤销非 SYSTEM 密钥 |
+| `GET /v1/users/api_keys` | 管理员清点所有非 SYSTEM 密钥及其所有者元数据 |
+| `GET /v1/system/api_keys` | 管理员列出 SYSTEM 密钥 |
+| `POST /v1/system/api_keys` | `ADMIN` 真人会话或管理员密钥主体创建 SYSTEM 密钥；拒绝 API 密钥 |
+| `DELETE /v1/system/api_keys/{id}` | 管理员撤销 SYSTEM 密钥 |
 
-The `/v1` router applies common authentication and read-only dependencies. Ordinary
-resource routers additionally apply the viewer write restriction. API-key routes are
-mounted outside that nested restriction and enforce their explicit capability policy:
-viewer personal self-service remains available, while organization-wide and system-key
-operations remain admin-gated.
+`/v1` 路由器应用通用的身份验证和只读依赖。普通资源路由器还应用 viewer 写入限制。API 密钥路由挂载在该嵌套限制之外，实施其显式能力策略：保留 viewer 个人自助，组织范围和系统密钥操作则仍限管理员。
 
-The root read-only dependency intentionally disables every `/v1` method, including list and
-inventory requests. This is a transport-availability policy for the REST API, not an
-API-key-specific authorization decision.
+根只读依赖刻意禁用每个 `/v1` 方法，包括列表与清单请求。这是 REST API 的传输可用性策略，并非 API 密钥特有的授权决策。
 
-The organization-wide inventory endpoint is required to make cross-user revocation
-operational: an admin must be able to discover a key's GlobalID and owner before revoking
-it. Returning owner metadata also lets operators distinguish similarly named keys without
-exposing the bearer secret itself.
+组织范围的清单端点是跨用户撤销能够实际操作的必要条件：管理员必须先发现密钥的 GlobalID 和所有者，才能撤销它。返回所有者元数据，还让运维人员可以区分名称相似的密钥，而无需暴露持有者秘密值本身。
+
+<a id="graphql"></a>
 
 ### GraphQL
 
-| Field | Policy |
+| 字段 | 策略 |
 |---|---|
-| `viewer { apiKeys }` | Returns only non-SYSTEM keys owned by the viewer |
-| `createUserApiKey` | Auth-enabled human session creates a key with current DB role; API keys denied |
-| `deleteUserApiKey` | Auth-enabled owner or admin, including admin-secret principal; non-SYSTEM resource; non-enumerating denial |
-| `userApiKeys` | Admin inventories all non-SYSTEM keys |
-| `systemApiKeys` | Admin lists SYSTEM keys |
-| `createSystemApiKey` | `ADMIN` human session or admin-secret principal creates a SYSTEM key; API keys denied |
-| `deleteSystemApiKey` | Admin revokes a verified SYSTEM resource |
+| `viewer { apiKeys }` | 仅返回 viewer 拥有的非 SYSTEM 密钥 |
+| `createUserApiKey` | 已启用身份验证的真人会话使用当前数据库角色创建密钥；拒绝 API 密钥 |
+| `deleteUserApiKey` | 已启用身份验证的所有者或管理员，包括管理员密钥主体；非 SYSTEM 资源；不可用于枚举的拒绝 |
+| `userApiKeys` | 管理员清点所有非 SYSTEM 密钥 |
+| `systemApiKeys` | 管理员列出 SYSTEM 密钥 |
+| `createSystemApiKey` | `ADMIN` 真人会话或管理员密钥主体创建 SYSTEM 密钥；拒绝 API 密钥 |
+| `deleteSystemApiKey` | 管理员撤销已验证的 SYSTEM 资源 |
 
-GraphQL GlobalID validation verifies the requested presentation type. Authorization also
-verifies the database resource class, so relabeling a user-key row as `SystemApiKey` or a
-system-key row as `UserApiKey` cannot cross the boundary.
+GraphQL GlobalID 验证会检查请求的表示类型。授权还会验证数据库资源类别，因此将用户密钥行重新标记为 `SystemApiKey`，或将系统密钥行标记为 `UserApiKey`，均不能跨越边界。
 
-The GraphQL personal-key list is a projection on the `viewer` object rather than a
-standalone management operation. It filters out resources that are not user-class keys, so a
-system-backed principal sees an empty list — the same result REST returns for the same
-principal.
+GraphQL 个人密钥列表是 `viewer` 对象上的投影，并非独立管理操作。它过滤掉非用户类别密钥资源，因此以系统身份为基础的主体看到空列表，与 REST 对同一主体返回的结果相同。
 
-Personal `createUserApiKey` and `deleteUserApiKey` mutations intentionally omit
-`IsNotViewer`: viewer credential self-service is allowed by D4 and D5. `createUserApiKey`
-and `createSystemApiKey` deny API-key-authenticated callers with an `Unauthorized` error;
-issuance starts from a session or the admin-secret principal. Administrative system-key
-mutations remain admin-gated. GraphQL queries remain available in read-only mode, while
-`IsNotReadOnly` denies credential issuance and revocation.
+个人 `createUserApiKey` 和 `deleteUserApiKey` mutation 刻意省略 `IsNotViewer`：D4 和 D5 允许 viewer 凭证自助。`createUserApiKey` 和 `createSystemApiKey` 对通过 API 密钥验证身份的调用方返回 `Unauthorized` 错误；签发源自会话或管理员密钥主体。管理性系统密钥 mutation 仍限管理员。在只读模式下，GraphQL 查询仍可用，而 `IsNotReadOnly` 拒绝凭证签发和撤销。
 
-## Issuance Compatibility History
+<a id="issuance-compatibility-history"></a>
 
-Through Phoenix 18, GraphQL permitted API-key-authenticated issuance for backward
-compatibility: a user API key could create another user key for the same owner, and an
-`ADMIN`-role user key could create a system key. The REST API-key endpoints, introduced
-later, enforced non-transitive issuance from their first release.
+## 签发兼容性历史
 
-Phoenix 19 removed the GraphQL compatibility behavior
-([`Arize-ai/phoenix#14396`](https://github.com/Arize-ai/phoenix/issues/14396)). Both
-surfaces now enforce the same policy: human sessions may issue user keys, human `ADMIN`
-sessions and the admin secret may issue system keys, and delegated API keys may not issue
-another credential. The GraphQL schema is unchanged; the mutations deny API-key callers
-with an `Unauthorized` error. Workflows that relied on unattended key creation must
-provision keys from a session-authenticated context instead; see `MIGRATION.md` for the
-operator-facing guidance.
+截至 Phoenix 18，GraphQL 为向后兼容允许通过 API 密钥身份验证进行签发：用户 API 密钥可以为同一所有者创建另一个用户密钥，`ADMIN` 角色用户密钥可以创建系统密钥。较晚引入的 REST API 密钥端点自首次发布起就实施不可传递签发。
 
-## Role Resolution and Lifecycle
+Phoenix 19 移除了 GraphQL 兼容行为（[`Arize-ai/phoenix#14396`](https://github.com/Arize-ai/phoenix/issues/14396)）。现在两个接口实施相同策略：真人会话可签发用户密钥，真人 `ADMIN` 会话和管理员密钥可签发系统密钥，受委托的 API 密钥不能再签发其他凭证。GraphQL schema 不变；mutation 对 API 密钥调用方返回 `Unauthorized` 错误。依赖无人值守密钥创建的工作流，必须改为在通过会话验证身份的上下文中配置密钥；面向运维人员的指导参见 `MIGRATION.md`。
 
-New keys always use the owner's current database role. Existing API keys adopt role changes
-from server-side state; runtime authorization follows the token-store refresh timing
-described below.
+<a id="role-resolution-and-lifecycle"></a>
 
-API-key JWTs contain a token ID (`jti`), not an embedded role. `JwtStore` reconstructs
-claims from database state and refreshes its in-memory cache every 10 seconds. Runtime
-principal flags can therefore lag a role change until the next refresh.
+## 角色解析与生命周期
 
-Consequently, after an API-key owner is demoted from `ADMIN`, admin checks that use the
-cached runtime principal may continue to admit that key until refresh. Authorization paths
-that query the database directly, including credential issuance and user-key revocation,
-use the new role immediately.
+新密钥始终使用所有者当前数据库角色。现有 API 密钥从服务端状态获取角色变化；运行时授权遵循下文所述令牌存储刷新时机。
 
-Credential issuance and personal-key classification query the database directly. A role
-change consequently applies immediately when a human session creates a credential on
-either surface, without waiting for token-store cache refresh. `PhoenixSystemUser` carries no token claims, and authorization
-never relies solely on cached claims. REST may use a credential's claims for an early
-fail-closed SYSTEM rejection, but permitted role-based decisions use current database
-state. Credential kind is resolved from the authenticated credential itself and is not
-inferred from role.
+API 密钥 JWT 包含令牌 ID（`jti`），不嵌入角色。`JwtStore` 从数据库状态重建声明，每 10 秒刷新内存缓存。因此，运行时主体标志可能要到下次刷新才反映角色变化。
 
-Session tokens and API keys diverge on role change. Changing a user's role logs the user
-out, evicting their access and refresh tokens immediately. API keys are intentionally not
-evicted: they remain valid and pick up the new role, within the refresh interval for
-runtime flags and immediately when issuing a new credential because issuance queries
-current database role. This keeps long-lived workload credentials stable across
-administrative changes while still binding their authority to current server-side role
-state.
+因此，API 密钥所有者从 `ADMIN` 降级后，使用缓存运行时主体的管理员检查可能在刷新前仍允许该密钥通过。直接查询数据库的授权路径，包括凭证签发和用户密钥撤销，会立即使用新角色。
 
-In read-only mode the entire REST API is unavailable, while GraphQL permits queries and
-blocks mutations. Under storage lock, both surfaces block creation but leave queries and
-revocation available.
+凭证签发和个人密钥分类直接查询数据库。因此，在任一接口上，真人会话创建凭证时都会立即应用角色变化，无需等待令牌存储缓存刷新。`PhoenixSystemUser` 不携带令牌声明，授权也从不只依赖缓存声明。REST 可以使用凭证声明，提前以失败时关闭方式拒绝 SYSTEM，但允许操作的基于角色决策使用当前数据库状态。凭证类型从已验证的凭证本身解析，不从角色推断。
 
-## Credential Lifecycle and Secret Handling
+角色变化时，会话令牌和 API 密钥的行为不同。更改用户角色会使用户退出登录，立即逐出其访问令牌与刷新令牌。API 密钥刻意不逐出：它们保持有效并获取新角色，运行时标志在刷新间隔内更新，而签发新凭证时立即更新，因为签发查询当前数据库角色。这样既让长期工作负载凭证在管理变更期间保持稳定，又使其权限始终绑定当前服务端角色状态。
 
-An API key follows this state model:
+只读模式下，整个 REST API 不可用，而 GraphQL 允许查询并阻止 mutation。存储锁定时，两个接口都阻止创建，但继续允许查询和撤销。
+
+<a id="credential-lifecycle-and-secret-handling"></a>
+
+## 凭证生命周期与秘密处理
+
+API 密钥遵循以下状态模型：
 
 ```text
 issued → active → inactive
@@ -472,81 +358,54 @@ issued → active → inactive
                         └── owner deleted
 ```
 
-- **Issued.** The server generates the bearer secret, persists only the information needed
-  to authenticate and manage it, and returns the plaintext exactly once.
-- **Active.** The key authenticates as its owner with authority derived from current
-  server-side state.
-- **Inactive.** An expired or revoked key no longer authenticates.
-- **Expired.** The key becomes inactive when its configured expiration is reached.
-- **Revoked.** An authorized revocation permanently makes the key inactive and is not
-  reversible.
-- **Owner deleted.** Deleting a human owner revokes all of that owner's keys. System keys
-  are bound to the non-deletable internal system user.
+- **已签发。**服务端生成持有者秘密值，仅持久化验证身份和管理所需的信息，并且只返回一次明文。
+- **有效。**密钥以所有者身份验证，权限来自当前服务端状态。
+- **无效。**已过期或已撤销的密钥不能再验证身份。
+- **已过期。**达到配置的过期时间后，密钥变为无效。
+- **已撤销。**经授权的撤销永久使密钥无效，且不可逆。
+- **所有者被删除。**删除真人所有者会撤销其全部密钥。系统密钥绑定不可删除的内部系统用户。
 
-Plaintext keys must not be persisted, returned by list operations, or written to logs.
-Names, descriptions, owner metadata, timestamps, and identifiers are management metadata,
-not bearer secrets.
+不得持久化明文密钥、通过列表操作返回明文密钥，或将明文写入日志。名称、描述、所有者元数据、时间戳和标识符是管理元数据，不是持有者秘密值。
 
-API keys cannot issue replacements on either surface, so revoking a compromised key
-contains that credential. Responders should still inventory the affected user's keys when
-the compromise may predate the Phoenix 19 upgrade, because legacy GraphQL issuance could
-have minted replacements before enforcement began. Likewise, rotating a compromised admin
-secret does not revoke SYSTEM keys created with it; those keys require separate inventory
-and revocation.
+两个接口上的 API 密钥都不能签发替代密钥，因此撤销被攻陷密钥可遏制该凭证。如果入侵可能发生在 Phoenix 19 升级之前，响应人员仍应清点受影响用户的密钥，因为旧版 GraphQL 签发可能在强制约束生效前创建替代密钥。同样，轮换被攻陷的管理员密钥，不会撤销其创建的 SYSTEM 密钥；这些密钥需要单独清点和撤销。
 
-Authorization is evaluated against authoritative state at the decision point. Operations
-that span authorization and mutation must fail closed if the caller, owner, or target no
-longer satisfies policy. Revocation is safe to repeat conceptually even when the transport
-reports a missing key.
+授权在决策点根据权威状态评估。跨越授权和变更的操作，如果调用方、所有者或目标不再符合策略，必须失败时关闭。从概念上，重复撤销是安全的，即使传输层报告密钥缺失。
 
-This model does not depend on audit logging for authorization correctness. Credential
-issuance, administrative inventory, revocation, and admin-secret use are security-relevant
-events, but audit-event retention and operational incident procedures are outside the scope
-of this document.
+该模型不依赖审计日志来保证授权正确性。凭证签发、管理清单、撤销和管理员密钥使用都属于安全相关事件，但审计事件留存和运维事件响应流程不在本文范围内。
 
-## Invariants and Edge Cases
+<a id="invariants-and-edge-cases"></a>
 
-- **System user existence.** The data model intends exactly one user with role `SYSTEM`.
-  System-key operations require at least one. If legacy or inconsistent data contains
-  more than one, choosing the lowest user id prevents nondeterministic ownership; it is a
-  compatibility fallback, not a supported multi-system-user model. Operators should repair
-  that state.
-- **Classification is derived, not stored.** A key's class comes from its owner's current
-  database role, not a persisted column. Changing the internal system user's role would
-  reclassify every system key with no migration; the system user's role must not be
-  repurposed.
-- **User deletion revokes keys.** Deleting a human user revokes that user's API keys as
-  part of the deletion, so no key outlives its owner.
-- **Expiration.** A key may carry a future expiration. An expired key no longer
-  authenticates and is pruned by the token-store refresh.
-- **Admin-secret principal.** The admin-secret principal's identity is the internal system
-  user; it has no personal keys, but its configured bootstrap authority admits
-  administrative user-key and system-key operations. It is available only when the
-  deployment is configured with a system user id.
+## 不变量与边界情况
 
-## Conformance
+- **系统用户存在性。**数据模型的设计意图是恰好存在一个角色为 `SYSTEM` 的用户。系统密钥操作要求至少存在一个。如果旧数据或不一致数据中存在多个，选择最小用户 ID 可避免所有权不确定；这是兼容性回退，并非受支持的多系统用户模型。运维人员应修复该状态。
+- **分类是推导结果，不存储。**密钥类别来自所有者当前数据库角色，而非持久化列。改变内部系统用户角色会在无需迁移的情况下重新分类所有系统密钥，因此不得改变系统用户角色的用途。
+- **删除用户即撤销密钥。**删除真人用户会在删除过程中撤销其 API 密钥，因此没有密钥的存续期超过所有者。
+- **过期。**密钥可以具有未来的过期时间。已过期密钥不能再验证身份，并由令牌存储刷新清除。
+- **管理员密钥主体。**管理员密钥主体的身份是内部系统用户；它没有个人密钥，但配置的引导权限允许管理性用户密钥和系统密钥操作。只有部署配置了系统用户 ID 时，它才可用。
 
-The capability matrix must be enforced with real bearer credentials across REST and
-GraphQL. Coverage must include:
+<a id="conformance"></a>
 
-- session-based viewer create/list/revoke self-service;
-- REST and GraphQL rejection of credential issuance by every API-key credential kind,
-  including an `ADMIN`-role user key invoking system-key issuance;
-- admin-secret system-key issuance with personal-key issuance denied;
-- owner revocation through a user key;
-- admin organization-wide inventory and cross-user revocation, including the admin secret;
-- identical missing/unauthorized revocation denial;
-- empty personal lists and mutation denial for SYSTEM-key principals;
-- viewer personal self-service on both REST and GraphQL;
-- rejection of personal/system GlobalID relabeling;
-- distinct presentation-validation and resource-class denial;
-- immediate DB-role use after a role change;
-- auth-disabled fail-closed behavior;
-- complete REST `/v1` denial in read-only mode;
-- GraphQL query availability with mutation denial in read-only mode;
-- storage-lock query and revocation availability with issuance denial.
+## 符合性
 
-Primary conformance suites:
+必须使用真实持有者凭证，在 REST 和 GraphQL 两个接口上强制执行能力矩阵。覆盖范围必须包括：
+
+- 基于会话的 viewer 创建/列出/撤销自助；
+- REST 和 GraphQL 拒绝所有 API 密钥凭证类型签发凭证，包括 `ADMIN` 角色用户密钥调用系统密钥签发；
+- 管理员密钥签发系统密钥，同时拒绝签发个人密钥；
+- 所有者通过用户密钥撤销；
+- 管理员组织范围清单和跨用户撤销，包括管理员密钥；
+- 对缺失/未授权撤销采用相同拒绝；
+- SYSTEM 密钥主体的个人列表为空，mutation 被拒绝；
+- REST 和 GraphQL 均允许 viewer 个人自助；
+- 拒绝重新标记个人/系统 GlobalID；
+- 区分表示验证拒绝与资源类别拒绝；
+- 角色变化后立即使用数据库角色；
+- 禁用身份验证时失败时关闭；
+- 只读模式下完全拒绝 REST `/v1`；
+- 只读模式下允许 GraphQL 查询，拒绝 mutation；
+- 存储锁定时允许查询与撤销，拒绝签发。
+
+主要符合性测试套件：
 
 - `tests/integration/auth/test_api_keys.py`
 - `tests/integration/auth/test_auth.py`
@@ -554,11 +413,11 @@ Primary conformance suites:
 - `tests/unit/server/api/routers/v1/test_api_keys.py`
 - `tests/unit/server/api/helpers/test_api_key_policy.py`
 
-The REST route registry in `tests/integration/_helpers.py` separately records common reads,
-admin-only operations, viewer-blocked writes, viewer credential self-service, and routes
-that require authentication to be enabled.
+`tests/integration/_helpers.py` 中的 REST 路由注册表，分别记录普通读取、仅限管理员的操作、对 viewer 阻止的写入、viewer 凭证自助，以及要求启用身份验证的路由。
 
-## Implementation References
+<a id="implementation-references"></a>
+
+## 实现参考
 
 - `src/phoenix/server/api/helpers/api_key_policy.py`
 - `src/phoenix/server/api/routers/v1/api_keys.py`

@@ -1,38 +1,46 @@
-# OTel Context + Async Boundaries
+<a id="otel-context--async-boundaries"></a>
 
-This document is the single reference for why we avoid **contextvars in async generator cleanup** in the Phoenix playground (chat, evaluators, streaming), and how we proved and designed around it. It covers the problem, root cause (CPython/asyncio), two possible fixes, why we chose the generator-side fix, and where the design is applied in code.
+# OTel 上下文与异步边界
+
+本文是 Phoenix playground（聊天、评估器、流式输出）中为何避免**在异步生成器清理时使用 contextvars**的统一参考，说明如何验证并据此设计。涵盖问题、CPython/asyncio 根因、两种可行修复、选择生成器端修复的原因，以及设计在代码中的应用位置。
 
 ---
 
-## 1. Problem statement
+<a id="1-problem-statement"></a>
 
-When using OpenTelemetry with `start_as_current_span` (or any API that relies on `contextvars`), the current context is stored in a contextvar. Across **async suspend/resume** (e.g. `async for chunk in stream()`), that context can change:
+## 1. 问题说明
 
-- **Generator side:** An async generator that sets a contextvar and gets a token, then `yield`s, may run its `finally` block in a **different** context after the consumer raises or exits. Calling `token.reset()` in that `finally` then raises: *"Token was created in a different Context"* (or OTel’s "Failed to detach context").
-- **Consumer side:** The consumer (e.g. code that does `async for` over the generator) may also attach spans via contextvars; the same risk—cleanup running in a different context—can apply when crossing the async boundary.
+使用 OpenTelemetry `start_as_current_span` 或任何依赖 `contextvars` 的 API 时，当前上下文保存在 contextvar 中。在**异步挂起和恢复**边界，例如 `async for chunk in stream()`，上下文可能改变：
 
-**Mapping to our code:**
+- **生成器端：**异步生成器设置 contextvar 并获得 token 后执行 `yield`，消费者抛出异常或退出后，生成器 `finally` 可能在**不同**上下文执行。在该 `finally` 中调用 `token.reset()` 会抛出 *"Token was created in a different Context"*，或 OTel 的 "Failed to detach context"。
+- **消费者端：**消费者，例如对生成器执行 `async for` 的代码，也可能通过 contextvars 附加 span；跨异步边界时，清理在不同上下文执行的风险也可能存在。
 
-| Role       | Our code                     | Uses contextvars? (before fix) |
+**与代码的对应关系：**
+
+| 角色 | 代码 | 修复前是否使用 contextvars？ |
 |-----------|------------------------------|--------------------------------|
-| Generator | `chat_completion_create()`   | Yes (implicit current span)    |
-| Consumer  | `evaluate()` (e.g. LLMEvaluator) | Yes (`start_as_current_span`) |
+| 生成器 | `chat_completion_create()` | 是，隐式当前 span |
+| 消费者 | `evaluate()`，例如 LLMEvaluator | 是，`start_as_current_span` |
 
-Goal: **prove** the failure mode with generic Python, understand **why** it happens (CPython + docs), then **design** so we never rely on contextvars across these boundaries.
+目标：使用通用 Python **证明**失败模式，结合 CPython 和文档理解**原因**，然后**设计**出不跨这些边界依赖 contextvars 的实现。
 
 ---
 
-## 2. Root cause: CPython and asyncio behavior
+<a id="2-root-cause-cpython-and-asyncio-behavior"></a>
 
-### 2.1 What we observe
+## 2. 根因：CPython 和 asyncio 行为
 
-When an async generator sets a contextvar and gets a token, then yields, and the consumer raises during `async for`, the generator’s `finally` runs later—in a different execution context—and `token.reset()` raises:
+<a id="21-what-we-observe"></a>
+
+### 2.1 观察结果
+
+异步生成器设置 contextvar 并取得 token 后让出执行，消费者在 `async for` 期间抛出异常时，生成器 `finally` 会稍后在不同执行上下文运行，导致 `token.reset()` 抛出：
 
 ```text
 ValueError: <Token ...> was created in a different Context
 ```
 
-The check is in CPython `Python/context.c`:
+检查位于 CPython `Python/context.c`：
 
 ```c
 // PyContextVar_Reset():
@@ -44,18 +52,22 @@ if (ctx != tok->tok_ctx) {       // token's context (when set() was called)
 }
 ```
 
-So the generator’s `finally` runs with a **different** current context than the one in which the token was created.
+因此，生成器 `finally` 运行时的当前上下文与创建 token 的上下文**不同**。
 
-### 2.2 Why: `async for` does not call `aclose()` on exception
+<a id="22-why-async-for-does-not-call-aclose-on-exception"></a>
 
-Relevant code: `Python/compile.c` (`compiler_async_for`) and `Python/ceval.c` (`END_ASYNC_FOR`).
+### 2.2 原因：`async for` 遇到异常不会调用 `aclose()`
 
-- **Structure of `async for`:** `GET_AITER` → loop with `SETUP_FINALLY`, `GET_ANEXT`, `YIELD_FROM` (await), body, then **except block** with `END_ASYNC_FOR`. There is **no** call to `iterator.aclose()` in this flow.
-- **What `END_ASYNC_FOR` does:** If the exception is `StopAsyncIteration`, it pops and continues. For **any other exception** (including `RuntimeError` in the body), it **re-raises** only. It does **not** call `iterator.aclose()`. So on exception the async generator is left open and is closed only when it is **finalized** (e.g. by GC).
+相关代码：`Python/compile.c`（`compiler_async_for`）和 `Python/ceval.c`（`END_ASYNC_FOR`）。
 
-### 2.3 How the generator actually gets closed: finalizer
+- **`async for` 结构：**`GET_AITER` → 使用 `SETUP_FINALLY`、`GET_ANEXT`、`YIELD_FROM`（await）的循环、循环体，之后是含 `END_ASYNC_FOR` 的 **except 块**。此流程**没有**调用 `iterator.aclose()`。
+- **`END_ASYNC_FOR` 的行为：**异常为 `StopAsyncIteration` 时出栈并继续。对于**其他任何异常**，包括循环体中的 `RuntimeError`，仅**重新抛出**，**不会**调用 `iterator.aclose()`。因此异常后异步生成器保持打开，仅在被**终结**时关闭，例如垃圾回收。
 
-From `Lib/asyncio/base_events.py`:
+<a id="23-how-the-generator-actually-gets-closed-finalizer"></a>
+
+### 2.3 生成器实际如何关闭：终结器
+
+来自 `Lib/asyncio/base_events.py`：
 
 ```python
 def _asyncgen_finalizer_hook(self, agen):
@@ -64,120 +76,141 @@ def _asyncgen_finalizer_hook(self, agen):
         self.call_soon_threadsafe(self.create_task, agen.aclose())
 ```
 
-When the event loop has registered async-gen hooks (in `run_forever()`), the **finalizer** runs when the async generator is destroyed. It schedules `agen.aclose()` by creating a **new** Task:
+事件循环在 `run_forever()` 中注册异步生成器钩子后，异步生成器销毁时会运行**终结器**，通过创建**新** Task 调度 `agen.aclose()`：
 
-- `self.create_task(agen.aclose())` creates a **new** `Task`.
-- Each `Task` captures the **current** context at creation: `self._context = contextvars.copy_context()` (`Lib/asyncio/tasks.py`).
-- So the task that runs `aclose()` has whatever context is **current** when the finalizer runs (e.g. a callback or the loop’s default context), **not** the original consumer task’s context.
+- `self.create_task(agen.aclose())` 创建**新** `Task`。
+- 每个 `Task` 在创建时捕获**当前**上下文：`self._context = contextvars.copy_context()`，位于 `Lib/asyncio/tasks.py`。
+- 因此运行 `aclose()` 的任务持有终结器执行时的**当前**上下文，例如回调或循环默认上下文，**不是**原消费者任务上下文。
 
-When that task runs, it uses `context.run(callback)` (`Lib/asyncio/events.py` `Handle._run()`). So the generator’s code (including its `finally`) runs in that **new** task’s context. Hence:
+任务运行时使用 `context.run(callback)`，位于 `Lib/asyncio/events.py` 的 `Handle._run()`。因此生成器代码，包括 `finally`，均在该**新**任务上下文执行。于是：
 
-- Token was created in **Context A** (original consumer task when the generator ran and called `cv.set()`).
-- Generator’s `finally` runs in **Context B** (task created by the finalizer to run `aclose()`).
-- `context_get()` returns B, `tok->tok_ctx` is A → "created in a different Context".
+- token 在**上下文 A** 创建，即生成器运行并调用 `cv.set()` 时的原消费者任务。
+- 生成器 `finally` 在**上下文 B** 运行，即终结器为执行 `aclose()` 创建的任务。
+- `context_get()` 返回 B，`tok->tok_ctx` 为 A → "created in a different Context"。
 
-**Summary:** Exception in the consumer → `async for` does not call `aclose()` → generator is finalized later → finalizer runs `create_task(agen.aclose())` → generator’s `finally` runs in a new task with a different context.
+**汇总：**消费者异常 → `async for` 不调用 `aclose()` → 生成器稍后终结 → 终结器执行 `create_task(agen.aclose())` → 生成器 `finally` 在不同上下文的新任务中运行。
 
-*CPython reference paths:* `Python/context.c` (`PyContextVar_Reset`, `context_get()`), `Python/compile.c` (`compiler_async_for`), `Python/ceval.c` (`END_ASYNC_FOR`), `Lib/asyncio/base_events.py` (`_asyncgen_finalizer_hook`), `Lib/asyncio/tasks.py` (Task `copy_context()`), `Lib/asyncio/events.py` (`Handle._run()`).
-
----
-
-## 3. Official Python documentation
-
-The language and library docs describe this behavior and the fix:
-
-- **[Asynchronous generator functions](https://docs.python.org/3/reference/expressions.html#asynchronous-generator-functions)** (Language reference):  
-  If an asynchronous generator exits early (break, caller cancelled, or other exceptions), its async cleanup runs in an **unexpected context**—e.g. after the lifetime of tasks it depends on, or during event loop shutdown when the async-generator garbage collection hook is called. **The caller must explicitly close the async generator by calling `aclose()`** to finalize it and detach it from the event loop.
-
-- **[contextlib.aclosing](https://docs.python.org/3/library/contextlib.html#contextlib.aclosing)** (Library):  
-  Using `async with aclosing(agen):` ensures the generator’s async exit code is executed **in the same context as its iterations** (so that exceptions and context variables work as expected, and the exit code isn’t run after the lifetime of some task it depends on).
-
-The language therefore gives two ways to avoid the problem: 1. **Caller:** Explicitly close the generator (e.g. `async with aclosing(stream): ...`).  
-2. **Generator:** Do not rely on contextvars in its cleanup (use `start_span` and `span.end()` in `finally`, not `start_as_current_span`). We chose (2) for the streaming client so we don’t depend on every consumer using `aclosing()`.
+*CPython 参考路径：*`Python/context.c`（`PyContextVar_Reset`、`context_get()`）、`Python/compile.c`（`compiler_async_for`）、`Python/ceval.c`（`END_ASYNC_FOR`）、`Lib/asyncio/base_events.py`（`_asyncgen_finalizer_hook`）、`Lib/asyncio/tasks.py`（Task 的 `copy_context()`）、`Lib/asyncio/events.py`（`Handle._run()`）。
 
 ---
 
-## 4. Empirical testing (generic Python, no OTel)
+<a id="3-official-python-documentation"></a>
 
-**Location:** `internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py` (this vignette).  
-**Run from repo root:** `uv run python internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py` (no pytest: asyncio + assert only, to avoid confounders).
+## 3. Python 官方文档
 
-### 4.1 Scenarios in `run_empirical_tests()`
+语言和标准库文档描述了此行为及修复：
 
-| Scenario | Outcome | Lesson |
+- **[异步生成器函数](https://docs.python.org/3/reference/expressions.html#asynchronous-generator-functions)**，语言参考：
+    异步生成器提前退出，包括 break、调用方取消或其他异常时，其异步清理会在**意外上下文**中运行，例如所依赖任务生命周期结束后，或事件循环关闭期间调用异步生成器垃圾回收钩子时。**调用方必须通过 `aclose()` 显式关闭异步生成器**，以终结生成器并将其从事件循环分离。
+
+- **[contextlib.aclosing](https://docs.python.org/3/library/contextlib.html#contextlib.aclosing)**，标准库：
+    使用 `async with aclosing(agen):` 可确保生成器异步退出代码**在与迭代相同的上下文中**执行，使异常和上下文变量按预期工作，且退出代码不会在所依赖任务生命周期之后执行。
+
+因此有两种避免方式：
+1. **调用方：**显式关闭生成器，例如 `async with aclosing(stream): ...`。
+2. **生成器：**清理时不依赖 contextvars，在 `finally` 中使用 `start_span` 和 `span.end()`，而非 `start_as_current_span`。流式客户端选择方案 2，不依赖每个消费者都使用 `aclosing()`。
+
+---
+
+<a id="4-empirical-testing-generic-python-no-otel"></a>
+
+## 4. 实测（通用 Python，无 OTel）
+
+**位置：**`internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py`，本示例。
+  **从仓库根目录运行：**`uv run python internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py`，不使用 pytest，仅 asyncio 和 assert，避免干扰因素。
+
+<a id="41-scenarios-in-run_empirical_tests"></a>
+
+### 4.1 `run_empirical_tests()` 中的场景
+
+| 场景 | 结果 | 经验 |
 |----------|--------|--------|
-| Generator sets token, consumer raises **without** aclosing | Generator’s `reset(token)` **fails** ("different Context") | Plain `async for` + exception leaves generator to finalizer → different context. |
-| Generator sets token, consumer raises **with** `async with aclosing(gen):` | Generator’s `reset(token)` **succeeds** | Explicit close in the same task keeps cleanup in the same context. |
-| Consumer sets token, generator raises | Consumer’s `reset(token)` **succeeds** | We did not reproduce consumer-side token invalidation; avoiding contextvars in evaluate is defensive. |
-| Normal exit (no exception) | Generator’s `reset(token)` **succeeds** | Failure is tied to exception/teardown path, not every suspend. |
+| 生成器设置 token，消费者**不使用** aclosing 并抛出异常 | 生成器 `reset(token)` **失败**，"different Context" | 普通 `async for` 加异常会将生成器留给终结器，导致上下文不同。 |
+| 生成器设置 token，消费者**使用** `async with aclosing(gen):` 并抛出异常 | 生成器 `reset(token)` **成功** | 同一任务中显式关闭，保持清理上下文一致。 |
+| 消费者设置 token，生成器抛出异常 | 消费者 `reset(token)` **成功** | 未复现消费者 token 失效；evaluate 中避免 contextvars 属于防御措施。 |
+| 正常退出，无异常 | 生成器 `reset(token)` **成功** | 失败与异常和销毁路径有关，并非每次挂起都会发生。 |
 
-From this we learn: the failure is reproducible and tied to the finalizer; aclosing fixes it empirically when the direct consumer uses it; the consumer’s token stayed valid in our scenarios (no consumer-side failure reproduced); the problem is exception/teardown-specific, not every suspend. The script runs print demos first, then these assertions.
+由此可知：失败可复现且与终结器相关；直接消费者使用 aclosing 时，实测可修复；场景中消费者 token 保持有效，未复现消费者端失败；问题仅发生于异常或销毁，而非每次挂起。脚本先打印演示，再运行这些断言。
 
-**Why the consumer (evaluate) can use `start_as_current_span`:** The consumer is an async **function**, not an async generator. When the stream raises or the loop breaks, the exception propagates and the consumer's `with` blocks are exited by normal stack unwind—in the **same** task. So the consumer's contextvar token is still valid when its context manager runs `__exit__`. Our empirical tests (scenario 3–4) confirmed that the consumer's `reset(token)` succeeds. So `evaluate` can use `start_as_current_span`; its cleanup runs in the same task.
+**消费者 evaluate 为何可使用 `start_as_current_span`：**消费者是异步**函数**，不是异步生成器。流抛出异常或循环中断时，异常传播，消费者的 `with` 块通过正常栈展开退出，仍在**相同**任务中。因此上下文管理器运行 `__exit__` 时，消费者 contextvar token 仍有效。实测场景 3—4 确认消费者 `reset(token)` 成功，所以 `evaluate` 可使用 `start_as_current_span`，其清理在同一任务执行。
 
-### 4.2 What aclosing can do for us
+<a id="42-what-aclosing-can-do-for-us"></a>
 
-- **Caller-side fix:** If the consumer uses `async with aclosing(stream):` and then `async for chunk in stream: ...`, on break/raise/cancel the context manager awaits `stream.aclose()`. The generator’s `finally` runs in the **same task** (and same context), so any contextvar token in the generator is still valid.
-- **Benefits:** (1) Explicit, prompt cleanup in the same task. (2) Same-context guarantee if we ever add context-dependent cleanup in the generator again. (3) Documented stdlib pattern.
-- **Why we didn’t rely on it:** We have multiple call sites (evaluators, subscriptions, chat_mutations, playground_clients). Requiring every caller to use `aclosing()` would be easy to miss and wouldn’t help legacy or third-party consumers. Fixing the **generator** (no contextvars in cleanup: use `start_span` + `span.end()` in `finally`) makes the stream safe regardless of how the caller iterates. We can still add `aclosing` at our own call sites as optional reinforcement.
+### 4.2 aclosing 能提供什么
 
-### 4.3 Two valid fixes (clarification)
+- **调用方修复：**消费者使用 `async with aclosing(stream):`，再执行 `async for chunk in stream: ...` 时，break、异常或取消会使上下文管理器等待 `stream.aclose()`。生成器 `finally` 在**相同任务**和上下文运行，生成器内 contextvar token 仍有效。
+- **收益：**1）同一任务中显式及时清理；2）将来若重新加入依赖上下文的清理，可保证上下文一致；3）标准库已有文档模式。
+- **未依赖它的原因：**调用点有多个，包括评估器、订阅、chat_mutations 和 playground_clients。要求每个调用方使用 `aclosing()` 容易遗漏，也无法帮助旧版或第三方消费者。修复**生成器**，清理时不用 contextvars，在 `finally` 中使用 `start_span` + `span.end()`，可使流不受调用方迭代方式影响。仍可在自有调用点添加 `aclosing` 作为可选增强。
 
-**If we use `aclosing` at every call site** that does `async for` over the stream, we **do not** need to stop using `start_as_current_span` in the generator. With `aclosing`, the generator is closed by the same task that consumes it, so its `finally` runs in the same context and the contextvar token remains valid. So either fix is sufficient:
+<a id="43-two-valid-fixes-clarification"></a>
 
-| Fix | What you do | Effect |
+### 4.3 两种有效修复（澄清）
+
+**如果每个**通过 `async for` 遍历流的**调用点都使用 `aclosing`**，则**无需**停止在生成器中使用 `start_as_current_span`。有了 `aclosing`，生成器由消费它的同一任务关闭，`finally` 运行于相同上下文，contextvar token 保持有效。因此任一种修复都足够：
+
+| 修复 | 做法 | 效果 |
 |-----|-------------|--------|
-| **Caller-side** | Every consumer uses `async with aclosing(stream): async for ...` | Generator’s `finally` runs in same task/context → `start_as_current_span` in the generator is safe. |
-| **Generator-side** (what we chose) | Generator uses `start_span` and `span.end()` in `finally`, not `start_as_current_span` | Generator’s cleanup doesn’t depend on current context → safe regardless of whether the caller uses `aclosing`. |
+| **调用方端** | 每个消费者使用 `async with aclosing(stream): async for ...` | 生成器 `finally` 在相同任务和上下文运行，生成器使用 `start_as_current_span` 安全。 |
+| **生成器端**，当前选择 | 生成器在 `finally` 中使用 `start_span` 和 `span.end()`，不使用 `start_as_current_span` | 清理不依赖当前上下文，无论调用方是否使用 `aclosing` 均安全。 |
 
-We chose the generator-side fix so correctness doesn’t depend on every caller (including future or third-party code) remembering to use `aclosing`.
+选择生成器端修复，使正确性不依赖所有调用方，包括未来和第三方代码，记住使用 `aclosing`。
 
-### 4.4 Why aclosing at our call sites was not enough (chain of generators)
+<a id="44-why-aclosing-at-our-call-sites-was-not-enough-chain-of-generators"></a>
 
-In practice we added `aclosing(stream)` at every place that calls `chat_completion_create` (subscriptions, chat_mutations, evaluators, playground_clients), but the "Token was created in a different Context" error still occurred.
+### 4.4 自有调用点的 aclosing 为何仍不足（生成器链）
 
-**Reason:** The **consumer** of our stream is often itself an **async generator** (e.g. a subscription handler that does `async for chunk in stream: yield chunk` to the client). So we have a chain: outer generator A (subscription) uses `async with aclosing(stream B): async for chunk in B: yield chunk`. When the client disconnects or the request is abandoned, the task driving A may be cancelled or A may be dropped. A is then closed only by the **finalizer**, which runs `create_task(A.aclose())` in a **new** task. That task runs A's `aclose()`, which exits A's `async with aclosing(B)` and calls `B.aclose()`. So B is closed from the finalizer's task, not from the original request task. B's `finally` (and thus OTel's detach) runs in the wrong context.
+实际中，在所有调用 `chat_completion_create` 的位置，包括订阅、chat_mutations、评估器和 playground_clients，均添加 `aclosing(stream)`，但仍出现 "Token was created in a different Context"。
 
-aclosing(B) does run, but it runs **inside** A's `aclose()`, which runs in the finalizer's task. The documentation's guarantee—"generator's finally runs in same task as its iterations"—applies to B only relative to the code that directly iterates B; that code is A's body. When A itself is finalized, that body is no longer running in the original task.
+**原因：**流的**消费者**往往自身也是**异步生成器**，例如订阅处理器通过 `async for chunk in stream: yield chunk` 向客户端输出。因此形成一条链：外层生成器 A（订阅）使用 `async with aclosing(stream B): async for chunk in B: yield chunk`。客户端断开或请求被放弃时，驱动 A 的任务可能被取消，A 也可能被丢弃。此后 A 仅由**终结器**关闭，终结器在**新**任务中运行 `create_task(A.aclose())`。新任务执行 A 的 `aclose()`，退出 A 的 `async with aclosing(B)` 并调用 `B.aclose()`。于是 B 从终结器任务关闭，而非原请求任务；B 的 `finally` 及 OTel detach 在错误上下文运行。
 
-**Takeaway:** aclosing at the direct call site is not sufficient when the direct call site is an async generator that can itself be closed by the finalizer. The generator-side fix (no contextvars in B's cleanup) is required in that architecture.
+aclosing(B) 确实运行了，但它运行于 A 的 `aclose()` **内部**，而后者位于终结器任务。文档所保证的“生成器 finally 在与迭代相同的任务中运行”，对 B 而言仅相对于直接迭代 B 的代码，即 A 的函数体。A 自身被终结后，其函数体已不在原任务运行。
 
-### 4.5 Why the framework stack (Strawberry, Starlette, ASGI) matters
+**要点：**若直接调用方自身是可能由终结器关闭的异步生成器，仅在直接调用点使用 aclosing 不足。该架构需要生成器端修复，使 B 的清理不使用 contextvars。
 
-aclosing is not failing because Strawberry, Starlette, or the ASGI layer "break" it. We do use aclosing correctly around our stream (B): the code that does `async for chunk in stream` is the subscription resolver, and it runs `async with aclosing(stream): ...`. The nuance is **one level up**.
+<a id="45-why-the-framework-stack-strawberry-starlette-asgi-matters"></a>
 
-The **consumer** of our stream is the subscription resolver—an **async generator** (A) that yields chunks to the client. The thing that iterates that resolver is the framework (Strawberry’s subscription transport, on top of Starlette/ASGI). When the client disconnects or the request ends, that layer typically does **not** call `aclosing` on the subscription resolver. The resolver is dropped and later finalized. So:
+### 4.5 框架栈（Strawberry、Starlette、ASGI）为何相关
 
-- **We** close our stream (B) with aclosing; the code that iterates B is the resolver (A).
-- **The framework** does not close the resolver (A) with aclosing; it leaves A to be garbage-collected and finalized.
-- The finalizer then runs `A.aclose()` in a new task. That runs our `aclosing(B).__aexit__`, so B is closed there—in the wrong context.
+aclosing 不是因为 Strawberry、Starlette 或 ASGI 层“破坏”它而失效。我们确实正确地用 aclosing 包围流 B：执行 `async for chunk in stream` 的代码是订阅解析器，并运行 `async with aclosing(stream): ...`。细节在**更上一层**。
 
-So the stack below us is relevant not because it breaks aclosing, but because it **defines who iterates the subscription** and does **not** guarantee that that iterator (the resolver) is closed in the same task. The resolver is often left to the finalizer, so our stream ends up being closed from the finalizer’s task. The generator-side fix (no contextvars in B’s cleanup) is therefore required regardless of how the framework closes—or doesn’t close—the subscription.
+流的**消费者**是订阅解析器，即向客户端让出数据块的**异步生成器** A。迭代该解析器的是框架，即位于 Starlette/ASGI 之上的 Strawberry 订阅传输层。客户端断开或请求结束时，该层通常**不会**对订阅解析器调用 `aclosing`，而是丢弃解析器，之后再终结。因此：
 
----
+- **我们**通过 aclosing 关闭流 B；迭代 B 的代码是解析器 A。
+- **框架**不通过 aclosing 关闭解析器 A，而是将其留待垃圾回收和终结。
+- 终结器在新任务中运行 `A.aclose()`，进而运行我们的 `aclosing(B).__aexit__`，使 B 在错误上下文关闭。
 
-## 5. Testing strategy
-
-1. **Generic Python first** — Use only `contextvars` and async generators (no OTel) to prove that a token can be invalid after suspend + exception. This gives generalizable knowledge about Python.
-2. **Map to our architecture** — Generator = streaming LLM client; consumer = evaluator or subscription handler. Design so the generator never uses `start_as_current_span`; use `start_span` and manual `span.end()` in `finally` so cleanup doesn't touch contextvars.
-3. **Application tests** — Existing tests (e.g. `test_playground_clients.py`, evaluator tests, chat_mutations/subscriptions) verify that the generator-side fix produces the expected traces and no "Failed to detach context" or token errors.
+下层框架栈之所以相关，是因为它**决定谁迭代订阅**，且**不**保证迭代器，即解析器，在相同任务关闭，而不是因为它破坏 aclosing。解析器往往留给终结器，因此流最终从终结器任务关闭。无论框架如何关闭订阅，或根本不关闭，均需要生成器端修复，使 B 清理不依赖 contextvars。
 
 ---
 
-## 6. Design decisions (summary)
+<a id="5-testing-strategy"></a>
 
-| Component | Decision | Rationale |
+## 5. 测试策略
+
+1. **先使用通用 Python** — 仅用 `contextvars` 和异步生成器，不用 OTel，证明挂起加异常后 token 可失效，从而获得可泛化的 Python 知识。
+2. **映射至架构** — 生成器为流式 LLM 客户端，消费者为评估器或订阅处理器。设计为生成器从不使用 `start_as_current_span`，而在 `finally` 中使用 `start_span` 并手动 `span.end()`，使清理不触及 contextvars。
+3. **应用测试** — 现有测试，例如 `test_playground_clients.py`、评估器测试、chat_mutations/subscriptions，验证生成器端修复产生预期追踪，且没有 "Failed to detach context" 或 token 错误。
+
+---
+
+<a id="6-design-decisions-summary"></a>
+
+## 6. 设计决策（汇总）
+
+| 组件 | 决策 | 原因 |
 |-----------|----------|-----------|
-| **playground_clients.py** `chat_completion_create` | Use `tracer.start_span(...)` and `span.end()` in `finally`. No `start_as_current_span`. | Proven: generator’s contextvar token can be invalid in `finally` when closed in another task; avoid attaching contextvars in the generator. |
-| **evaluators.py** | Use `start_as_current_span` as usual; evaluate is an async function, not an async generator, so its cleanup runs in the same task. | Consumer's token stays valid (see §4.1); no generator-side risk in evaluate. |
-| **subscriptions.py / chat_mutations.py** | Use aclosing at call sites that consume the stream; generator-side fix in `chat_completion_create` makes the stream safe even when the subscription resolver is finalized. | Defense in depth; generator does not rely on contextvars in cleanup. |
+| **playground_clients.py** 的 `chat_completion_create` | 在 `finally` 使用 `tracer.start_span(...)` 和 `span.end()`，不使用 `start_as_current_span`。 | 已证明：由其他任务关闭时，生成器 contextvar token 可能在 `finally` 失效，避免在生成器中附加 contextvars。 |
+| **evaluators.py** | 正常使用 `start_as_current_span`；evaluate 是异步函数而非异步生成器，清理在同一任务运行。 | 消费者 token 保持有效，参见 §4.1；evaluate 没有生成器端风险。 |
+| **subscriptions.py / chat_mutations.py** | 消费流的调用点使用 aclosing；`chat_completion_create` 的生成器端修复使流即使在订阅解析器终结时也安全。 | 纵深防御；生成器清理不依赖 contextvars。 |
 
 ---
 
-## 7. References
+<a id="7-references"></a>
 
-- **Phoenix code:** `src/phoenix/server/api/helpers/playground_clients.py`, `src/phoenix/server/api/evaluators.py`, `src/phoenix/server/api/subscriptions.py`, `src/phoenix/server/api/mutations/chat_mutations.py`.
-- **Generic demo:** `internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py` — run from repo root: `uv run python internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py`.
-- **Application tests:** `tests/unit/server/api/helpers/test_playground_clients.py`, `test_evaluators.py`, and tests that run the full chat/subscriptions flow with tracing.
-- **CPython** (paths under a local cpython clone): `Python/context.c`, `Python/compile.c`, `Python/ceval.c`, `Lib/asyncio/base_events.py`, `Lib/asyncio/tasks.py`, `Lib/asyncio/events.py`.
-- **Official docs:** [Asynchronous generator functions](https://docs.python.org/3/reference/expressions.html#asynchronous-generator-functions), [contextlib.aclosing](https://docs.python.org/3/library/contextlib.html#contextlib.aclosing).
+## 7. 参考资料
+
+- **Phoenix 代码：**`src/phoenix/server/api/helpers/playground_clients.py`、`src/phoenix/server/api/evaluators.py`、`src/phoenix/server/api/subscriptions.py`、`src/phoenix/server/api/mutations/chat_mutations.py`。
+- **通用演示：**`internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py`，从仓库根目录运行：`uv run python internal_docs/vignettes/otel-contextvars-async/contextvars_async_gen_demo.py`。
+- **应用测试：**`tests/unit/server/api/helpers/test_playground_clients.py`、`test_evaluators.py`，以及启用追踪的完整聊天和订阅流程测试。
+- **CPython**，本地 cpython 克隆中的路径：`Python/context.c`、`Python/compile.c`、`Python/ceval.c`、`Lib/asyncio/base_events.py`、`Lib/asyncio/tasks.py`、`Lib/asyncio/events.py`。
+- **官方文档：**[异步生成器函数](https://docs.python.org/3/reference/expressions.html#asynchronous-generator-functions)、[contextlib.aclosing](https://docs.python.org/3/library/contextlib.html#contextlib.aclosing)。

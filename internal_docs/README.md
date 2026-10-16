@@ -1,8 +1,9 @@
-# Internal Documentation
+<a id="internal-documentation"></a>
+# 内部文档
 
-This folder contains materials that are only relevant to core maintainers of this project.
+本目录包含仅与本项目核心维护者相关的资料。
 
-- [Guide to being On-Call](./on_call.md)
-- [Feature Specifications](./specs)
-  - [Declarative RBAC](./specs/rbac.md)
-  - [MCP Analytics SQL Surface](./specs/mcp-analytics-sql.md)
+- [值班指南](./on_call.md)
+- [功能规格](./specs)
+  - [声明式 RBAC](./specs/rbac.md)
+  - [MCP 分析 SQL 接口](./specs/mcp-analytics-sql.md)

@@ -1,2 +1,1 @@
-Yes, go ahead with the axial coding. Group what you found into annotation configs and
-apply them to the traces you took notes on.
+好的，继续进行轴心编码。将你的发现归纳为标注配置，并应用到你做过笔记的追踪上。

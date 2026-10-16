@@ -1,34 +1,44 @@
-# Mastra Agent with Arize Phoenix Tracing
+<a id="mastra-agent-with-arize-phoenix-tracing"></a>
 
-A movie recommendation agent built with Mastra and traced with Arize Phoenix.
+# 集成 Arize Phoenix 追踪的 Mastra Agent
 
-## Setup
+使用 Mastra 构建并由 Arize Phoenix 追踪的电影推荐 Agent。
 
-### 1. Setup Phoenix
+<a id="setup"></a>
 
-Get started with Phoenix here: https://arize.com/docs/phoenix/get-started
+## 配置
 
-If running locally, Phoenix will be available at `http://localhost:6006`.
+<a id="1-setup-phoenix"></a>
 
-### 2. Install Dependencies
+### 1. 配置 Phoenix
+
+Phoenix 入门指南： https://arize.com/docs/phoenix/get-started
+
+若在本地运行，Phoenix 将在 `http://localhost:6006` 提供服务。
+
+<a id="2-install-dependencies"></a>
+
+### 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-This will install all required dependencies including:
+这会安装所有必需依赖，包括：
 
-- `@ai-sdk/openai` - OpenAI SDK for AI SDK
-- `@mastra/core` - Mastra core framework
-- `@mastra/arize` - Arize Phoenix Tracing integration
-- `zod` - Schema validation
-- `dotenv` - Environment variable management
-- `@arizeai/phoenix-evals` - Arize Phoenix Evals TS Library
-- `@arizeai/phoenix-client/spans` - Arize Phoenix Client library
+- `@ai-sdk/openai` - 供 AI SDK 使用的 OpenAI SDK
+- `@mastra/core` - Mastra 核心框架
+- `@mastra/arize` - Arize Phoenix 追踪集成
+- `zod` - 模式验证
+- `dotenv` - 环境变量管理
+- `@arizeai/phoenix-evals` - Arize Phoenix Evals TS 库
+- `@arizeai/phoenix-client/spans` - Arize Phoenix 客户端库
 
-### 3. Configure Environment
+<a id="3-configure-environment"></a>
 
-Create a `.env` file in the root directory:
+### 3. 配置环境
+
+在根目录创建 `.env` 文件：
 
 ```bash
 # OpenAI API Key
@@ -40,39 +50,41 @@ PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006/v1/traces
 PHOENIX_PROJECT_NAME=mastra-project
 ```
 
-The eval script calls the Phoenix API on `PHOENIX_ENDPOINT`, the server's base URL.
-`PHOENIX_COLLECTOR_ENDPOINT` is the exact URL traces are sent to — Mastra's
-`ArizeExporter` POSTs to it verbatim, so it carries the OTLP `/v1/traces` path and
-`src/mastra/index.ts` passes it straight through.
+评估脚本通过服务器基础 URL `PHOENIX_ENDPOINT` 调用 Phoenix API。`PHOENIX_COLLECTOR_ENDPOINT` 是发送追踪的确切 URL；Mastra 的 `ArizeExporter` 会按原样向其发送 POST，因此该 URL 包含 OTLP `/v1/traces` 路径，并由 `src/mastra/index.ts` 直接传递。
 
-If you are using an instance with authentication enabled, also set
-`PHOENIX_API_KEY=your-api-key` and point both variables at that instance:
-`PHOENIX_ENDPOINT=https://phoenix.example.com` and
-`PHOENIX_COLLECTOR_ENDPOINT=https://phoenix.example.com/v1/traces`.
+若实例启用了身份验证，还需设置 `PHOENIX_API_KEY=your-api-key`，并将两个变量都指向该实例：`PHOENIX_ENDPOINT=https://phoenix.example.com` 和 `PHOENIX_COLLECTOR_ENDPOINT=https://phoenix.example.com/v1/traces`。
 
-## Running the Agent
+<a id="running-the-agent"></a>
 
-Start the Mastra dev server:
+## 运行 Agent
+
+启动 Mastra 开发服务器：
 
 ```bash
 npm run dev
 ```
 
-Navigate to the Mastra Playground to interact with the movie recommendation agent.
+进入 Mastra Playground，与电影推荐 Agent 交互。
 
-## Viewing Traces
+<a id="viewing-traces"></a>
 
-Once you've run the agent, open Phoenix. You'll see all agent runs, tool calls, and model interactions traced and visualized.
+## 查看追踪
 
-## Running Evals
+运行 Agent 后打开 Phoenix，即可看到所有 Agent 运行、工具调用和模型交互的追踪及可视化。
 
-Once you're ready to run Evals, run this from the example directory:
+<a id="running-evals"></a>
+
+## 运行评估
+
+准备好运行评估后，在示例目录运行：
 
 ```bash
 npm run eval
 ```
 
-## Project Structure
+<a id="project-structure"></a>
+
+## 项目结构
 
 ```
 src/
@@ -88,11 +100,13 @@ src/
     evals.ts                   # Tool Correctness & Goal Completion evals
 ```
 
-## What's Included
+<a id="whats-included"></a>
 
-- **Movie Recommendation Agent**: An agent that recommends movies using three tools:
-  - MovieSelector: Finds movies by genre
-  - Reviewer: Reviews and sorts movies by rating
-  - PreviewSummarizer: Provides movie summaries
-- **Arize Phoenix Tracing**: All agent interactions are automatically traced and sent to Phoenix
-- **Arize Phoenix Evals**: Run Tool Correctness & Agent Goal Completion Evals using Phoenix Evals TS
+## 包含的内容
+
+- **电影推荐 Agent**：使用三个工具推荐电影的 Agent：
+  - MovieSelector：按类型查找电影
+  - Reviewer：评论电影并按评分排序
+  - PreviewSummarizer：提供电影摘要
+- **Arize Phoenix 追踪**：所有 Agent 交互都会被自动追踪并发送到 Phoenix
+- **Arize Phoenix Evals**：使用 Phoenix Evals TS 运行工具正确性和 Agent 目标完成度评估

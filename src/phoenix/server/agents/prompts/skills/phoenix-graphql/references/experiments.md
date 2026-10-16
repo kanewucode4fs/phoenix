@@ -1,17 +1,21 @@
-# Experiment, ExperimentRun
+<a id="experiment-experimentrun"></a>
 
-An experiment is one run of a prompt or pipeline over every example in a dataset.
+# 实验与实验运行（Experiment、ExperimentRun）
 
-## Reaching an experiment
+实验是对数据集中每个示例运行一次提示词或流水线。
 
-There is **no `getExperimentById`** — reach an `Experiment` via `node(id:)`, `Dataset.experiments`, or `compareExperiments`.
+<a id="reaching-an-experiment"></a>
 
-`Dataset.experiments` is newest-first by default and paginated, so a **user-facing experiment number** (the 1-based, oldest-first `sequenceNumber`) is not necessarily on the first page — the lowest numbers are the farthest from it. Do **not** read the first page and guess; resolve a number exactly with:
+## 获取实验
 
-- `experiments(sequenceNumbers: [Int!])` — returns only the experiments with the given `sequenceNumber`s, without paging. Prefer this whenever the user names experiments by number (e.g. "compare experiment 5 and 7" → `sequenceNumbers: [5, 7]`).
-- `experiments(sort: {col: sequenceNumber | createdAt, dir: asc | desc})` — reorder the connection; e.g. `{col: sequenceNumber, dir: asc}` puts sequences `1..N` on the first page.
+**不存在 `getExperimentById`**，应通过 `node(id:)`、`Dataset.experiments` 或 `compareExperiments` 获取 `Experiment`。
 
-Before reporting on a fetched experiment, confirm its `sequenceNumber` matches the number the user asked for.
+`Dataset.experiments` 默认按从新到旧排序并分页，因此**用户看到的实验编号**（从 1 开始、按从旧到新顺序生成的 `sequenceNumber`）未必位于第一页，较小编号反而离第一页最远。**不要**读取第一页后猜测，应精确解析编号：
+
+- `experiments(sequenceNumbers: [Int!])`：只返回指定 `sequenceNumber` 的实验，无需分页。用户按编号指明实验时优先使用，例如“比较实验 5 和 7” → `sequenceNumbers: [5, 7]`。
+- `experiments(sort: {col: sequenceNumber | createdAt, dir: asc | desc})`：重新排序连接，例如 `{col: sequenceNumber, dir: asc}` 可使序号 `1..N` 位于第一页。
+
+报告获取到的实验前，确认其 `sequenceNumber` 与用户要求的编号一致。
 
 ```graphql
 query ExperimentsByNumber($datasetId: ID!, $sequenceNumbers: [Int!]!) {
@@ -25,34 +29,38 @@ query ExperimentsByNumber($datasetId: ID!, $sequenceNumbers: [Int!]!) {
 }
 ```
 
-## Experiment fields
+<a id="experiment-fields"></a>
 
-- `name`, `description`, `sequenceNumber`, `repetitions`, `isEphemeral`
-- `dataset`, `datasetVersion`, `project`
-- `runs(first, after, sort: ExperimentRunSort)` — **forward-only** (no `last`/`before`)
-- `runCount`, `expectedRunCount`
-- `errorRate`, `averageRunLatencyMs`, `costSummary`, `costDetailSummaryEntries`
+## Experiment 字段
+
+- `name`、`description`、`sequenceNumber`、`repetitions`、`isEphemeral`
+- `dataset`、`datasetVersion`、`project`
+- `runs(first, after, sort: ExperimentRunSort)`：**只能向前分页**，没有 `last`/`before`
+- `runCount`、`expectedRunCount`
+- `errorRate`、`averageRunLatencyMs`、`costSummary`、`costDetailSummaryEntries`
 - `annotationSummaries { annotationName meanScore minScore maxScore count errorCount }`
 
-## ExperimentRun fields
+<a id="experimentrun-fields"></a>
 
-- `output`, `latencyMs`, `error`, `startTime`, `endTime`
-- `annotations(first, after)` — connection; node has `name`, `label`, `score`, `explanation`
-- `example { id revision { input output metadata } }` — the dataset example this
-  run executed. There is **no** `datasetExample` field, and `input`/`output`/
-  `metadata` live on `example.revision`, not on `example` itself.
+## ExperimentRun 字段
 
-## Comparison
+- `output`、`latencyMs`、`error`、`startTime`、`endTime`
+- `annotations(first, after)`：连接，节点包含 `name`、`label`、`score`、`explanation`
+- `example { id revision { input output metadata } }`：本次运行执行的数据集示例。**不存在** `datasetExample` 字段，`input`/`output`/`metadata` 位于 `example.revision`，不在 `example` 本身。
 
-For candidate comparison prefer `compareExperiments(baseExperimentId: GlobalID!, compareExperimentIds: [GlobalID!]!, first, after, filterCondition)` over fetching each experiment's runs separately. Related: `experimentRunMetricComparisons(baseExperimentId, compareExperimentIds)` and `validateExperimentRunFilterCondition(condition, experimentIds)`.
+<a id="comparison"></a>
 
-## Examples
+## 比较
 
-Note: if the experiment came from a playground run driven through `execute_browser_action`,
-prefer the `playground.experiment.readResults` UI operation over hand-writing
-this query — it returns the same scores-plus-failures shape in one call.
+比较候选方案时，优先使用 `compareExperiments(baseExperimentId: GlobalID!, compareExperimentIds: [GlobalID!]!, first, after, filterCondition)`，而非分别获取每个实验的运行。相关接口包括 `experimentRunMetricComparisons(baseExperimentId, compareExperimentIds)` 和 `validateExperimentRunFilterCondition(condition, experimentIds)`。
 
-Metrics only:
+<a id="examples"></a>
+
+## 示例
+
+注意：如果实验来自通过 `execute_browser_action` 驱动的 Playground 运行，应优先使用 `playground.experiment.readResults` 界面操作，而非手写以下查询；该操作一次调用就返回相同的“分数加失败项”结构。
+
+仅获取指标：
 
 ```graphql
 query ExperimentMetrics($id: ID!) {
@@ -69,8 +77,7 @@ query ExperimentMetrics($id: ID!) {
 }
 ```
 
-Scored results with per-run inputs/outputs — the shape for "which examples
-failed and why" (filter on `annotations`/`error` client-side with jq):
+带逐次运行输入、输出的评分结果，用于回答“哪些示例失败，以及为什么”；通过 jq 在客户端按 `annotations`/`error` 筛选：
 
 ```graphql
 query ExperimentResults($id: ID!) {

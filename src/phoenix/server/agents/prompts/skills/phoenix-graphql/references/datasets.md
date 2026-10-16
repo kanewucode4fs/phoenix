@@ -1,33 +1,43 @@
-# Dataset, DatasetExample
+<a id="dataset-datasetexample"></a>
 
-## Reaching a dataset
+# 数据集与示例（Dataset、DatasetExample）
 
-There is **no `getDatasetByName`** — fetch via `node(id:) { ... on Dataset { ... } }` or the `datasets(filter: DatasetFilter, sort)` connection.
+<a id="reaching-a-dataset"></a>
 
-## Dataset fields
+## 获取数据集
 
-- `name`, `description`, `metadata`
+**不存在 `getDatasetByName`**，应通过 `node(id:) { ... on Dataset { ... } }` 或 `datasets(filter: DatasetFilter, sort)` 连接获取。
+
+<a id="dataset-fields"></a>
+
+## Dataset 字段
+
+- `name`、`description`、`metadata`
 - `exampleCount(datasetVersionId)`
 - `examples(datasetVersionId, splitIds, first, after, filter: String, filterIds)` → `DatasetExampleConnection`
 - `versions(first, after, sort)` → `DatasetVersionConnection`
-- `splits`, `labels`
-- `experiments(first, after, filterCondition, filterIds)`, `experimentCount`
+- `splits`、`labels`
+- `experiments(first, after, filterCondition, filterIds)`、`experimentCount`
 
-Gotchas:
+注意事项：
 
-- **The version argument is `datasetVersionId` everywhere** (not `versionId`); omit it to get the latest version.
-- `examples` has two distinct filter args: `filter: String` (free-text search over input/output/metadata) and `filterIds: [GlobalID!]` (membership lookup).
-- `experiments` uses `filterCondition: String` (not `filter`).
+- **版本参数在所有位置均为 `datasetVersionId`**，不是 `versionId`；省略时获取最新版本。
+- `examples` 有两个不同的筛选参数：`filter: String` 用于对输入、输出、元数据进行自由文本搜索，`filterIds: [GlobalID!]` 用于按成员 ID 查询。
+- `experiments` 使用 `filterCondition: String`，不是 `filter`。
 
-## DatasetExample fields
+<a id="datasetexample-fields"></a>
+
+## DatasetExample 字段
 
 - `externalId`
-- `revision(datasetVersionId) { input output metadata revisionKind }` — `input`/`output`/`metadata` are `JSON`; `revisionKind` is `CREATE`/`PATCH`/`DELETE`.
+- `revision(datasetVersionId) { input output metadata revisionKind }`：`input`/`output`/`metadata` 为 `JSON`；`revisionKind` 为 `CREATE`/`PATCH`/`DELETE`。
 - `span`
 - `datasetSplits`
 - `experimentRuns(experimentIds, first, after)`
 
-## Example
+<a id="example"></a>
+
+## 示例
 
 ```graphql
 query DatasetExamples($id: ID!, $first: Int = 20) {

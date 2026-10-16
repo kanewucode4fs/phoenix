@@ -1,10 +1,14 @@
-# Integration with Existing Phoenix Configuration
+<a id="integration-with-existing-phoenix-configuration"></a>
 
-**Critical**: LDAP must integrate with Phoenix's existing authentication system in `src/phoenix/config.py`.
+# 与现有 Phoenix 配置集成
 
-#### Current Authentication Configuration
+**关键要求**：LDAP 必须与 `src/phoenix/config.py` 中现有的 Phoenix 身份验证系统集成。
 
-**Existing `AuthSettings` NamedTuple** (`config.py:836-841`):
+<a id="current-authentication-configuration"></a>
+
+#### 当前身份验证配置
+
+**现有 `AuthSettings` NamedTuple** (`config.py:836-841`):
 ```python
 class AuthSettings(NamedTuple):
     enable_auth: bool
@@ -14,7 +18,7 @@ class AuthSettings(NamedTuple):
     oauth2_clients: OAuth2Clients
 ```
 
-**Existing Validation Logic** (`config.py:844-870`):
+**现有校验逻辑** (`config.py:844-870`):
 ```python
 def get_env_auth_settings() -> AuthSettings:
     enable_auth = get_env_enable_auth()
@@ -39,9 +43,11 @@ def get_env_auth_settings() -> AuthSettings:
     return AuthSettings(...)
 ```
 
-#### Required Changes for LDAP Integration
+<a id="required-changes-for-ldap-integration"></a>
 
-**1. Update `AuthSettings` NamedTuple**:
+#### LDAP 集成所需变更
+
+**1. 更新 `AuthSettings` NamedTuple**：
 
 ```python
 class AuthSettings(NamedTuple):
@@ -53,7 +59,7 @@ class AuthSettings(NamedTuple):
     ldap_config: Optional[LDAPConfig]  # ✅ ADD THIS
 ```
 
-**2. Add LDAP Config Loader**:
+**2. 添加 LDAP 配置加载器**：
 
 ```python
 def get_env_ldap_config() -> Optional[LDAPConfig]:
@@ -68,7 +74,7 @@ def get_env_ldap_config() -> Optional[LDAPConfig]:
     return LDAPConfig.from_env()
 ```
 
-**3. Update Validation Logic in `get_env_auth_settings()`**:
+**3. 更新 `get_env_auth_settings()` 中的校验逻辑**：
 
 ```python
 def get_env_auth_settings() -> AuthSettings:
@@ -105,7 +111,7 @@ def get_env_auth_settings() -> AuthSettings:
     )
 ```
 
-**4. Update `create_app()` Signature** (`server/app.py:968`):
+**4. 更新 `create_app()` 签名**（`server/app.py:968`）：
 
 ```python
 def create_app(
@@ -121,7 +127,7 @@ def create_app(
 ) -> FastAPI:
 ```
 
-**5. Update `main()` to Pass LDAP Config** (`server/main.py:458`):
+**5. 更新 `main()` 以传递 LDAP 配置**（`server/main.py:458`）：
 
 ```python
 app = create_app(
@@ -134,7 +140,7 @@ app = create_app(
 )
 ```
 
-**6. Store LDAP Config in App State** (`server/app.py`):
+**6. 在应用状态中保存 LDAP 配置**（`server/app.py`）：
 
 ```python
 # Store LDAP config in app state for routers to access
@@ -142,21 +148,25 @@ if ldap_config:
     app.state.ldap_config = ldap_config
 ```
 
-#### Environment Variable Interactions
+<a id="environment-variable-interactions"></a>
 
-| Scenario | Behavior | Validation |
+#### 环境变量交互
+
+| 场景 | 行为 | 校验 |
 |----------|----------|------------|
-| `ENABLE_AUTH=false` | ✅ LDAP config ignored (no auth needed) | No validation |
-| `ENABLE_AUTH=true` + no `PHOENIX_SECRET` | ❌ Error: Secret required | Existing validation |
-| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=true` + no OAuth2 + no LDAP | ❌ Error: No auth methods available | ✅ **NEW** validation |
-| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=true` + LDAP configured | ✅ LDAP-only auth | ✅ **NEW** validation |
-| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=true` + OAuth2 + LDAP | ✅ OAuth2 + LDAP (no basic) | ✅ **NEW** validation |
-| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=false` + LDAP | ✅ Basic + LDAP coexist | Works by default |
-| `PHOENIX_LDAP_HOST` set + malformed JSON in `GROUP_ROLE_MAPPINGS` | ❌ Error: Invalid JSON | ✅ Validated in `LDAPConfig.from_env()` |
+| `ENABLE_AUTH=false` | ✅ 忽略 LDAP 配置，无需身份验证 | 不校验 |
+| `ENABLE_AUTH=true` 且缺少 `PHOENIX_SECRET` | ❌ 错误：必须设置密钥 | 现有校验 |
+| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=true`，无 OAuth2、无 LDAP | ❌ 错误：没有可用身份验证方法 | ✅ **新增**校验 |
+| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=true`，已配置 LDAP | ✅ 仅 LDAP 身份验证 | ✅ **新增**校验 |
+| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=true` + OAuth2 + LDAP | ✅ OAuth2 + LDAP，不使用基本身份验证 | ✅ **新增**校验 |
+| `ENABLE_AUTH=true` + `DISABLE_BASIC_AUTH=false` + LDAP | ✅ 基本身份验证与 LDAP 共存 | 默认可用 |
+| 已设置 `PHOENIX_LDAP_HOST`，但 `GROUP_ROLE_MAPPINGS` JSON 格式错误 | ❌ 错误：无效 JSON | ✅ 在 `LDAPConfig.from_env()` 中校验 |
 
-#### `/auth/login` Endpoint Interaction
+<a id="authlogin-endpoint-interaction"></a>
 
-**Current Code** (`server/api/routers/auth.py:67-70`):
+#### `/auth/login` 端点交互
+
+**当前代码** (`server/api/routers/auth.py:67-70`):
 ```python
 @router.post("/login")
 async def login(request: Request) -> Response:
@@ -165,11 +175,13 @@ async def login(request: Request) -> Response:
     # ... password validation ...
 ```
 
-**No Change Needed**: LDAP will have its own endpoint (`/auth/ldap/login`), so this check is correct.
+**无需变更**：LDAP 使用独立端点（`/auth/ldap/login`），因此这项检查正确。
 
-#### CSRF Protection Interaction
+<a id="csrf-protection-interaction"></a>
 
-**Current Warning** (`server/app.py:1034-1040`):
+#### CSRF 防护交互
+
+**当前警告** (`server/app.py:1034-1040`):
 ```python
 elif email_sender or oauth2_client_configs:
     logger.warning(
@@ -180,7 +192,7 @@ elif email_sender or oauth2_client_configs:
     )
 ```
 
-**Update Required**:
+**需要更新**：
 ```python
 elif email_sender or oauth2_client_configs or ldap_config:  # ✅ ADD ldap_config
     logger.warning(
@@ -191,11 +203,13 @@ elif email_sender or oauth2_client_configs or ldap_config:  # ✅ ADD ldap_confi
     )
 ```
 
-#### Rate Limiting
+<a id="rate-limiting"></a>
 
-**Current**: `/auth/login` is rate-limited (`server/api/routers/auth.py:52-61`)
+#### 限流
 
-**LDAP**: New `/auth/ldap/login` endpoint must be added to rate-limited paths:
+**当前**：`/auth/login` 已限流（`server/api/routers/auth.py:52-61`）
+
+**LDAP**：必须将新 `/auth/ldap/login` 端点加入限流路径：
 ```python
 login_rate_limiter = fastapi_ip_rate_limiter(
     rate_limiter,
@@ -210,21 +224,25 @@ login_rate_limiter = fastapi_ip_rate_limiter(
 )
 ```
 
-#### Summary of Changes Needed
+<a id="summary-of-changes-needed"></a>
 
-| File | Change | Impact |
+#### 所需变更汇总
+
+| 文件 | 变更 | 影响 |
 |------|--------|--------|
-| `src/phoenix/config.py` | Add `ldap_config: Optional[LDAPConfig]` to `AuthSettings` | ONE-WAY door (NamedTuple field order) |
-| `src/phoenix/config.py` | Update `get_env_auth_settings()` validation | Allows LDAP as auth alternative |
-| `src/phoenix/config.py` | Add `get_env_ldap_config()` function | New function |
-| `src/phoenix/server/app.py` | Add `ldap_config` parameter to `create_app()` | Signature change |
-| `src/phoenix/server/app.py` | Update CSRF warning to include LDAP | Warning message |
-| `src/phoenix/server/app.py` | Store `ldap_config` in `app.state` | New state |
-| `src/phoenix/server/main.py` | Pass `ldap_config=auth_settings.ldap_config` | Call site |
-| `src/phoenix/server/api/routers/auth.py` | Add `/auth/ldap/login` to rate limiter paths | Rate limiting |
+| `src/phoenix/config.py` | 为 `AuthSettings` 添加 `ldap_config: Optional[LDAPConfig]` | 不可逆变更，涉及 NamedTuple 字段顺序 |
+| `src/phoenix/config.py` | 更新 `get_env_auth_settings()` 校验 | 允许 LDAP 作为替代身份验证方式 |
+| `src/phoenix/config.py` | 添加 `get_env_ldap_config()` 函数 | 新函数 |
+| `src/phoenix/server/app.py` | 为 `create_app()` 添加 `ldap_config` 参数 | 签名变更 |
+| `src/phoenix/server/app.py` | 更新 CSRF 警告以包含 LDAP | 警告消息 |
+| `src/phoenix/server/app.py` | 将 `ldap_config` 存入 `app.state` | 新状态 |
+| `src/phoenix/server/main.py` | 传入 `ldap_config=auth_settings.ldap_config` | 调用位置 |
+| `src/phoenix/server/api/routers/auth.py` | 将 `/auth/ldap/login` 加入限流路径 | 限流 |
 
-**All changes are backward compatible** - LDAP is optional, existing OAuth2/basic auth continue to work unchanged.
+**所有变更均向后兼容** — LDAP 可选，现有 OAuth2 和基本身份验证继续按原方式工作。
 
 ---
 
-### Phase 1: Core LDAP Authentication
+<a id="phase-1-core-ldap-authentication"></a>
+
+### 阶段 1：核心 LDAP 身份验证

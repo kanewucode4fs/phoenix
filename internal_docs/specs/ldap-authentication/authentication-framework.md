@@ -1,19 +1,27 @@
-## Authentication Method Framework
+<a id="authentication-method-framework"></a>
 
-### Configuration Permutations & Behavior Matrix
+## 身份验证方法框架
 
-Phoenix now supports three authentication methods: **LOCAL** (username/password), **OAuth2** (OIDC), and **LDAP**. The framework must handle all valid permutations coherently.
+<a id="configuration-permutations--behavior-matrix"></a>
 
-#### Configuration Variables
+### 配置组合与行为矩阵
 
-| Variable | Effect |
+Phoenix 现已支持三种身份验证方法：**LOCAL**（用户名/密码）、**OAuth2**（OIDC）和 **LDAP**。框架必须一致地处理所有有效组合。
+
+<a id="configuration-variables"></a>
+
+#### 配置变量
+
+| 变量 | 作用 |
 |----------|--------|
-| `PHOENIX_ENABLE_AUTH` | Enables authentication system (default: `false`) |
-| `PHOENIX_DISABLE_BASIC_AUTH` | Disables LOCAL auth (default: `false`) |
-| `PHOENIX_OAUTH2_*` | Configures OAuth2/OIDC providers (optional) |
-| `PHOENIX_LDAP_HOST` | Enables LDAP authentication (optional) |
+| `PHOENIX_ENABLE_AUTH` | 启用身份验证系统，默认 `false` |
+| `PHOENIX_DISABLE_BASIC_AUTH` | 禁用 LOCAL 身份验证，默认 `false` |
+| `PHOENIX_OAUTH2_*` | 配置 OAuth2/OIDC 提供方，可选 |
+| `PHOENIX_LDAP_HOST` | 启用 LDAP 身份验证，可选 |
 
-#### Validation Rules (Backend: `config.py`)
+<a id="validation-rules-backend-configpy"></a>
+
+#### 校验规则（后端：`config.py`）
 
 ```python
 def get_env_auth_settings() -> AuthSettings:
@@ -30,21 +38,25 @@ def get_env_auth_settings() -> AuthSettings:
         )
 ```
 
-#### Complete Permutation Matrix
+<a id="complete-permutation-matrix"></a>
 
-| Auth Enabled | Basic Disabled | OAuth2 | LDAP | Backend Result | Login Page Shows | Notes |
+#### 完整组合矩阵
+
+| 启用身份验证 | 禁用基本身份验证 | OAuth2 | LDAP | 后端结果 | 登录页显示 | 说明 |
 |:------------:|:--------------:|:------:|:----:|----------------|------------------|-------|
-| ❌ `false` | - | - | - | ✅ Valid | Nothing | No authentication required |
-| ✅ `true` | ❌ `false` | ❌ | ❌ | ✅ Valid | **LOCAL form** | Standard username/password |
-| ✅ `true` | ❌ `false` | ✅ | ❌ | ✅ Valid | **LOCAL form** + "or" + **OAuth2 buttons** | Both methods available |
-| ✅ `true` | ❌ `false` | ❌ | ✅ | ✅ Valid | **LOCAL form** + "or" + **LDAP form** | Both methods available |
-| ✅ `true` | ❌ `false` | ✅ | ✅ | ✅ Valid | **LOCAL form** + "or" + **LDAP form** + "or" + **OAuth2 buttons** | All three methods<br>**Admin Dialog**: LOCAL + OAuth2 + LDAP tabs |
-| ✅ `true` | ✅ `true` | ❌ | ❌ | ❌ **INVALID** | N/A | **Error**: "no alternative authentication methods are configured" |
-| ✅ `true` | ✅ `true` | ✅ | ❌ | ✅ Valid | **OAuth2 buttons only** | OAuth2-only deployment<br>**Admin Dialog**: OAuth2 tab only |
-| ✅ `true` | ✅ `true` | ❌ | ✅ | ✅ Valid | **LDAP form only** | LDAP-only deployment<br>**Admin Dialog**: LDAP tab only |
-| ✅ `true` | ✅ `true` | ✅ | ✅ | ✅ Valid | **LDAP form** + "or" + **OAuth2 buttons** | Both external auth methods<br>**Admin Dialog**: OAuth2 + LDAP tabs only |
+| ❌ `false` | - | - | - | ✅ 有效 | 无 | 无需身份验证 |
+| ✅ `true` | ❌ `false` | ❌ | ❌ | ✅ 有效 | **LOCAL 表单** | 标准用户名/密码 |
+| ✅ `true` | ❌ `false` | ✅ | ❌ | ✅ 有效 | **LOCAL 表单** + “或” + **OAuth2 按钮** | 两种方法均可用 |
+| ✅ `true` | ❌ `false` | ❌ | ✅ | ✅ 有效 | **LOCAL 表单** + “或” + **LDAP 表单** | 两种方法均可用 |
+| ✅ `true` | ❌ `false` | ✅ | ✅ | ✅ 有效 | **LOCAL 表单** + “或” + **LDAP 表单** + “或” + **OAuth2 按钮** | 三种方法均可用<br>**管理员对话框**：LOCAL + OAuth2 + LDAP 选项卡 |
+| ✅ `true` | ✅ `true` | ❌ | ❌ | ❌ **无效** | 不适用 | **错误**：“no alternative authentication methods are configured” |
+| ✅ `true` | ✅ `true` | ✅ | ❌ | ✅ 有效 | **仅 OAuth2 按钮** | 仅 OAuth2 部署<br>**管理员对话框**：仅 OAuth2 选项卡 |
+| ✅ `true` | ✅ `true` | ❌ | ✅ | ✅ 有效 | **仅 LDAP 表单** | 仅 LDAP 部署<br>**管理员对话框**：仅 LDAP 选项卡 |
+| ✅ `true` | ✅ `true` | ✅ | ✅ | ✅ 有效 | **LDAP 表单** + “或” + **OAuth2 按钮** | 两种外部身份验证方法<br>**管理员对话框**：仅 OAuth2 + LDAP 选项卡 |
 
-#### Frontend Rendering Logic (`LoginPage.tsx`)
+<a id="frontend-rendering-logic-loginpagetsx"></a>
+
+#### 前端渲染逻辑（`LoginPage.tsx`）
 
 ```typescript
 const showLoginForm = !window.Config.basicAuthDisabled;
@@ -52,20 +64,22 @@ const showLDAPForm = window.Config.ldapEnabled;
 const hasOAuth2Idps = window.Config.oAuth2Idps.length > 0;
 ```
 
-**Separator Logic**:
-1. "or" between LOCAL and LDAP if both exist: `{showLoginForm ? <div>or</div> : null}`
-2. "or" between (LOCAL OR LDAP) and OAuth2: `{(showLoginForm || showLDAPForm) && hasOAuth2Idps ? <div>or</div> : null}`
+**分隔符逻辑**：
+1. LOCAL 和 LDAP 均存在时，在两者之间显示“or”：`{showLoginForm ? <div>or</div> : null}`
+2. 在 LOCAL 或 LDAP 与 OAuth2 之间显示“or”：`{(showLoginForm || showLDAPForm) && hasOAuth2Idps ? <div>or</div> : null}`
 
-#### Admin User Creation Logic (`NewUserDialog.tsx`)
+<a id="admin-user-creation-logic-newuserdialogtsx"></a>
 
-**Tab Visibility Logic**:
+#### 管理员创建用户逻辑（`NewUserDialog.tsx`）
+
+**选项卡可见性逻辑**：
 ```typescript
 const showLocalTab = !window.Config.basicAuthDisabled;
 const showOAuth2Tab = window.Config.oAuth2Idps.length > 0;
 const showLDAPTab = window.Config.ldapEnabled;
 ```
 
-**Smart Default Tab Selection**:
+**智能默认选项卡选择**：
 ```typescript
 const defaultTab = showLocalTab
   ? "local"      // Prefer LOCAL if available
@@ -76,22 +90,24 @@ const defaultTab = showLocalTab
       : "local"; // Fallback (should never happen)
 ```
 
-**Tab Display Rules**:
-- **LOCAL tab**: Shown only if `!basicAuthDisabled` (standard password auth allowed)
-- **OAuth2 tab**: Shown only if `oAuth2Idps.length > 0` (at least one OAuth2 provider configured)
-- **LDAP tab**: Shown only if `ldapEnabled` (LDAP is configured)
+**选项卡显示规则**：
+- **LOCAL 选项卡**：仅在 `!basicAuthDisabled` 时显示，允许标准密码身份验证
+- **OAuth2 选项卡**：仅在 `oAuth2Idps.length > 0` 时显示，已配置至少一个 OAuth2 提供方
+- **LDAP 选项卡**：仅在 `ldapEnabled` 时显示，已配置 LDAP
 
-**Rationale**: Only show tabs for auth methods that are actually configured and usable, preventing admins from creating invalid users.
+**原因**：仅显示实际已配置且可用的身份验证方法，防止管理员创建无效用户。
 
-#### Security: Cross-Authentication Prevention
+<a id="security-cross-authentication-prevention"></a>
 
-**Problem**: Users could have same email in different auth systems, creating security vulnerabilities:
-- LDAP user with `alice@corp.com` → OAuth2 login hijacks account
-- OAuth2 user with `bob@corp.com` → LDAP login creates duplicate
+#### 安全：防止跨身份验证方式登录
 
-**Solution** (Implemented in `auth.py` and `oauth2.py`):
+**问题**：不同身份验证系统中的用户可能具有相同邮箱，造成安全漏洞：
+- 邮箱为 `alice@corp.com` 的 LDAP 用户 → OAuth2 登录劫持账户
+- 邮箱为 `bob@corp.com` 的 OAuth2 用户 → LDAP 登录创建重复账户
 
-1. **LDAP Login Checks for OAuth2 Conflict** (`auth.py`):
+**解决方案**（在 `auth.py` 和 `oauth2.py` 中实现）：
+
+1. **LDAP 登录检查 OAuth2 冲突** (`auth.py`):
 ```python
 # Before creating LDAP user, check for OAuth2 user with same email
 existing_oauth2_user = await session.scalar(
@@ -104,33 +120,37 @@ if existing_oauth2_user:
     raise Unauthorized("Invalid username and/or password")  # Generic error
 ```
 
-2. **OAuth2 Login Checks for LDAP Conflict** (`oauth2.py`):
+2. **OAuth2 登录检查 LDAP 冲突** (`oauth2.py`):
 ```python
 if user.oauth2_client_id == LDAP_CLIENT_ID_MARKER:
     raise SignInNotAllowed("Sign in is not allowed.")  # Generic error
 ```
 
-**Error Messages**: Always generic to prevent username enumeration.
+**错误消息**：始终使用通用消息，防止用户名枚举。
 
-#### Key Design Principles
+<a id="key-design-principles"></a>
 
-1. **Backend-First Validation**: Invalid configurations fail at startup, not runtime
-2. **Secure Defaults**: `PHOENIX_DISABLE_BASIC_AUTH=true` requires alternative auth
-3. **Graceful Degradation**: Frontend adapts to available auth methods
-4. **No Username Enumeration**: Generic error messages across all scenarios
-5. **Cross-Auth Security**: Each auth method is isolated, no account hijacking
+#### 关键设计原则
 
-#### Startup Admin Provisioning (`PHOENIX_ADMINS`)
+1. **后端优先校验**：无效配置在启动时失败，而非运行时
+2. **安全默认值**：`PHOENIX_DISABLE_BASIC_AUTH=true` 要求提供替代身份验证方式
+3. **平滑降级**：前端适配可用身份验证方法
+4. **禁止用户名枚举**：所有场景使用通用错误消息
+5. **跨验证方式安全**：每种身份验证方法隔离，防止账户劫持
 
-When `PHOENIX_ADMINS` is configured, Phoenix automatically creates admin users at startup (`facilitator.py:_ensure_admins`):
+<a id="startup-admin-provisioning-phoenix_admins"></a>
 
-| Condition | User Type Created |
+#### 启动时配置管理员（`PHOENIX_ADMINS`）
+
+配置 `PHOENIX_ADMINS` 后，Phoenix 会在启动时自动创建管理员用户（`facilitator.py:_ensure_admins`）：
+
+| 条件 | 创建的用户类型 |
 |-----------|-------------------|
-| `PHOENIX_DISABLE_BASIC_AUTH=false` | `LocalUser` (random password, must reset) |
-| `PHOENIX_DISABLE_BASIC_AUTH=true` + LDAP configured (no OAuth2) | **LDAP user** (`oauth2_client_id=\ue000LDAP(stopgap)`, `oauth2_user_id=NULL`) |
-| `PHOENIX_DISABLE_BASIC_AUTH=true` + OAuth2 configured | `OAuth2User` (generic) |
+| `PHOENIX_DISABLE_BASIC_AUTH=false` | `LocalUser`，使用随机密码，必须重置 |
+| `PHOENIX_DISABLE_BASIC_AUTH=true` 且已配置 LDAP、未配置 OAuth2 | **LDAP 用户**（`oauth2_client_id=\ue000LDAP(stopgap)`、`oauth2_user_id=NULL`） |
+| `PHOENIX_DISABLE_BASIC_AUTH=true` 且已配置 OAuth2 | `OAuth2User`，通用类型 |
 
-**LDAP Startup Admin Flow**:
+**LDAP 启动管理员流程**：
 ```python
 # facilitator.py creates LDAP admin at startup
 user = models.OAuth2User(
@@ -147,7 +167,7 @@ user = models.OAuth2User(
 user.oauth2_user_id = user_dn  # Now DN-based lookup works
 ```
 
-**Configuration Example**:
+**配置示例**：
 ```bash
 PHOENIX_ENABLE_AUTH=true
 PHOENIX_DISABLE_BASIC_AUTH=true
@@ -155,55 +175,59 @@ PHOENIX_ADMINS="John Doe=john@example.com;Jane Smith=jane@example.com"
 PHOENIX_LDAP_HOST=ldap.example.com
 # ... other LDAP config
 ```
-→ Creates `john@example.com` and `jane@example.com` as LDAP users at startup
+→ 启动时将 `john@example.com` 和 `jane@example.com` 创建为 LDAP 用户
 
-#### Common Deployment Scenarios
+<a id="common-deployment-scenarios"></a>
 
-**Scenario 1: Corporate Environment (LDAP + OAuth2)**
+#### 常见部署场景
+
+**场景 1：企业环境（LDAP + OAuth2）**
 ```bash
 PHOENIX_ENABLE_AUTH=true
 PHOENIX_DISABLE_BASIC_AUTH=true   # No password auth
 PHOENIX_LDAP_HOST=ldap.corp.com
 PHOENIX_OAUTH2_CLIENT_ID=...      # Google/Microsoft for external contractors
 ```
-→ Login page shows LDAP form + OAuth2 buttons
+→ 登录页显示 LDAP 表单和 OAuth2 按钮
 
-**Scenario 2: Pure LDAP Deployment**
+**场景 2：纯 LDAP 部署**
 ```bash
 PHOENIX_ENABLE_AUTH=true
 PHOENIX_DISABLE_BASIC_AUTH=true
 PHOENIX_LDAP_HOST=ldap.corp.com
 ```
-→ Login page shows LDAP form only
+→ 登录页仅显示 LDAP 表单
 
-**Scenario 3: All Methods Available (Dev/Testing)**
+**场景 3：所有方法可用（开发/测试）**
 ```bash
 PHOENIX_ENABLE_AUTH=true
 # PHOENIX_DISABLE_BASIC_AUTH not set (defaults to false)
 PHOENIX_LDAP_HOST=ldap.corp.com
 PHOENIX_OAUTH2_CLIENT_ID=...
 ```
-→ Login page shows LOCAL + LDAP + OAuth2
+→ 登录页显示 LOCAL + LDAP + OAuth2
 
-**Scenario 4: Auth Disabled (Local Development)**
+**场景 4：禁用身份验证（本地开发）**
 ```bash
 # PHOENIX_ENABLE_AUTH not set (defaults to false)
 ```
-→ No login page, no authentication required
+→ 无登录页，无需身份验证
 
-#### Testing Coverage
+<a id="testing-coverage"></a>
 
-**Backend Validation** (`tests/unit/test_config.py`):
-- ✅ Valid configurations accepted
-- ✅ Invalid configuration (basic disabled, no alternatives) raises `ValueError`
-- ✅ LDAP config validation (host, search base, group mappings)
+#### 测试覆盖
 
-**Frontend Rendering** (Manual verification required):
-- ✅ Correct forms shown for each permutation
-- ✅ Separators placed correctly
-- ✅ Default tab selection in admin dialog
+**后端校验**（`tests/unit/test_config.py`）：
+- ✅ 接受有效配置
+- ✅ 无效配置（禁用基本身份验证且无替代方式）抛出 `ValueError`
+- ✅ LDAP 配置校验：主机、搜索基准和组映射
 
-**Cross-Auth Security** (`tests/integration/auth/test_ldap.py`):
+**前端渲染**（需要手动验证）：
+- ✅ 为每种组合显示正确表单
+- ✅ 分隔符位置正确
+- ✅ 管理员对话框默认选项卡选择
+
+**跨身份验证方式安全**（`tests/integration/auth/test_ldap.py`）：
 - ✅ `test_ldap_user_cannot_login_via_oauth2`
 - ✅ `test_ldap_login_rejected_when_oauth2_user_exists`
 

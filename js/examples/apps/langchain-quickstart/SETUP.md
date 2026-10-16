@@ -1,34 +1,42 @@
-# Quick Setup Guide
+<a id="quick-setup-guide"></a>
 
-Follow these steps to get the LangChain TypeScript travel planner agent running.
+# 快速配置指南
 
-## 1. Navigate to the directory
+按照以下步骤运行 LangChain TypeScript 旅行规划 Agent。
+
+<a id="1-navigate-to-the-directory"></a>
+
+## 1. 进入目录
 
 ```bash
 cd js/examples/apps/langchain-quickstart
 ```
 
-## 2. Install dependencies
+<a id="2-install-dependencies"></a>
+
+## 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-This installs (among others):
+这会安装以下依赖（以及其他依赖）：
 
-- `langchain` – LangChain and agent
-- `@langchain/core` – Callbacks and tools
-- `zod` – Schema validation for tools
-- `@arizeai/phoenix-otel` – Phoenix tracing
-- `@arizeai/openinference-instrumentation-langchain` – LangChain instrumentation
-- `@arizeai/phoenix-client`, `@arizeai/phoenix-evals` – Fetching spans and running evals
-- `@ai-sdk/openai` – OpenAI-compatible models (agent and evals)
-- `dotenv` – Load `.env`
-- `tsx` – TypeScript execution (dev)
+- `langchain` – LangChain 与 Agent
+- `@langchain/core` – 回调与工具
+- `zod` – 工具模式验证
+- `@arizeai/phoenix-otel` – Phoenix 追踪
+- `@arizeai/openinference-instrumentation-langchain` – LangChain 插桩
+- `@arizeai/phoenix-client`, `@arizeai/phoenix-evals` – 获取 Span 及运行评估
+- `@ai-sdk/openai` – 兼容 OpenAI 的模型（用于 Agent 和评估）
+- `dotenv` – 加载 `.env`
+- `tsx` – TypeScript 执行（开发）
 
-## 3. Set environment variables
+<a id="3-set-environment-variables"></a>
 
-Create a `.env` from `.env.example` and set at least:
+## 3. 设置环境变量
+
+根据 `.env.example` 创建 `.env`，至少设置：
 
 ```bash
 # Required for the agent
@@ -42,38 +50,44 @@ PHOENIX_ENDPOINT=http://localhost:6006
 PHOENIX_PROJECT_NAME=langchain-travel-agent
 ```
 
-For `npm run custom_evals` you also need:
+运行 `npm run custom_evals` 还需要：
 
 ```bash
 FIREWORKS_API_KEY=your-fireworks-key-here
 ```
 
-## 4. Start Phoenix (if running locally)
+<a id="4-start-phoenix-if-running-locally"></a>
 
-In a separate terminal:
+## 4. 启动 Phoenix（若在本地运行）
+
+在另一个终端中：
 
 ```bash
 pip install arize-phoenix
 phoenix serve
 ```
 
-Phoenix will be available at `http://localhost:6006`.
+Phoenix 将在 `http://localhost:6006` 提供服务。
 
-## 5. Run the application
+<a id="5-run-the-application"></a>
+
+## 5. 运行应用
 
 ```bash
 npm start
 ```
 
-You should see:
+你应该看到：
 
-- Three trip-planning queries (Ireland, Japan, Portugal) with destination, duration, and interests
-- Agent responses using the three tools (essential_info, budget_basics, local_flavor)
-- Traces in Phoenix at `http://localhost:6006`
+- 三次旅行规划查询（爱尔兰、日本、葡萄牙），包含目的地、时长和兴趣
+- Agent 使用三个工具（essential_info、budget_basics、local_flavor）生成的响应
+- Phoenix `http://localhost:6006` 中的追踪
 
-## 6. (Optional) Run evaluations
+<a id="6-optional-run-evaluations"></a>
 
-After the agent has run and sent traces:
+## 6. （可选）运行评估
+
+Agent 运行并发送追踪后：
 
 ```bash
 # Pre-built correctness eval (OpenAI)
@@ -83,7 +97,9 @@ npm run pre_built_evals
 npm run custom_evals
 ```
 
-## File structure
+<a id="file-structure"></a>
+
+## 文件结构
 
 ```
 langchain-quickstart/
@@ -99,19 +115,23 @@ langchain-quickstart/
 └── SETUP.md                  # This file
 ```
 
-**Note:** `index.ts` sets up Phoenix and LangChain instrumentation at the top of the file (it does not import `instrumentation.ts`).
+**Note:** `index.ts` sets up Phoenix and LangChain 插桩 at the top of the file (it does not import `instrumentation.ts`).
 
-## What the code does
+<a id="what-the-code-does"></a>
 
-1. **index.ts** – Registers Phoenix, instruments LangChain, and runs a travel planner agent that must call three tools per request and respond with Essentials, Budget, and Local flavor.
-2. **tools.ts** – Defines three Tavily-backed tools: **essential_info** (weather, best time, attractions, etiquette), **budget_basics** (cost breakdown for destination + duration), **local_flavor** (experiences for destination + interests).
-3. **pre_built_evals.ts** – Loads LangGraph spans from Phoenix, runs the built-in correctness evaluator, and logs annotations to Phoenix.
-4. **custom_evals.ts** – Same span loading, runs a custom correctness template for the travel agent using a Fireworks model, and logs annotations as `custom_correctness`.
+## 代码的作用
 
-## Next steps
+1. **index.ts** – 注册 Phoenix，为 LangChain 插桩，并运行旅行规划 Agent；每次请求必须调用三个工具，按 Essentials（基本信息）、Budget（预算）、Local flavor（当地特色）回复。
+2. **tools.ts** – 定义三个由 Tavily 支持的工具：**essential_info**（天气、最佳时间、景点、礼仪）、**budget_basics**（按目的地和时长分解费用）、**local_flavor**（按目的地和兴趣推荐体验）。
+3. **pre_built_evals.ts** – 从 Phoenix 加载 LangGraph Span，运行内置正确性评估器，并向 Phoenix 记录标注。
+4. **custom_evals.ts** – 加载相同 Span，使用 Fireworks 模型运行旅行 Agent 的自定义正确性模板，并以 `custom_correctness` 记录标注。
 
-- Change destinations/durations/interests in `src/index.ts`
-- Add or change tools in `src/tools.ts`
-- Adjust the system prompt in `src/index.ts`
-- Tweak the custom eval template in `src/custom_evals.ts`
-- See the [LangChain JS docs](https://js.langchain.com/) for more examples
+<a id="next-steps"></a>
+
+## 后续步骤
+
+- 在 `src/index.ts` 中修改目的地/时长/兴趣
+- 在 `src/tools.ts` 中新增或修改工具
+- 调整 `src/index.ts` 中的系统提示词
+- 微调 `src/custom_evals.ts` 中的自定义评估模板
+- 更多示例见 [LangChain JS 文档](https://js.langchain.com/)

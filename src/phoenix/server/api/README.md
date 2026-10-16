@@ -1,28 +1,34 @@
-# Permission Matrix for GraphQL API
+<a id="permission-matrix-for-graphql-api"></a>
 
-## Mutations
+# GraphQL API 权限矩阵
 
-| Action                       | Admin | Member |
-|:-----------------------------|:-----:|:------:|
-| Create User                  |  Yes  |   No   |
-| Delete User                  |  Yes  |   No   |
-| Change Own Password          |  Yes  |  Yes   |
-| Change Other's Password      |  Yes  |   No   |
-| Change Own Username          |  Yes  |  Yes   |
-| Change Other's Username      |  Yes  |   No   |
-| Change Own Email             |  No   |   No   |
-| Change Other's Email         |  No   |   No   |
-| Create System API Keys       |  Yes  |   No   |
-| Delete System API Keys       |  Yes  |   No   |
-| Create Own User API Keys     |  Yes  |  Yes   |
-| Delete Own User API Keys     |  Yes  |  Yes   |
-| Delete Other's User API Keys |  Yes  |   No   |
+<a id="mutations"></a>
 
-## Queries
+## 变更操作
 
-| Action                               | Admin | Member |
-|:-------------------------------------|:-----:|:------:|
-| List All System API Keys             |  Yes  |   No   |
-| List All User API Keys               |  Yes  |   No   |
-| List All Users                       |  Yes  |   No   |
-| Fetch Other User's Info, e.g. emails |  Yes  |   No   |
+| 操作 | 管理员 | 成员 |
+|:---|:---:|:---:|
+| 创建用户 | 是 | 否 |
+| 删除用户 | 是 | 否 |
+| 修改自己的密码 | 是 | 是 |
+| 修改他人的密码 | 是 | 否 |
+| 修改自己的用户名 | 是 | 是 |
+| 修改他人的用户名 | 是 | 否 |
+| 修改自己的邮箱 | 否 | 否 |
+| 修改他人的邮箱 | 否 | 否 |
+| 创建系统 API 密钥 | 是 | 否 |
+| 删除系统 API 密钥 | 是 | 否 |
+| 创建自己的用户 API 密钥 | 是 | 是 |
+| 删除自己的用户 API 密钥 | 是 | 是 |
+| 删除他人的用户 API 密钥 | 是 | 否 |
+
+<a id="queries"></a>
+
+## 查询操作
+
+| 操作 | 管理员 | 成员 |
+|:---|:---:|:---:|
+| 列出所有系统 API 密钥 | 是 | 否 |
+| 列出所有用户 API 密钥 | 是 | 否 |
+| 列出所有用户 | 是 | 否 |
+| 获取其他用户的信息，例如邮箱 | 是 | 否 |

@@ -1,27 +1,35 @@
-# Phoenix Evals Reference
+<a id="phoenix-evals-reference"></a>
 
-Welcome to the Phoenix Evals Reference documentation. This package provides evaluation tools and utilities for LLM applications, including tools to determine relevance, toxicity, hallucination detection, and much more.
+# Phoenix Evals 参考文档
 
-## Features
+欢迎阅读 Phoenix Evals 参考文档。此包提供面向 LLM 应用的评估工具，包括相关性判断、毒性判断、幻觉检测等。
 
-Phoenix Evals provides **lightweight, composable building blocks** for writing and running evaluations:
+<a id="features"></a>
 
-- **Works with your preferred model SDKs** via adapters (OpenAI, LiteLLM, LangChain)
-- **Powerful input mapping and binding** for working with complex data structures
-- **Several pre-built metrics** for common evaluation tasks like hallucination detection
-- **Evaluators are natively instrumented** via OpenTelemetry tracing for observability and dataset curation
-- **Blazing fast performance** - achieve up to 20x speedup with built-in concurrency and batching
-- **Tons of convenience features** to improve the developer experience!
+## 功能
 
-## Installation
+Phoenix Evals 提供**轻量、可组合的构建模块**，用于编写和运行评估：
 
-Install the Phoenix Evals package using pip:
+- 通过适配器**兼容你偏好的模型 SDK**（OpenAI、LiteLLM、LangChain）
+- **强大的输入映射与绑定**，支持复杂数据结构
+- 为幻觉检测等常见评估任务提供**多种预置指标**
+- **评估器原生插桩**，通过 OpenTelemetry 追踪实现可观测性和数据集整理
+- **极高性能**：通过内置并发和批处理实现最高 20 倍加速
+- **丰富的便捷功能**，改善开发体验！
+
+<a id="installation"></a>
+
+## 安装
+
+通过 pip 安装 Phoenix Evals 包：
 
 ```bash
 pip install 'arize-phoenix-evals>=2.0.0' openai
 ```
 
-## Quick Start
+<a id="quick-start"></a>
+
+## 快速开始
 
 ```python
 from phoenix.evals import create_classifier
@@ -50,16 +58,20 @@ scores = evaluator.evaluate(
 scores[0].pretty_print()
 ```
 
-## Core Functions
+<a id="core-functions"></a>
 
-The main evaluation functions that power the package:
+## 核心函数
 
-- **`create_classifier`**: Create LLM-based classification evaluators
-- **`create_evaluator`**: Create custom evaluators from functions
-- **`bind_evaluator`**: Bind evaluators with input mappings
-- **`evaluate_dataframe`**: Evaluate dataframes with multiple evaluators
+此包的主要评估函数：
 
-## Usage Examples
+- **`create_classifier`**: 创建基于 LLM 的分类评估器
+- **`create_evaluator`**: 从函数创建自定义评估器
+- **`bind_evaluator`**: 通过输入映射绑定评估器
+- **`evaluate_dataframe`**: 使用多个评估器评估 DataFrame
+
+<a id="usage-examples"></a>
+
+## 使用示例
 
 ```python
 import pandas as pd
@@ -104,13 +116,17 @@ results_df = evaluate_dataframe(
 print(results_df.head())
 ```
 
-## External Links
+<a id="external-links"></a>
 
-- [Main Phoenix Documentation](https://arize.com/docs/phoenix)
-- [Python Reference](https://arize-phoenix.readthedocs.io/)
-- [GitHub Repository](https://github.com/Arize-ai/phoenix)
+## 外部链接
 
-## API Reference
+- [Phoenix 主文档](https://arize.com/docs/phoenix)
+- [Python 参考文档](https://arize-phoenix.readthedocs.io/)
+- [GitHub 仓库](https://github.com/Arize-ai/phoenix)
+
+<a id="api-reference"></a>
+
+## API 参考
 
 ```{toctree}
 :maxdepth: 2
@@ -119,7 +135,9 @@ print(results_df.head())
 api/evals
 ```
 
-## Indices and tables
+<a id="indices-and-tables"></a>
+
+## 索引与表格
 
 - {ref}`genindex`
 - {ref}`modindex`

@@ -1,83 +1,95 @@
-# Vendor-Specific Tools
+<a id="vendor-specific-tools"></a>
+# 提供商专用工具
 
-## Summary
+<a id="summary"></a>
+## 概述
 
-Phoenix prompt versions and playground instances need to represent the tool definitions used by LLM providers. Some tools are portable function tools with a common semantic shape. Other tools are vendor-specific JSON objects, such as web search, code execution, file search, computer use, or provider-specific connector definitions.
+Phoenix 提示词版本和 Playground 实例需要表示 LLM 提供商使用的工具定义。有些是具有共同语义结构的可移植函数工具；另一些则是提供商专用 JSON 对象，例如网页搜索、代码执行、文件搜索、计算机操作或提供商专用连接器定义。
 
-This spec defines a tool model with two variants in a single ordered list:
+本规格定义一个工具模型，在同一有序列表中包含两种变体：
 
-- Function tools: normalized, provider-portable tool definitions.
-- Raw tools: JSON tool definitions preserved as provider-specific passthrough values.
+- 函数工具：规范化、可跨提供商移植的工具定义。
+- 原始工具：保留为提供商专用透传值的 JSON 工具定义。
 
-The model keeps function tools structured while allowing Phoenix to preserve and replay vendor-specific tool definitions without lossy normalization.
+模型保留函数工具的结构化形式，同时允许 Phoenix 无损保留和重放提供商专用定义。
 
-## Goals
+<a id="goals"></a>
+## 目标
 
-- Preserve tool definitions from prompt versions, playground edits, and traced spans.
-- Keep function tools portable across providers.
-- Support vendor-specific tools without requiring Phoenix to understand every vendor schema.
-- Make raw vendor-specific tools visible and editable as JSON.
-- Avoid dropping non-function tools when opening traces in the playground.
-- Prevent raw provider-specific tools from being carried across incompatible provider or API changes.
+- 保留提示词版本、Playground 编辑和追踪 span 中的工具定义。
+- 让函数工具可跨提供商移植。
+- 无需 Phoenix 理解每个提供商 schema，即可支持专用工具。
+- 以 JSON 形式显示和编辑原始专用工具。
+- 在 Playground 打开追踪时避免丢弃非函数工具。
+- 防止原始提供商专用工具被带入不兼容的提供商或 API 变更。
 
-## Non-Goals
+<a id="non-goals"></a>
+## 非目标
 
-- Phoenix does not define a universal schema for every vendor-specific tool.
-- Phoenix does not semantically validate raw vendor-specific tools.
-- Phoenix does not translate arbitrary vendor-specific tools between providers.
-- Phoenix does not infer credentials, authentication, or runtime configuration for external tool connectors.
-- Phoenix does not guarantee that a raw tool accepted by one provider is valid for another provider.
+- Phoenix 不为所有提供商专用工具定义通用 schema。
+- 不对原始专用工具进行语义验证。
+- 不在提供商之间转换任意专用工具。
+- 不推断外部工具连接器的凭证、认证或运行时配置。
+- 不保证一个提供商接受的原始工具对另一提供商有效。
 
-## Terminology
+<a id="terminology"></a>
+## 术语
 
-Function tool:
-A tool with a normalized function definition. It has a name, optional description, JSON schema parameters, and optional strictness.
+函数工具：
+具有规范化函数定义的工具，包含名称、可选描述、JSON schema 参数和可选严格性设置。
 
-Raw tool:
-A JSON object that Phoenix stores and sends as-is. Raw tools are used for vendor-specific tool definitions that do not fit the normalized function-tool model.
+原始工具：
+Phoenix 原样存储和发送的 JSON 对象，用于不适合规范化函数工具模型的提供商专用定义。
 
-Tool list:
-An ordered list containing function tools and raw tools. Order is preserved.
+工具列表：
+包含函数工具和原始工具的有序列表，顺序保持不变。
 
-Canonical representation:
-The provider-independent representation Phoenix uses for function tools.
+规范表示：
+Phoenix 对函数工具采用的提供商无关表示。
 
-Display representation:
-The provider-specific JSON shape shown in the playground editor for a function tool.
+显示表示：
+Playground 编辑器中显示的函数工具提供商专用 JSON 结构。
 
-OpenAI API type:
-For OpenAI and Azure OpenAI providers, the selected API surface: Chat Completions or Responses.
+OpenAI API 类型：
+对于 OpenAI 和 Azure OpenAI，指所选 API 接口，即 Chat Completions 或 Responses。
 
-## Design Principles
+<a id="design-principles"></a>
+## 设计原则
 
-### Preserve What Phoenix Cannot Interpret
+<a id="preserve-what-phoenix-cannot-interpret"></a>
+### 保留 Phoenix 无法解读的内容
 
-Tool definitions are part of a prompt's executable context. If Phoenix cannot normalize a tool definition without losing fields, it should preserve the original JSON object instead of dropping it or partially converting it.
+工具定义是提示词可执行上下文的一部分。如果规范化会丢失字段，Phoenix 应保留原始 JSON 对象，而非丢弃或部分转换。
 
-### Normalize Only Shared Semantics
+<a id="normalize-only-shared-semantics"></a>
+### 仅规范化共享语义
 
-Function tools have a common cross-provider semantic shape. Phoenix can normalize them safely because the core fields are portable:
+函数工具具有共同的跨提供商语义结构。核心字段可移植，因此 Phoenix 可以安全规范化：
 
 - `name`
 - `description`
 - `parameters`
 - `strict`
 
-Vendor-specific tools do not share this property. Similar names, such as "web search" or "code execution", do not imply compatible configuration schemas.
+提供商专用工具不具备这一性质。网页搜索或代码执行等名称相似，并不表示配置 schema 兼容。
 
-### Make Provider-Specific State Explicit
+<a id="make-provider-specific-state-explicit"></a>
+### 明确提供商专用状态
 
-Raw tools are provider-specific JSON. They are editable, copyable, and deletable, but Phoenix does not present them as portable abstractions.
+原始工具是提供商专用 JSON，可以编辑、复制和删除，但 Phoenix 不将其呈现为可移植抽象。
 
-### Avoid Unsafe Carryover
+<a id="avoid-unsafe-carryover"></a>
+### 避免不安全沿用
 
-Function tools can survive provider changes because Phoenix can render them into the selected provider's expected function-tool shape. Raw tools are not portable, so Phoenix drops them when the provider or provider API type changes.
+函数工具可在提供商切换后保留，因为 Phoenix 可将其渲染为所选提供商期望的结构。原始工具不可移植，因此提供商或提供商 API 类型变化时，Phoenix 将其丢弃。
 
-## Data Model
+<a id="data-model"></a>
+## 数据模型
 
-### Python Prompt Types
+<a id="python-prompt-types"></a>
+### Python 提示词类型
 
-Prompt tools are represented as a list of discriminated tool objects.
+提示词工具表示为带判别字段的工具对象列表。
 
 ```python
 class PromptToolFunctionDefinition(DBBaseModel):
@@ -110,9 +122,10 @@ class PromptTools(DBBaseModel):
     disable_parallel_tool_calls: bool = UNDEFINED
 ```
 
-### GraphQL Shape
+<a id="graphql-shape"></a>
+### GraphQL 结构
 
-The GraphQL API exposes the same two variants.
+GraphQL API 暴露相同的两种变体。
 
 ```graphql
 union PromptToolFunctionPromptToolRaw = PromptToolFunction | PromptToolRaw
@@ -135,9 +148,10 @@ input PromptToolsInput {
 }
 ```
 
-### TypeScript Playground Types
+<a id="typescript-playground-types"></a>
+### TypeScript Playground 类型
 
-The frontend keeps the same distinction in store state.
+前端在存储状态中保持同样区分。
 
 ```typescript
 type FunctionTool = {
@@ -162,9 +176,10 @@ type PlaygroundInstance = {
 };
 ```
 
-## Storage Format
+<a id="storage-format"></a>
+## 存储格式
 
-Function tools are stored as structured objects.
+函数工具存为结构化对象。
 
 ```json
 {
@@ -194,7 +209,7 @@ Function tools are stored as structured objects.
 }
 ```
 
-Raw tools are stored as JSON objects inside the same ordered tool list.
+原始工具作为 JSON 对象存于同一有序工具列表中。
 
 ```json
 {
@@ -214,30 +229,33 @@ Raw tools are stored as JSON objects inside the same ordered tool list.
 }
 ```
 
-A prompt may contain both function tools and raw tools in the same ordered list.
+一个提示词可以在同一有序列表中同时包含函数工具和原始工具。
 
-## Conversion Rules
+<a id="conversion-rules"></a>
+## 转换规则
 
-### Function Tool to Provider Display JSON
+<a id="function-tool-to-provider-display-json"></a>
+### 函数工具转为提供商显示 JSON
 
-Function tools are stored canonically. The playground renders them into provider-specific display JSON using the selected model provider.
+函数工具以规范形式存储。Playground 按所选模型提供商将其渲染为专用显示 JSON。
 
-The display JSON can be edited by the user. Phoenix then attempts to classify the edited JSON object again:
+用户可编辑显示 JSON，随后 Phoenix 再次尝试分类：
 
-- If it can be interpreted as a function tool, Phoenix converts it into the canonical function-tool representation.
-- If it is a JSON object but cannot be interpreted as a function tool, Phoenix preserves it as a raw tool.
+- 可解读为函数工具时，转换为规范函数工具表示。
+- 是 JSON 对象但不能解读为函数工具时，保留为原始工具。
 
-"Can be interpreted as a function tool" means Phoenix can convert the provider display object without dropping any provider wrapper fields. JSON Schema fields nested under the function parameters are preserved as part of the canonical `parameters` object, including keywords Phoenix does not explicitly understand. If the provider wrapper contains fields that do not map to `name`, `description`, `parameters`, or `strict`, Phoenix stores the entire object as a raw tool instead of partially normalizing it.
+“可解读为函数工具”意味着转换提供商显示对象时，不丢弃任何提供商包装字段。函数参数中嵌套的 JSON Schema 字段保留在规范 `parameters` 对象中，包括 Phoenix 不明确理解的关键词。包装中存在无法映射到 `name`、`description`、`parameters` 或 `strict` 的字段时，整个对象存为原始工具，而非部分规范化。
 
-### Provider Display JSON to Function Tool
+<a id="provider-display-json-to-function-tool"></a>
+### 提供商显示 JSON 转为函数工具
 
-If a JSON tool object can be interpreted as a function tool, Phoenix converts it into the canonical function-tool representation.
+JSON 工具对象能解读为函数工具时，Phoenix 转换为规范表示。
 
-If the object cannot be interpreted as a function tool, Phoenix should preserve it as a raw tool rather than reject it solely because it is vendor-specific.
+无法解读为函数工具时，应保留为原始工具，而非仅因提供商专用就拒绝。
 
-This classification is symmetric. A tool that was previously stored as a function tool can become a raw tool after editing, and a tool that was previously stored as a raw tool can become a function tool after editing.
+分类是对称的。原先存为函数工具的内容编辑后可变成原始工具；原始工具编辑后也可变成函数工具。
 
-OpenAI Responses function tools use a flat shape and should normalize to function tools:
+OpenAI Responses 函数工具采用扁平结构，应规范化为函数工具：
 
 ```json
 {
@@ -257,192 +275,208 @@ OpenAI Responses function tools use a flat shape and should normalize to functio
 }
 ```
 
-### Raw Tool Passthrough
+<a id="raw-tool-passthrough"></a>
+### 原始工具透传
 
-Raw tools do not use provider display conversion. The editor value is the stored value, and the stored value is the value sent to the provider.
+原始工具不进行提供商显示转换。编辑器值即存储值，存储值即发送给提供商的值。
 
-Phoenix may format the JSON for readability, but it must not rename fields, remove fields, or rewrite the structure.
+Phoenix 可格式化 JSON 以便阅读，但不得重命名字段、删除字段或改写结构。
 
-## Playground Behavior
+<a id="playground-behavior"></a>
+## Playground 行为
 
-### Adding Tools
+<a id="adding-tools"></a>
+### 添加工具
 
-When a playground instance has no tools, the UI may offer separate entry points for:
+实例没有工具时，界面可分别提供入口：
 
-- Function tool: creates a canonical function tool.
-- Raw JSON tool: creates a raw tool with a small starter object.
+- 函数工具：创建规范函数工具。
+- 原始 JSON 工具：以小型初始对象创建原始工具。
 
-When a playground instance already has tools, adding another function tool should preserve existing tools and append the new function tool. Adding raw JSON tools may be exposed as a separate action where the UI supports it.
+已有工具时，新增函数工具应保留现有工具并追加新工具。界面支持时，可通过单独操作添加原始 JSON 工具。
 
-### Editing Tools
+<a id="editing-tools"></a>
+### 编辑工具
 
-All tools use the JSON editor. On each valid JSON object edit, Phoenix reclassifies the edited object:
+所有工具均使用 JSON 编辑器。每次编辑出有效 JSON 对象时，Phoenix 重新分类：
 
-1. If the object is a supported function-tool shape, store a function tool.
-2. Otherwise, store a raw tool.
+1. 对象是支持的函数工具结构时，存为函数工具。
+2. 否则，存为原始工具。
 
-Function tools are rendered into the selected provider's display representation before editing. Raw tools are rendered as their stored JSON object.
+编辑前，函数工具渲染为所选提供商的显示表示；原始工具按存储的 JSON 对象渲染。
 
-Validation requirements:
+验证要求：
 
-- The value must be syntactically valid JSON.
-- The value must be a JSON object to update the tool state.
-- Provider-specific semantic validation is left to the provider API.
+- 值必须是语法有效的 JSON。
+- 只有 JSON 对象才能更新工具状态。
+- 提供商专用语义验证交给提供商 API。
 
-Invalid or non-object JSON does not overwrite the last valid tool state. The editor should surface JSON syntax errors locally; save or execution uses the latest valid stored value.
+无效或非对象 JSON 不覆盖最近有效状态。编辑器应本地显示语法错误；保存和执行使用最近有效的存储值。
 
-### Provider Changes
+<a id="provider-changes"></a>
+### 提供商变化
 
-When the selected provider changes:
+所选提供商变化时：
 
-- Function tools are retained.
-- Raw tools are dropped.
-- Tool choice is recalculated from the remaining function tools.
-- Message tool calls are converted to the new provider format where supported.
+- 保留函数工具。
+- 丢弃原始工具。
+- 根据剩余函数工具重新计算工具选择。
+- 支持时，将消息工具调用转换为新提供商格式。
 
-Raw tools are dropped because their JSON shape is provider-specific.
+丢弃原始工具，是因为其 JSON 结构为提供商专用。
 
-### Provider API Type Changes
+<a id="provider-api-type-changes"></a>
+### 提供商 API 类型变化
 
-When a provider has multiple API types and the API type changes, raw tools are dropped. Function tools are retained.
+提供商有多种 API 类型且类型发生变化时，丢弃原始工具，保留函数工具。
 
-For example, a raw OpenAI Responses API tool object should not be assumed valid for Chat Completions.
+例如，不应假定原始 OpenAI Responses API 工具对象对 Chat Completions 有效。
 
-When opening spans or prompt versions for OpenAI or Azure OpenAI, Phoenix should infer the OpenAI API type from tool shapes when explicit connection configuration is unavailable. Responses-only tool objects such as `tool_search` or `namespace` imply the Responses API.
+打开 OpenAI 或 Azure OpenAI span 或提示词版本时，如果没有显式连接配置，Phoenix 应根据工具结构推断 OpenAI API 类型。仅 Responses 支持的 `tool_search`、`namespace` 等对象意味着 Responses API。
 
-## Trace Ingestion
+<a id="trace-ingestion"></a>
+## 追踪摄入
 
-Traced spans may include tool definitions as serialized JSON attributes. Phoenix should parse each tool definition independently.
+追踪 span 可能通过序列化 JSON 属性包含工具定义。Phoenix 应独立解析各工具。
 
-For each traced tool:
+对于每个追踪工具：
 
-1. Parse the serialized JSON.
-2. If it can be normalized to a function tool, create a function tool.
-3. If it is a JSON object but not a function tool, create a raw tool.
-4. If it is not parseable or not an object, report a parsing error for that tool.
+1. 解析序列化 JSON。
+2. 可规范化为函数工具时，创建函数工具。
+3. 是 JSON 对象但非函数工具时，创建原始工具。
+4. 无法解析或不是对象时，报告该工具的解析错误。
 
-This behavior allows "Open in Playground" to preserve vendor-specific tools captured by instrumentation.
+这让“在 Playground 中打开”能够保留插桩捕获的提供商专用工具。
 
-OpenAI Responses function tools with flat `type: "function"` shapes are normalized to canonical function tools. Responses-only non-function tools are preserved as raw tools.
+OpenAI Responses 的扁平 `type: "function"` 结构规范化为函数工具。Responses 专有的非函数工具保留为原始工具。
 
-## Prompt Version Behavior
+<a id="prompt-version-behavior"></a>
+## 提示词版本行为
 
-Prompt versions should round-trip tool lists without losing raw tools.
+提示词版本应无损往返传递工具列表，不丢失原始工具。
 
-Required round trips:
+必需往返路径：
 
-- GraphQL input to database storage.
-- Database storage to GraphQL output.
-- GraphQL output to playground instance.
-- Playground instance to GraphQL input.
-- Prompt version to SDK code snippets where supported.
+- GraphQL 输入到数据库存储。
+- 数据库存储到 GraphQL 输出。
+- GraphQL 输出到 Playground 实例。
+- Playground 实例到 GraphQL 输入。
+- 在支持时，从提示词版本到 SDK 代码片段。
 
-Function tools should remain normalized across these boundaries. Raw tools should remain equivalent at the JSON data model level, ignoring formatting and key ordering.
+函数工具跨这些边界时应保持规范化。忽略格式和键顺序后，原始工具应在 JSON 数据模型层面保持等价。
 
-## Evaluator Behavior
+<a id="evaluator-behavior"></a>
+## 评估器行为
 
-LLM evaluators use prompt tools to define structured evaluator outputs. That contract depends on canonical function-tool parameters, especially the `label` and optional `explanation` properties.
+LLM 评估器用提示词工具定义结构化输出。该契约依赖规范函数参数，尤其是 `label` 和可选 `explanation` 属性。
 
-Evaluator prompts are therefore function-tool-only:
+因此，评估器提示词仅允许函数工具：
 
-- Evaluator validation should reject raw tools.
-- Evaluator validation should reject mixed tool lists that include raw tools.
-- Evaluator UI code may read prompt tool unions, but it should infer evaluator output shape only from function tools.
+- 验证应拒绝原始工具。
+- 验证应拒绝包含原始工具的混合列表。
+- 评估器界面可读取提示词工具联合类型，但只能从函数工具推断输出结构。
 
-Raw tools remain supported for prompt storage, playground execution, trace ingestion, and SDK export. They are not valid evaluator output definitions.
+原始工具仍支持提示词存储、Playground 执行、追踪摄入和 SDK 导出，但不能作为有效评估器输出定义。
 
-## SDK Code Snippets
+<a id="sdk-code-snippets"></a>
+## SDK 代码片段
 
-When generating SDK snippets:
+生成 SDK 片段时：
 
-- Function tools should be serialized into the target SDK's expected function-tool format.
-- Raw tools should be emitted as raw tool objects.
-- Tool choice should be emitted only when the target SDK and selected provider support the represented choice.
+- 函数工具序列化为目标 SDK 期望的格式。
+- 原始工具作为原始工具对象输出。
+- 仅目标 SDK 和所选提供商支持该选择时，才输出工具选择。
 
-If a target SDK accepts a generic `tools` array, Phoenix may render raw tools directly. Phoenix should not claim provider validation has occurred.
+目标 SDK 接受通用 `tools` 数组时，Phoenix 可直接渲染原始工具，但不应声称已经提供商验证。
 
-TypeScript SDK helper functions should model the API tool union. They should convert function tools through the normal provider conversion path and pass raw tools through to the target SDK payload where the target SDK accepts raw tool objects.
+TypeScript SDK 辅助函数应建模 API 工具联合类型，通过正常提供商转换路径处理函数工具，并在目标 SDK 接受原始工具对象时将其透传到载荷。
 
-## Validation
+<a id="validation"></a>
+## 验证
 
-Phoenix performs structural validation:
+Phoenix 执行结构验证：
 
-- A tool list must contain at least one tool when present.
-- Function tools must satisfy the canonical function-tool schema.
-- Raw tools must be JSON objects.
-- Tool choice must be structurally valid.
+- 工具列表存在时，至少包含一个工具。
+- 函数工具必须符合规范函数工具 schema。
+- 原始工具必须为 JSON 对象。
+- 工具选择结构必须有效。
 
-Phoenix does not perform vendor semantic validation for raw tools.
+Phoenix 不对原始工具执行提供商语义验证。
 
-Examples of validation delegated to providers:
+交给提供商的验证示例：
 
-- Whether `type: "web_search"` is available for the selected model.
-- Whether a field such as `search_context_size` accepts a particular value.
-- Whether a connector definition has valid authorization.
-- Whether a tool is compatible with streaming.
+- 所选模型是否支持 `type: "web_search"`。
+- `search_context_size` 等字段是否接受某值。
+- 连接器定义是否具有有效授权。
+- 工具是否兼容流式传输。
 
-## Security and Secrets
+<a id="security-and-secrets"></a>
+## 安全与密钥
 
-Raw tools may contain vendor-specific configuration. They should not be used as a credential store.
+原始工具可能包含提供商专用配置，不应作为凭证存储。
 
-Guidelines:
+指引：
 
-- Credentials should use Phoenix credential configuration where possible.
-- UI copy should not encourage embedding API keys or bearer tokens in raw tools.
-- If a provider requires credentials inside a tool definition, the value is user-provided prompt or runtime configuration and should be treated as sensitive user input.
-- Logs and errors should avoid printing full raw tool definitions when they may contain secrets.
+- 尽量使用 Phoenix 凭证配置。
+- 界面文案不应鼓励在原始工具中嵌入 API 密钥或 bearer token。
+- 提供商要求在工具定义中放凭证时，该值属于用户提供的提示词或运行时配置，应按敏感用户输入处理。
+- 可能含密钥时，日志和错误应避免打印完整原始工具定义。
 
-## Error Handling
+<a id="error-handling"></a>
+## 错误处理
 
-Parsing errors should be explicit and localized.
+解析错误应明确且局部化。
 
-Recommended behavior:
+建议行为：
 
-- Invalid JSON in the editor is surfaced locally and does not update stored tool state.
-- A non-object JSON value in the editor is ignored and does not update stored tool state.
-- A traced tool that cannot be parsed is omitted and a parsing error is surfaced.
-- Provider API errors are displayed as provider execution errors, not Phoenix schema errors.
+- 编辑器中无效 JSON 本地报错，不更新存储状态。
+- 编辑器中非对象 JSON 忽略，不更新存储状态。
+- 追踪中无法解析的工具被省略，同时显示解析错误。
+- 提供商 API 错误显示为提供商执行错误，而非 Phoenix schema 错误。
 
-Phoenix should not silently drop valid JSON object tools only because they are not function tools.
+Phoenix 不应仅因工具不是函数工具，就静默丢弃有效 JSON 对象。
 
-## Testing Requirements
+<a id="testing-requirements"></a>
+## 测试要求
 
-Unit tests should cover:
+单元测试应覆盖：
 
-- Function tool parsing and serialization.
-- Raw tool parsing and serialization.
-- Symmetric editor reclassification between function and raw tools.
-- Mixed ordered tool lists.
-- Provider changes dropping raw tools and keeping function tools.
-- Provider API type changes dropping raw tools.
-- OpenAI Responses API type inference from Responses-only tool shapes.
-- OpenAI Responses flat function tools normalizing to function tools.
-- Trace ingestion preserving non-function JSON tools as raw tools.
-- GraphQL mutation inputs accepting function and raw tool variants.
-- Prompt version queries returning both variants.
-- SDK snippets emitting raw tools as raw objects.
-- Evaluator validation rejecting raw tools and mixed function/raw tool lists.
+- 函数工具解析和序列化。
+- 原始工具解析和序列化。
+- 编辑器中函数与原始工具之间对称的重新分类。
+- 混合有序工具列表。
+- 提供商变化时丢弃原始工具、保留函数工具。
+- 提供商 API 类型变化时丢弃原始工具。
+- 从 Responses 专有工具结构推断 OpenAI Responses API 类型。
+- OpenAI Responses 扁平函数工具规范化。
+- 追踪摄入将非函数 JSON 工具保留为原始工具。
+- GraphQL 变更输入接受函数和原始工具变体。
+- 提示词版本查询返回两种变体。
+- SDK 片段将原始工具输出为原始对象。
+- 评估器验证拒绝原始工具及函数/原始混合列表。
 
-Integration tests should cover:
+集成测试应覆盖：
 
-- Creating a prompt version with raw tools.
-- Reading the same prompt version through GraphQL and client APIs.
-- Opening a trace with raw vendor tools in the playground.
-- Running playground execution with a raw tool for a provider that accepts it.
+- 创建包含原始工具的提示词版本。
+- 通过 GraphQL 和客户端 API 读取同一版本。
+- 在 Playground 打开包含原始提供商工具的追踪。
+- 针对接受原始工具的提供商运行 Playground。
 
-## Open Questions
+<a id="open-questions"></a>
+## 待解决问题
 
-- Should the UI offer provider-specific starter templates for common raw tools such as web search or code execution?
-- Should Phoenix warn before dropping raw tools on provider changes?
-- Should raw tools support per-tool labels or descriptions for UI display without changing the provider payload?
-- Should SDK snippet generation include comments when raw tools are emitted?
+- 界面是否应为网页搜索、代码执行等常见原始工具提供专用初始模板？
+- 提供商变化导致丢弃原始工具前，Phoenix 是否应警告？
+- 是否支持不改变提供商载荷的逐工具标签或描述，用于界面显示？
+- SDK 片段生成在输出原始工具时是否应附注释？
 
-## Acceptance Criteria
+<a id="acceptance-criteria"></a>
+## 验收标准
 
-- Phoenix can store prompt versions containing function tools, raw tools, or both.
-- Raw tools round-trip through GraphQL without structural changes.
-- Opening a span with vendor-specific JSON tools preserves those tools in the playground.
-- Changing provider or provider API type removes raw tools and retains function tools.
-- Function-tool behavior remains compatible with existing prompts.
-- Raw tools are shown and edited as JSON objects.
-- Tests cover storage, GraphQL, playground, trace ingestion, and code snippet behavior.
+- Phoenix 能保存包含函数工具、原始工具或两者的提示词版本。
+- 原始工具通过 GraphQL 往返，结构不变。
+- 打开含提供商专用 JSON 工具的 span 时，在 Playground 保留工具。
+- 更改提供商或 API 类型时，移除原始工具、保留函数工具。
+- 函数工具行为继续兼容现有提示词。
+- 原始工具以 JSON 对象显示和编辑。
+- 测试覆盖存储、GraphQL、Playground、追踪摄入和代码片段行为。

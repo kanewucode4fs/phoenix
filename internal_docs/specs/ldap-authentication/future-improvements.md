@@ -1,45 +1,57 @@
-# Future Improvements (Post-MVP)
+<a id="future-improvements-post-mvp"></a>
 
-This document catalogs potential enhancements to elevate the LDAP implementation from production-ready (A-) to enterprise-grade (A+). These are **not blockers** for the current release but represent opportunities for future iterations.
+# 未来改进（MVP 之后）
+
+本文列出将 LDAP 实现从生产可用（A-）提升至企业级（A+）的潜在增强。它们**不阻碍**当前发布，而是后续迭代的机会。
 
 ---
 
-## Priority Matrix
+<a id="priority-matrix"></a>
 
-| Feature | Impact | Complexity | Target Phase |
+## 优先级矩阵
+
+| 功能 | 影响 | 复杂度 | 目标阶段 |
 |---------|--------|------------|--------------|
-| [Password Policy Handling](#1-password-policy-handling) | High | Medium | **Phase 2** |
-| [Retry Logic](#2-retry-logic-for-transient-failures) | Medium | Low | **Phase 2** |
-| [Metrics/Observability](#3-metricsobservability) | Medium | Low | **Phase 2** |
-| [Nested Group Resolution](#4-nested-group-resolution-for-active-directory) | Medium | High | Phase 3 |
-| [Connection Health Checks](#5-connection-health-checks) | Low | Medium | Phase 3 |
-| [Group Search Pagination](#6-group-search-pagination) | Low | Low | As needed |
+| [密码策略处理](#1-password-policy-handling) | 高 | 中 | **阶段 2** |
+| [重试逻辑](#2-retry-logic-for-transient-failures) | 中 | 低 | **阶段 2** |
+| [指标与可观测性](#3-metricsobservability) | 中 | 低 | **阶段 2** |
+| [嵌套组解析](#4-nested-group-resolution-for-active-directory) | 中 | 高 | 阶段 3 |
+| [连接健康检查](#5-connection-health-checks) | 低 | 中 | 阶段 3 |
+| [组搜索分页](#6-group-search-pagination) | 低 | 低 | 按需 |
 
-**Phase 2 Recommendation**: Items 1-3 should be bundled in the next LDAP release for significant UX and operational improvements with modest effort.
+**阶段 2 建议**：在下一次 LDAP 发布中合并第 1—3 项，以适度工作量显著改进用户体验和运维。
 
 ---
 
-## 1. Password Policy Handling
+<a id="1-password-policy-handling"></a>
 
-**Impact**: High | **Complexity**: Medium | **Target**: Phase 2
+## 1. 密码策略处理
 
-### Current Behavior
+**影响**：高 | **复杂度**：中 | **目标**：阶段 2
 
-All bind failures return generic "Invalid credentials" error.
+<a id="current-behavior"></a>
 
-### Problem
+### 当前行为
 
-Active Directory and OpenLDAP return specific error codes for password-related issues that could provide better UX:
+所有绑定失败均返回通用错误“Invalid credentials”。
 
-| AD Error Code | Meaning | Current UX | Ideal UX |
+<a id="problem"></a>
+
+### 问题
+
+Active Directory 和 OpenLDAP 对密码相关问题返回特定错误码，可用于改善用户体验：
+
+| AD 错误码 | 含义 | 当前体验 | 理想体验 |
 |---------------|---------|------------|----------|
-| `data 532` | Password expired | "Invalid credentials" | "Password expired, contact admin" |
-| `data 533` | Account disabled | "Invalid credentials" | "Account disabled" |
-| `data 701` | Account expired | "Invalid credentials" | "Account expired" |
-| `data 773` | Must change password | "Invalid credentials" | "Password change required" |
-| `data 775` | Account locked | "Invalid credentials" | "Account locked, try later" |
+| `data 532` | 密码已过期 | "Invalid credentials" | "Password expired, contact admin" |
+| `data 533` | 账户已禁用 | "Invalid credentials" | "Account disabled" |
+| `data 701` | 账户已过期 | "Invalid credentials" | "Account expired" |
+| `data 773` | 必须修改密码 | "Invalid credentials" | "Password change required" |
+| `data 775` | 账户已锁定 | "Invalid credentials" | "Account locked, try later" |
 
-### Implementation Sketch
+<a id="implementation-sketch"></a>
+
+### 实现草案
 
 ```python
 from enum import Enum
@@ -90,7 +102,9 @@ def _verify_user_password(self, server, user_dn, password) -> LDAPAuthResult:
         return LDAPAuthResult.INVALID_CREDENTIALS
 ```
 
-### API Response Updates
+<a id="api-response-updates"></a>
+
+### API 响应更新
 
 ```python
 # In /auth/ldap/login endpoint
@@ -109,31 +123,43 @@ match auth_result:
         raise HTTPException(401, detail="Invalid username and/or password")
 ```
 
-### Security Considerations
+<a id="security-considerations"></a>
 
-- **Username Enumeration Risk**: Detailed errors confirm user existence. Consider only showing detailed errors after successful user lookup (which already confirms existence).
-- **Information Disclosure**: Error messages should be generic enough to not aid attackers but specific enough to help legitimate users.
+### 安全考虑
 
-### References
+- **用户名枚举风险**：详细错误会确认用户存在。考虑仅在成功查找用户后显示详细错误，因为查找已确认其存在。
+- **信息披露**：错误消息应足够通用，不帮助攻击者，同时也应足够具体，帮助合法用户。
 
-- [MS-ADTS §3.1.1.3.4.2](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/) - AD LDAP error codes
-- [OpenLDAP ppolicy overlay](https://www.openldap.org/doc/admin24/overlays.html#Password%20Policies) - LDAP password policy controls
+<a id="references"></a>
+
+### 参考资料
+
+- [MS-ADTS §3.1.1.3.4.2](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/) — AD LDAP 错误码
+- [OpenLDAP ppolicy 叠加层](https://www.openldap.org/doc/admin24/overlays.html#Password%20Policies) — LDAP 密码策略控制
 
 ---
 
-## 2. Retry Logic for Transient Failures
+<a id="2-retry-logic-for-transient-failures"></a>
 
-**Impact**: Medium | **Complexity**: Low | **Target**: Phase 2
+## 2. 瞬态失败重试逻辑
 
-### Current Behavior
+**影响**：中 | **复杂度**：低 | **目标**：阶段 2
 
-A network blip mid-request fails the entire authentication attempt for that server, then moves to next server.
+<a id="current-behavior-1"></a>
 
-### Problem
+### 当前行为
 
-Transient network issues (brief DNS hiccups, momentary packet loss) cause unnecessary failures and degrade user experience.
+请求途中网络短暂抖动会使该服务器上的整个身份验证尝试失败，然后转至下一台服务器。
 
-### Implementation Sketch
+<a id="problem-1"></a>
+
+### 问题
+
+瞬态网络问题，例如短暂 DNS 异常或丢包，会导致不必要的失败并降低用户体验。
+
+<a id="implementation-sketch-1"></a>
+
+### 实现草案
 
 ```python
 from tenacity import (
@@ -180,7 +206,9 @@ def _try_authenticate_on_server(
         pass
 ```
 
-### Metrics Integration
+<a id="metrics-integration"></a>
+
+### 指标集成
 
 ```python
 # Track retry frequency for monitoring
@@ -197,7 +225,9 @@ def on_retry(retry_state):
     ).inc()
 ```
 
-### Configuration Option (Optional)
+<a id="configuration-option-optional"></a>
+
+### 配置选项（可选）
 
 ```bash
 # Environment variable to disable retries if needed
@@ -208,23 +238,31 @@ PHOENIX_LDAP_RETRY_DELAY_MS=500
 
 ---
 
-## 3. Metrics/Observability
+<a id="3-metricsobservability"></a>
 
-**Impact**: Medium | **Complexity**: Low | **Target**: Phase 2
+## 3. 指标与可观测性
 
-### Current Behavior
+**影响**：中 | **复杂度**：低 | **目标**：阶段 2
 
-No visibility into LDAP authentication performance or failure patterns.
+<a id="current-behavior-2"></a>
 
-### Problem
+### 当前行为
 
-Operations teams cannot:
-- Track LDAP auth latency trends
-- Identify failing servers proactively
-- Debug authentication issues without log diving
-- Set up alerting for LDAP degradation
+无法了解 LDAP 身份验证性能或失败模式。
 
-### Implementation Sketch
+<a id="problem-2"></a>
+
+### 问题
+
+运维团队无法：
+- 跟踪 LDAP 身份验证延迟趋势
+- 主动识别故障服务器
+- 不深入日志便调试身份验证问题
+- 为 LDAP 性能下降配置告警
+
+<a id="implementation-sketch-2"></a>
+
+### 实现草案
 
 ```python
 from prometheus_client import Counter, Histogram, Gauge
@@ -276,7 +314,9 @@ ldap_servers_configured = Gauge(
 )
 ```
 
-### Usage in Code
+<a id="usage-in-code"></a>
+
+### 代码用法
 
 ```python
 async def authenticate(self, username: str, password: str) -> LDAPUserInfo | None:
@@ -299,36 +339,46 @@ async def authenticate(self, username: str, password: str) -> LDAPUserInfo | Non
     return None
 ```
 
-### Grafana Dashboard (Future)
+<a id="grafana-dashboard-future"></a>
 
-Consider shipping a pre-built Grafana dashboard JSON for LDAP monitoring:
-- Authentication success/failure rates
-- Latency percentiles (P50, P95, P99)
-- Server health status
-- Error type breakdown
+### Grafana 仪表盘（未来）
+
+考虑提供用于 LDAP 监控的预构建 Grafana 仪表盘 JSON：
+- 身份验证成功率和失败率
+- 延迟分位数（P50、P95、P99）
+- 服务器健康状态
+- 错误类型分布
 
 ---
 
-## 4. Nested Group Resolution for Active Directory
+<a id="4-nested-group-resolution-for-active-directory"></a>
 
-**Impact**: Medium | **Complexity**: High | **Target**: Phase 3 (customer-driven)
+## 4. Active Directory 嵌套组解析
 
-### Current Behavior
+**影响**：中 | **复杂度**：高 | **目标**：阶段 3，由客户需求驱动
 
-Only direct group memberships are resolved via `memberOf` attribute.
+<a id="current-behavior-3"></a>
 
-### Problem
+### 当前行为
 
-Many AD deployments use nested groups:
+目前仅通过 `memberOf` 属性解析直接组成员关系。
+
+<a id="problem-3"></a>
+
+### 问题
+
+许多 AD 部署使用嵌套组：
 ```
 Phoenix Admins (group)
   └── IT Admins (group)        ← Nested group
         └── alice (user)       ← Indirect member of "Phoenix Admins"
 ```
 
-Current implementation won't see Alice as a member of "Phoenix Admins".
+当前实现不会将 Alice 识别为“Phoenix Admins”的成员。
 
-### Option A: LDAP_MATCHING_RULE_IN_CHAIN (Recommended)
+<a id="option-a-ldap_matching_rule_in_chain-recommended"></a>
+
+### 方案 A：LDAP_MATCHING_RULE_IN_CHAIN（推荐）
 
 ```python
 def _get_nested_groups_ad(self, conn: Connection, user_dn: str) -> list[str]:
@@ -361,7 +411,9 @@ def _get_nested_groups_ad(self, conn: Connection, user_dn: str) -> list[str]:
     return [entry.entry_dn for entry in conn.entries]
 ```
 
-### Option B: tokenGroups Attribute
+<a id="option-b-tokengroups-attribute"></a>
+
+### 方案 B：tokenGroups 属性
 
 ```python
 def _get_nested_groups_via_token_groups(self, conn: Connection, user_dn: str) -> list[str]:
@@ -410,7 +462,9 @@ def _get_nested_groups_via_token_groups(self, conn: Connection, user_dn: str) ->
     return groups
 ```
 
-### Configuration
+<a id="configuration"></a>
+
+### 配置
 
 ```bash
 # Enable nested group resolution (default: false for backward compatibility)
@@ -420,27 +474,37 @@ PHOENIX_LDAP_NESTED_GROUPS=true
 PHOENIX_LDAP_NESTED_GROUPS_METHOD=chain  # or "tokengroups"
 ```
 
-### References
+<a id="references-1"></a>
+
+### 参考资料
 
 - [MS-ADTS LDAP_MATCHING_RULE_IN_CHAIN](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/)
-- [tokenGroups attribute](https://docs.microsoft.com/en-us/windows/win32/adschema/a-tokengroups)
-- [SID structure (MS-DTYP)](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/)
+- [tokenGroups 属性](https://docs.microsoft.com/en-us/windows/win32/adschema/a-tokengroups)
+- [SID 结构（MS-DTYP）](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/)
 
 ---
 
-## 5. Connection Health Checks
+<a id="5-connection-health-checks"></a>
 
-**Impact**: Low | **Complexity**: Medium | **Target**: Phase 3
+## 5. 连接健康检查
 
-### Current Behavior
+**影响**：低 | **复杂度**：中 | **目标**：阶段 3
 
-Failed servers are discovered at authentication time.
+<a id="current-behavior-4"></a>
 
-### Problem
+### 当前行为
 
-First user to hit a failed server experiences latency while failover occurs. No proactive alerting for server issues.
+仅在身份验证时发现服务器故障。
 
-### Implementation Sketch
+<a id="problem-4"></a>
+
+### 问题
+
+首位访问故障服务器的用户会在故障转移期间遭遇延迟。没有针对服务器问题的主动告警。
+
+<a id="implementation-sketch-3"></a>
+
+### 实现草案
 
 ```python
 import asyncio
@@ -534,7 +598,9 @@ class LDAPAuthenticator:
         return None
 ```
 
-### FastAPI Lifespan Integration
+<a id="fastapi-lifespan-integration"></a>
+
+### FastAPI 生命周期集成
 
 ```python
 from contextlib import asynccontextmanager
@@ -557,19 +623,27 @@ async def lifespan(app: FastAPI):
 
 ---
 
-## 6. Group Search Pagination
+<a id="6-group-search-pagination"></a>
 
-**Impact**: Low | **Complexity**: Low | **Target**: As needed
+## 6. 组搜索分页
 
-### Current Behavior
+**影响**：低 | **复杂度**：低 | **目标**：按需
 
-POSIX mode group searches use single unpaginated query.
+<a id="current-behavior-5"></a>
 
-### Problem
+### 当前行为
 
-LDAP servers typically limit results to 1000 entries (configurable). Organizations with >1000 groups in a search base may get truncated results.
+POSIX 模式组搜索使用单次不分页查询。
 
-### Implementation Sketch
+<a id="problem-5"></a>
+
+### 问题
+
+LDAP 服务器通常将结果限制为 1000 个条目，可配置。搜索基准中具有超过 1000 个组的组织可能获得截断结果。
+
+<a id="implementation-sketch-4"></a>
+
+### 实现草案
 
 ```python
 from ldap3.extend.standard import paged_search
@@ -611,48 +685,62 @@ def _search_groups_paged(
     return groups
 ```
 
-### When to Implement
+<a id="when-to-implement"></a>
 
-Only implement if a customer reports truncation issues. Signs of this problem:
-- Users missing expected role assignments
-- Log messages about partial results
-- Large enterprise with >1000 LDAP groups
+### 实现时机
 
-### References
+仅在客户报告截断问题时实现。问题信号包括：
+- 用户未获得预期角色分配
+- 日志提示结果不完整
+- 大型企业拥有超过 1000 个 LDAP 组
 
-- [RFC 2696](https://www.rfc-editor.org/rfc/rfc2696) - LDAP Simple Paged Results Control
+<a id="references-2"></a>
 
----
+### 参考资料
 
-## Implementation Recommendations
-
-### Phase 2 (Next LDAP Release)
-
-Bundle these three improvements for significant operational value:
-
-1. ✅ **Metrics/Observability** - Low effort, essential for production operations
-2. ✅ **Retry Logic** - Low effort, improves reliability
-3. ⚠️ **Password Policy Handling** - Medium effort, major UX improvement
-
-**Estimated Effort**: 2-3 days total
-
-### Phase 3 (Future)
-
-Implement based on customer demand:
-
-4. ⏳ **Nested Group Resolution** - Only if customers report AD nested group issues
-5. ⏳ **Connection Health Checks** - Only for large multi-server deployments
-6. ⏳ **Group Search Pagination** - Only if truncation reported
-
-### Not Recommended
-
-- **Connection Pooling**: Complexity vs. benefit tradeoff unfavorable for typical Phoenix workloads (<100 auth/sec). Each auth takes <500ms; pool management overhead may exceed connection setup cost.
+- [RFC 2696](https://www.rfc-editor.org/rfc/rfc2696) — LDAP 简单分页结果控制
 
 ---
 
-## Related Documentation
+<a id="implementation-recommendations"></a>
 
-- [Main LDAP Spec](../ldap-authentication.md) - Implementation overview
-- [Security Deep-Dive](./security.md) - Current security measures
-- [Configuration Reference](./configuration.md) - Environment variables
-- [Protocol Compliance](./protocol-compliance.md) - RFC compliance details
+## 实现建议
+
+<a id="phase-2-next-ldap-release"></a>
+
+### 阶段 2（下一次 LDAP 发布）
+
+合并以下三项改进，以获得显著运维价值：
+
+1. ✅ **指标与可观测性** — 工作量低，生产运维必需
+2. ✅ **重试逻辑** — 工作量低，提高可靠性
+3. ⚠️ **密码策略处理** — 工作量中等，显著改善体验
+
+**预计工作量**：合计 2—3 天
+
+<a id="phase-3-future"></a>
+
+### 阶段 3（未来）
+
+根据客户需求实现：
+
+4. ⏳ **嵌套组解析** — 仅在客户报告 AD 嵌套组问题时实现
+5. ⏳ **连接健康检查** — 仅用于大型多服务器部署
+6. ⏳ **组搜索分页** — 仅在报告截断时实现
+
+<a id="not-recommended"></a>
+
+### 不推荐
+
+- **连接池**：对典型 Phoenix 工作负载（每秒少于 100 次身份验证），复杂度与收益的取舍不利。每次身份验证耗时少于 500ms，连接池管理开销可能超过建立连接的成本。
+
+---
+
+<a id="related-documentation"></a>
+
+## 相关文档
+
+- [LDAP 主规范](../ldap-authentication.md) — 实现概览
+- [安全详解](./security.md) — 当前安全措施
+- [配置参考](./configuration.md) — 环境变量
+- [协议合规性](./protocol-compliance.md) — RFC 合规详情

@@ -1,2 +1,1 @@
-Compare your first experiment against your last one. Did the prompt changes help? Show me
-which examples moved, and record what you learned on the last experiment.
+比较你的第一次实验和最后一次实验。提示词修改有帮助吗？向我展示哪些示例的结果发生了变化，并将学到的经验记录到最后一次实验中。

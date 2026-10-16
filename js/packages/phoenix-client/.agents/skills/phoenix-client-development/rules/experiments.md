@@ -1,18 +1,26 @@
-# Experiment Execution
+<a id="experiment-execution"></a>
 
-## Two-Phase Architecture
+# 实验执行
 
-Experiments run in two sequential phases, each with its own tracer provider:
+<a id="two-phase-architecture"></a>
 
-1. **Task phase** — provider uses the experiment's `projectName`.
-2. **Evaluation phase** — provider uses `projectName: "evaluators"` so eval spans don't pollute the task trace view.
+## 两阶段架构
 
-The task provider MUST be fully cleaned up before the eval provider is created. Both providers are created with `global: false` and explicitly attached/detached — never relying on `register()`'s built-in global registration.
+实验依次运行两个阶段，每个阶段有各自的追踪提供程序：
 
-## Provider Ownership
+1. **任务阶段**：提供程序使用实验的 `projectName`。
+2. **评估阶段**：提供程序使用 `projectName: "evaluators"`，避免评估 Span 混入任务追踪视图。
 
-Functions that create a tracer provider own it and MUST clean it up. Functions that receive a provider from their caller MUST NOT clean it up. This enables provider reuse (e.g., `evaluateExperiment()` accepts an external provider when called standalone).
+创建评估提供程序前，**必须**彻底清理任务提供程序。两个提供程序都以 `global: false` 创建，并显式挂载/分离，绝不依赖 `register()` 内置的全局注册。
 
-## Consistency Across Entry Points
+<a id="provider-ownership"></a>
 
-`runExperiment()`, `resumeExperiment()`, and `resumeEvaluation()` all follow the two-phase pattern. When modifying tracing or lifecycle logic, all three MUST be updated consistently.
+## 提供程序的所有权
+
+创建追踪提供程序的函数拥有它，并且**必须**清理它。从调用方接收提供程序的函数**不得**清理它，以便复用提供程序（例如单独调用 `evaluateExperiment()` 时可接收外部提供程序）。
+
+<a id="consistency-across-entry-points"></a>
+
+## 各入口保持一致
+
+`runExperiment()`、`resumeExperiment()` 和 `resumeEvaluation()` 都遵循两阶段模式。修改追踪或生命周期逻辑时，三者**必须**一致更新。

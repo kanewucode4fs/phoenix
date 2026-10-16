@@ -1,145 +1,72 @@
-# Pytest Eval-CI Integration: Design Philosophy
+<a id="pytest-eval-ci-integration-design-philosophy"></a>
+# Pytest Eval-CI 集成：设计理念
 
-Authors: @anticorrelator
+作者：@anticorrelator
 
-The `phoenix.client.pytest` plugin lets you record ordinary pytest tests as Phoenix
-experiments. You mark a test with `@pytest.mark.phoenix`, and when it runs in CI it becomes
-a row of evaluation data in Phoenix — no separate harness, and no rewriting your tests as
-dataset rows. This document explains the thinking behind that design: which rules of
-Phoenix's dataset/experiment model we relax on purpose so this feels like normal pytest, and
-which rules we hold firm so the recorded data is still trustworthy. Usage and examples for
-end users live in
-`docs/phoenix/datasets-and-experiments/how-to-experiments/eval-ci-with-pytest.mdx`.
+`phoenix.client.pytest` 插件允许将普通 pytest 测试记录为 Phoenix 实验。用 `@pytest.mark.phoenix` 标记测试后，在 CI 中运行时，它就成为 Phoenix 中的一行评估数据：无需独立测试框架，也无需将测试改写为数据集行。本文解释设计思路：为了保留正常 pytest 体验，有意放宽了 Phoenix 数据集/实验模型的哪些规则，以及为了确保记录数据可信，严格保留了哪些规则。面向最终用户的用法和示例位于 `docs/phoenix/datasets-and-experiments/how-to-experiments/eval-ci-with-pytest.mdx`。
 
-A note on vocabulary, for readers newer to Phoenix. A **dataset** is a collection of
-**examples** (the inputs you want to test against). An **experiment** is the record of
-running something against those examples — one **run** per example, and each run can carry
-**annotations**, which are scores or labels (for instance, the output of an evaluator).
-Normally you build the dataset first and then run an experiment against it.
+先为不熟悉 Phoenix 的读者说明术语：**数据集**是一组**示例**，即要测试的输入。**实验**记录针对这些示例的运行，每个示例对应一次**运行**；每次运行可带有**标注**，即分数或标签，例如评估器输出。通常先构建数据集，再针对它运行实验。
 
-## Core Stance: The Test Suite Is the Source of Truth
+<a id="core-stance-the-test-suite-is-the-source-of-truth"></a>
+## 核心立场：测试套件是唯一事实来源
 
-Phoenix's experiment model was designed around a curated dataset and a single, uniform task.
-You assemble a dataset of examples, then run one function against every example the same
-number of times, scored by the same set of evaluators. Because every run is the same task on
-a different input, you can average the results meaningfully and compare one experiment to
-another.
+Phoenix 实验模型围绕精心整理的数据集和单一、统一的任务设计。先整理示例数据集，再对每个示例以相同次数运行同一函数，由同一组评估器评分。因为每次运行只是同一任务在不同输入上的执行，结果平均值才有意义，也能比较不同实验。
 
-A pytest suite does not look like that. Tests are independent functions, each doing its own
-thing, grouped into files, sometimes parametrized, sometimes sharing fixtures. Rather than
-ask people to abandon that and hand-author datasets, we let the test suite remain the source
-of truth and **derive** the dataset and experiment from it as a byproduct of running the
-tests.
+pytest 套件并非如此。测试是独立函数，各自执行不同工作，按文件分组，有时参数化，有时共享 fixture。我们不要求用户放弃这一模式、手工编写数据集，而是让测试套件仍为唯一事实来源，在运行测试时将数据集和实验**推导**为副产物。
 
-The trade-off is deliberate. The derived data does not satisfy several of the uniformity
-assumptions the experiment model was built on. We accept that, and we compensate by being
-strict about a different set of guarantees — stable identity, non-duplicating writes, and
-clear provenance — so the data stays meaningful even when it isn't uniform.
+这是有意的取舍。推导的数据不满足实验模型原有的若干一致性假设。我们接受这一点，改为严格保证稳定标识、非重复写入和清晰来源，使数据即使不统一仍有意义。
 
-> In one line: **we relax uniformity, but never identity.**
+> 一句话：**可以放宽一致性，绝不放宽身份标识。**
 
-## Where the Two Models Disagree
+<a id="where-the-two-models-disagree"></a>
+## 两种模型的分歧
 
-| What the experiment model assumes | What a pytest suite actually does | How we bridge the gap |
+| 实验模型的假设 | pytest 套件的实际行为 | 衔接方式 |
 |---|---|---|
-| One task, run over the whole dataset | Every test is its own task | Many different tests share one experiment, and each run is tagged with the test it came from |
-| Every example runs the same number of times | Different tests can ask for different repeat counts | The experiment's repeat count becomes a ceiling; some examples simply run fewer times |
-| Examples are curated ahead of time, often with an expected answer | Examples are discovered from the tests; there is no expected answer | The test's own assertion decides pass/fail, recorded as a score |
-| The same evaluators score every example | Evaluators are attached per test | Different examples in one experiment may be scored differently |
-| A pass/fail gate is computed from the aggregate | pytest already passes or fails each test | Gating stays at the individual-test level; there is no aggregate gate |
-| A dataset is a fixed, named artifact | The suite changes with every commit | The dataset is re-synced on each run to mirror the current suite |
-| One process records all the runs | pytest can split tests across many processes | One process sets things up first; the others just record their runs into it |
+| 一个任务遍历整个数据集 | 每个测试都是自己的任务 | 多个不同测试共用一个实验，每次运行都标记来源测试 |
+| 每个示例运行相同次数 | 不同测试可以要求不同重复次数 | 实验重复次数作为上限，部分示例实际运行更少 |
+| 示例预先整理，通常有预期答案 | 示例从测试中发现，没有预期答案 | 由测试断言决定通过或失败，并记录为分数 |
+| 相同评估器对每个示例评分 | 评估器逐测试附加 | 一个实验中的不同示例可以采用不同评分方式 |
+| 根据聚合计算通过或失败门禁 | pytest 已逐测试判断通过或失败 | 门禁保留在单测试层级，不设置聚合门禁 |
+| 数据集是固定具名产物 | 套件随每次提交变化 | 每次运行重新同步数据集，反映当前套件 |
+| 一个进程记录全部运行 | pytest 可将测试拆分到多个进程 | 一个进程先初始化，其他进程仅向其中记录运行 |
 
-## What We Loosen, and Why
+<a id="what-we-loosen-and-why"></a>
+## 放宽哪些规则，以及原因
 
-Each of these is a place where the recorded data is intentionally less uniform than a
-hand-built experiment would be.
+以下各点都使记录数据有意地不如手工构建的实验统一。
 
-1. **Many kinds of test in one experiment.** By default, every marked test in a file shares
-   one dataset, and therefore one experiment. Those tests may be entirely unrelated, so a
-   single experiment can mix different tasks together. We record which test each example came
-   from, so every run is traceable. The practical consequence: a per-test pass/fail rate is
-   always meaningful, but *averaging a score across the whole experiment* only makes sense
-   when that score means the same thing for every test. When in doubt, trust the counts (how
-   many passed, how many an evaluator flagged) rather than the averages. The uniform version
-   of this — one task over a dataset — is what `run_experiment` is for.
+1. **一个实验包含多种测试。** 默认同一文件中所有已标记测试共用一个数据集，因此共用一个实验。这些测试可能完全无关，一个实验会混合不同任务。我们记录每个示例来源于哪个测试，使每次运行都可追溯。实际影响是：逐测试的通过/失败率始终有意义，但只有分数在所有测试中含义相同时，**对整个实验的分数取平均**才有意义。不确定时，应信任计数，如通过多少次、被评估器标记多少次，而非平均值。统一模式，即一个任务遍历一个数据集，是 `run_experiment` 的用途。
 
-2. **Different repeat counts per test.** A test can ask to run several times, to catch
-   flakiness or to sample a non-deterministic system. An experiment, however, records a
-   single repeat count, and tests in the same group may disagree on it. We set the
-   experiment's count to the largest any test asked for, and let tests that wanted fewer
-   simply have fewer runs. The count is a ceiling for the experiment, not a promise that
-   every example reached it. All repeats of a test point at the same example and are
-   distinguished only by a repeat number.
+2. **逐测试采用不同重复次数。** 测试可以要求运行多次，以捕捉不稳定性或对非确定系统采样。但实验只记录一个重复次数，同组测试的需求可能不同。我们将实验次数设为所有测试要求的最大值，要求较少的测试仅产生较少运行。这是实验的上限，不承诺每个示例都达到它。同一测试的全部重复运行指向同一个示例，仅通过重复编号区分。
 
-3. **No expected answer on the example.** Because examples come from tests rather than a
-   curated set, they carry only the test's inputs — there is no reference output to compare
-   against. The test produces its output while it runs, and you record that output
-   explicitly (pytest discourages returning values from tests, so you call a small helper
-   instead). Correctness comes from the test's own assertions, recorded as a pass/fail score,
-   not from comparing the output to an expected answer.
+3. **示例没有预期答案。** 示例来自测试，而非人工整理的集合，因此只包含测试输入，没有参考输出可比较。测试在运行时产生输出，由用户显式记录：pytest 不鼓励测试返回值，因此改用小型辅助函数。正确性由测试自身断言决定，记录为通过/失败分数，而不是通过输出与预期答案比较判断。
 
-4. **Per-test evaluators.** You can attach evaluators to a test, and they run automatically
-   against its inputs and output. Because evaluators are attached per test, two examples in
-   the same experiment can be scored by different evaluators. These attached evaluators only
-   ever contribute scores — they never fail the individual test on their own. A failing test
-   is a failing *assertion*, which is a separate thing.
+4. **逐测试附加评估器。** 可以给测试附加评估器，自动对其输入和输出执行评估。由于按测试附加，同一实验中的两个示例可能由不同评估器评分。这些评估器只提供分数，绝不会自行导致单个测试失败。测试失败是**断言**失败，二者不同。
 
-5. **Gating happens per test, the pytest way.** When a test's assertion fails, the test
-   fails — and we record that same failure on its run, taken from the very result pytest
-   itself reports, so the two can never disagree. We deliberately do **not** compute an
-   aggregate pass/fail gate over the experiment. (An earlier baseline-comparison gate was
-   removed so it can be designed properly on its own later.)
+5. **按 pytest 方式逐测试设门禁。** 测试断言失败时，测试就失败；我们直接取 pytest 报告的结果，在对应运行中记录同一失败，因此两者绝不矛盾。我们有意**不**对实验计算聚合通过/失败门禁。此前的基线比较门禁已移除，以便日后独立进行合理设计。
 
-6. **The dataset tracks the suite over time.** The dataset is named after the test file by
-   default; you can override the name — for example, per CI run — through the
-   `PHOENIX_TEST_DATASET` environment variable. Each run reconciles the dataset against the
-   tests that were collected, creating a new version only when something actually changed.
-   When you run a filtered subset of tests, we add to the dataset rather than reconcile it, so
-   we don't delete examples for tests that simply weren't run this time. The dataset is a
-   living mirror of the suite, not a frozen benchmark.
+6. **数据集随时间跟踪套件。** 默认以测试文件命名数据集，也可通过 `PHOENIX_TEST_DATASET` 环境变量覆盖，例如每次 CI 运行使用不同名称。每次运行将数据集与收集到的测试对账，只有实际发生变化时才创建新版本。运行过滤后的测试子集时，采用追加而非完整对账，避免删除本次仅仅未运行的测试示例。数据集是套件的动态镜像，而非冻结的基准。
 
-7. **Parallel runs don't fragment the experiment.** pytest can distribute tests across worker
-   processes. To keep them all in one experiment, a single coordinating process creates the
-   dataset and experiment first and hands the resulting identifiers to the workers; the
-   workers only record runs and never create anything themselves. So however the tests are
-   split up, they all land in the same experiment.
+7. **并行运行不会拆散实验。** pytest 可将测试分发到工作进程。为使其保留在同一实验，一个协调进程先创建数据集和实验，再将标识符交给工作进程；后者仅记录运行，不自行创建任何内容。因此无论怎样拆分，全部测试都进入同一实验。
 
-8. **Tracing is layered on top.** Each marked test, and each evaluator call, is wrapped in a
-   trace span and exported to the experiment's project, so a recorded run links back to the
-   underlying trace. This was added after the first version. If tracing can't be set up it
-   degrades to a single warning rather than failing tests, and it is skipped entirely when
-   recording is turned off.
+8. **在其上叠加追踪。** 每个已标记测试和每次评估器调用都包装在 span 中，导出到实验项目，使运行记录可链接到底层追踪。这在首版之后添加。如果无法配置追踪，会降级为一条警告，而不使测试失败；关闭记录时完全跳过追踪。
 
-## What We Keep Strict
+<a id="what-we-keep-strict"></a>
+## 严格保留的规则
 
-The looseness above is bounded by a small set of guarantees we do not compromise.
+上述放宽受少量不可妥协的保证约束。
 
-- **You opt in, test by test.** Only tests you explicitly mark are recorded. An unmarked
-  suite touches no network and behaves exactly as it did before the plugin was installed.
-- **Stable identity.** Each example's identity is derived from the test's path and
-  parameters, so its history stays continuous across runs. Renaming a test creates a new
-  example rather than silently rewriting an old one.
-- **Non-duplicating writes.** Each run is keyed by its example and repeat number. Re-running
-  an unchanged suite creates no new dataset version and no duplicate runs, and retries —
-  including under parallel execution — don't double-record.
-- **One source of truth for pass/fail.** The result we record is the same result pytest
-  reports. The test log and the recorded experiment cannot drift apart.
+- **逐测试主动启用。** 仅记录显式标记的测试。未标记套件不访问网络，行为与安装插件之前完全相同。
+- **稳定身份标识。** 每个示例的标识从测试路径和参数推导，使其历史在各次运行间连续。重命名测试会创建新示例，而非悄悄改写旧示例。
+- **非重复写入。** 每次运行以示例和重复编号为键。重新运行未变化的套件，不创建新数据集版本或重复运行；即使并行执行，重试也不会重复记录。
+- **通过/失败的唯一事实来源。** 记录结果与 pytest 报告结果相同，测试日志和实验记录不会发生偏差。
 
-## Open Questions
+<a id="open-questions"></a>
+## 待解决问题
 
-- **One experiment per file, or per test function?** Naming the dataset after the file keeps
-  the number of experiments manageable but mixes different tests together. Naming it after
-  each test function would make every experiment uniform and easy to interpret, at the cost of
-  many more of them. We haven't settled this.
-- **Helping readers not over-trust averages.** Since an experiment can mix different tests, we
-  may want the UI to signal that pass/fail counts are reliable while averaged scores may not
-  be.
-- **Aggregate gating / regression analysis.** Deferred. Comparing a run against a baseline,
-  and failing CI on a regression, needs its own design.
-- **Name collisions across repositories.** A file path doesn't distinguish two different
-  repositories that both push to the same Phoenix instance. A naming prefix would; out of
-  scope until someone needs it.
-- **Repeat counts for `unittest`-style tests.** Tests written as `unittest` classes don't
-  receive the machinery that expands repeats, so they record a single run regardless of the
-  requested count. A known limitation.
+- **每个文件还是每个测试函数对应一个实验？** 以文件命名数据集，可控制实验数量，但会混合不同测试。按每个测试函数命名，可使实验统一且易解读，但数量大增。尚未确定。
+- **帮助读者避免过度信任平均值。** 一个实验可能混合不同测试，因此可以考虑在界面中提示：通过/失败计数可靠，而平均分可能不可靠。
+- **聚合门禁和回归分析。** 暂缓。与基线比较并在回归时使 CI 失败，需要独立设计。
+- **跨仓库命名冲突。** 两个仓库推送到同一 Phoenix 实例时，仅文件路径不足以区分。命名前缀可以解决，但有人需要前不纳入范围。
+- **`unittest` 风格测试的重复次数。** 以 `unittest` 类编写的测试不接入重复展开机制，因此无论请求多少次，都只记录一次运行。这是已知限制。

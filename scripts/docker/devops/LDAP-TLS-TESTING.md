@@ -1,10 +1,16 @@
-# LDAP TLS Security Testing
+<a id="ldap-tls-security-testing"></a>
 
-## Overview
+# LDAP TLS 安全测试
 
-Comprehensive automated testing suite that validates LDAP TLS implementations using an **adversarial MITM proxy**. The proxy actively attempts to steal credentials from LDAP traffic. Success = vulnerability, failure = secure.
+<a id="overview"></a>
 
-## Architecture
+## 概述
+
+使用**对抗性中间人（MITM）代理**验证 LDAP TLS 实现的全面自动化测试套件。代理会主动尝试从 LDAP 流量中窃取凭证；窃取成功表示存在漏洞，失败表示安全。
+
+<a id="architecture"></a>
+
+## 架构
 
 ```mermaid
 graph TB
@@ -38,7 +44,9 @@ graph TB
     MITM -->|Forward + Inspect| LDAP
 ```
 
-## Files
+<a id="files"></a>
+
+## 文件
 
 ```
 scripts/docker/devops/
@@ -51,7 +59,9 @@ scripts/docker/devops/
 └── ldap-grafana.toml            # Grafana LDAP config (for comparison)
 ```
 
-## Quick Start
+<a id="quick-start"></a>
+
+## 快速开始
 
 ```bash
 # Start all services and run tests
@@ -77,18 +87,22 @@ COMPOSE_PROFILES=ldap-test docker compose \
     down
 ```
 
-## Services
+<a id="services"></a>
 
-| Service | Purpose | Port |
-|---------|---------|------|
-| `ldap` | OpenLDAP server with TLS | 389, 636 |
-| `ldap-mitm-proxy` | Adversarial credential extractor + HTTP API | 3389 (proxy), 8080 (API) |
-| `phoenix-starttls` | Phoenix with STARTTLS mode | 6007 |
-| `phoenix` | Phoenix with LDAPS mode | 6006 |
-| `grafana-ldap` | Grafana for comparison | 3000 |
-| `ldap-test` | Test runner (executes test_ldap_tls.py) | - |
+## 服务
 
-## Test Execution Flow
+| 服务 | 用途 | 端口 |
+| --- | --- | --- |
+| `ldap` | 支持 TLS 的 OpenLDAP 服务 | 389, 636 |
+| `ldap-mitm-proxy` | 对抗性凭证提取器及 HTTP API | 3389（代理）, 8080（API） |
+| `phoenix-starttls` | 使用 STARTTLS 模式的 Phoenix | 6007 |
+| `phoenix` | 使用 LDAPS 模式的 Phoenix | 6006 |
+| `grafana-ldap` | 用于对比的 Grafana | 3000 |
+| `ldap-test` | 测试运行器（执行 test_ldap_tls.py） | - |
+
+<a id="test-execution-flow"></a>
+
+## 测试执行流程
 
 ```mermaid
 sequenceDiagram
@@ -133,7 +147,9 @@ sequenceDiagram
     T->>T: Generate final verdict
 ```
 
-## Test Phases
+<a id="test-phases"></a>
+
+## 测试阶段
 
 ```mermaid
 graph LR
@@ -160,24 +176,37 @@ graph LR
     V1 --> V2 --> V3
 ```
 
-### Phase 1: Baseline LDAP Connectivity
-Verify LDAP server works with different TLS modes:
-- **Plaintext** (port 389, no TLS) - Baseline
-- **STARTTLS** (port 389 with upgrade) - Correct implementation
-- **LDAPS** (port 636, TLS from start) - Direct TLS
+<a id="phase-1-baseline-ldap-connectivity"></a>
 
-### Phase 2: Application Security Tests
-Test Phoenix and Grafana via MITM proxy:
-- **Phoenix STARTTLS** → Routes through proxy → Should be SECURE
-- **Phoenix LDAPS** → Direct connection → Should be SECURE  
-- **Grafana STARTTLS** → Routes through proxy → Currently VULNERABLE
+### 阶段 1：LDAP 基础连接
 
-### Phase 3: Adversarial Analysis
-- Parse MITM proxy logs for extracted credentials
-- Verify extracted credentials actually work
-- Determine security verdict
+验证 LDAP 服务在不同 TLS 模式下是否正常：
 
-## Security Validation Model
+- **明文**（389 端口，无 TLS）：基线
+- **STARTTLS**（389 端口，连接后升级）：正确实现
+- **LDAPS**（636 端口，连接建立时即启用 TLS）：直接 TLS
+
+<a id="phase-2-application-security-tests"></a>
+
+### 阶段 2：应用安全测试
+
+通过 MITM 代理测试 Phoenix 和 Grafana：
+
+- **Phoenix STARTTLS** → 经代理路由 → 应为 SECURE
+- **Phoenix LDAPS** → 直接连接 → 应为 SECURE
+- **Grafana STARTTLS** → 经代理路由 → 当前为 VULNERABLE
+
+<a id="phase-3-adversarial-analysis"></a>
+
+### 阶段 3：对抗性分析
+
+- 解析 MITM 代理日志中的已提取凭证
+- 验证提取到的凭证是否确实可用
+- 得出安全结论
+
+<a id="security-validation-model"></a>
+
+## 安全验证模型
 
 ```mermaid
 sequenceDiagram
@@ -206,7 +235,9 @@ sequenceDiagram
     Note over MITM: Log Verdict:<br/>SECURE or VULNERABLE
 ```
 
-## Security Decision Flow
+<a id="security-decision-flow"></a>
+
+## 安全判定流程
 
 ```mermaid
 flowchart TD
@@ -230,9 +261,14 @@ flowchart TD
     Report --> End([Exit: 0=Pass, 1=Fail])
 ```
 
-## Expected Results
+<a id="expected-results"></a>
 
-### Phoenix (SECURE)
+## 预期结果
+
+<a id="phoenix-secure"></a>
+
+### Phoenix（安全，SECURE）
+
 ```
 Application: phoenix-starttls
 StartTLS requested: True
@@ -241,7 +277,10 @@ Credentials extracted: 0
 Verdict: SECURE ✅
 ```
 
-### Grafana (VULNERABLE)
+<a id="grafana-vulnerable"></a>
+
+### Grafana（存在漏洞，VULNERABLE）
+
 ```
 Application: grafana-ldap
 StartTLS requested: False
@@ -252,9 +291,11 @@ Credentials extracted: 2
 Verdict: VULNERABLE 🚨
 ```
 
-## Structured Logging
+<a id="structured-logging"></a>
 
-All security events are logged as JSON for programmatic analysis:
+## 结构化日志
+
+所有安全事件均以 JSON 记录，便于程序分析：
 
 ```json
 {
@@ -270,9 +311,11 @@ All security events are logged as JSON for programmatic analysis:
 }
 ```
 
+<a id="mitm-http-api"></a>
+
 ### MITM HTTP API
 
-The proxy now exposes a lightweight read-only API that streams the same structured events without requiring Docker access:
+代理现在提供轻量级只读 API，可流式读取相同的结构化事件，无需访问 Docker：
 
 ```bash
 # Fetch all recorded events (Phoenix STARTTLS, Grafana, etc.)
@@ -282,13 +325,16 @@ curl -s http://localhost:8080/events | jq
 curl -s "http://localhost:8080/events?since=$(date +%s)" | jq
 ```
 
-- Endpoint: `GET /events` → `{ "events": [...] }`
-- Optional `since` query string filters by `timestamp`.
-- Health check: `GET /healthz` → `{ "status": "ok" }`
+- 端点：`GET /events` → `{ "events": [...] }`
+- 可选查询参数 `since` 按 `timestamp` 筛选。
+- 健康检查：`GET /healthz` → `{ "status": "ok" }`
 
-`test_ldap_tls.py` consumes this API (via `MITM_API_URL`, default `http://ldap-mitm-proxy:8080`) during Phase 3 so the runner can analyze adversarial results from inside its container.
+`test_ldap_tls.py` 在阶段 3 通过 `MITM_API_URL`（默认 `http://ldap-mitm-proxy:8080`）调用此 API，使运行器能够在自身容器内分析对抗测试结果。
 
-### Event Types
+<a id="event-types"></a>
+
+### 事件类型
+
 ```mermaid
 stateDiagram-v2
     [*] --> connection_established: New Connection
@@ -311,25 +357,35 @@ stateDiagram-v2
     end note
 ```
 
-Event descriptions:
-- `connection_established` - New client connection
-- `starttls_requested` - Client requested StartTLS upgrade
-- `tls_handshake_detected` - TLS negotiation started
-- `credentials_stolen` - Plaintext credentials extracted (vulnerability)
-- `connection_closed` - Connection finished with verdict
+事件说明：
 
-## Exit Codes
+- `connection_established`：建立新的客户端连接
+- `starttls_requested`：客户端请求升级为 StartTLS
+- `tls_handshake_detected`：开始 TLS 协商
+- `credentials_stolen`：成功提取明文凭证（存在漏洞）
+- `connection_closed`：连接结束，并附带判定结果
 
-- **0** - All tests passed, no vulnerabilities detected
-- **1** - Test failures or security vulnerabilities found
+<a id="exit-codes"></a>
 
-## Test Data
+## 退出码
 
-`ldap-seed.ldif` contains 11 test users covering edge cases.
+- **0**：所有测试通过，未检测到漏洞
+- **1**：测试失败或发现安全漏洞
 
-## Troubleshooting
+<a id="test-data"></a>
 
-### Tests fail with connection errors
+## 测试数据
+
+`ldap-seed.ldif` 包含 11 个覆盖边界情况的测试用户。
+
+<a id="troubleshooting"></a>
+
+## 故障排查
+
+<a id="tests-fail-with-connection-errors"></a>
+
+### 测试因连接错误而失败
+
 ```bash
 # Check if services are running
 docker ps | grep devops
@@ -341,14 +397,20 @@ COMPOSE_PROFILES=ldap-test docker compose \
     restart
 ```
 
-### MITM proxy shows no connections
+<a id="mitm-proxy-shows-no-connections"></a>
+
+### MITM 代理未显示连接
+
 ```bash
 # Check if apps are configured to use proxy
 docker exec devops-phoenix-starttls env | grep LDAP_HOST
 # Should show: PHOENIX_LDAP_HOST=ldap-mitm-proxy
 ```
 
-### Want to test manually
+<a id="want-to-test-manually"></a>
+
+### 手动测试
+
 ```bash
 # Test Phoenix STARTTLS
 curl -X POST http://localhost:6007/auth/ldap/login \
@@ -359,20 +421,24 @@ curl -X POST http://localhost:6007/auth/ldap/login \
 docker logs devops-ldap-mitm-proxy 2>&1 | tail -30
 ```
 
-## Reproducibility Checklist
+<a id="reproducibility-checklist"></a>
 
-- ✅ Single entry point: `test_ldap_tls.py`
-- ✅ No manual steps required
-- ✅ All dependencies in Docker
-- ✅ Deterministic test data
-- ✅ Idempotent execution
-- ✅ Clear exit codes (0 = pass, 1 = fail)
-- ✅ Structured logs for automation
-- ✅ Self-documented via logging output
+## 可复现性检查清单
 
-## Future Testing
+- ✅ 统一入口：`test_ldap_tls.py`
+- ✅ 无需手动步骤
+- ✅ 所有依赖均位于 Docker 中
+- ✅ 确定性的测试数据
+- ✅ 幂等执行
+- ✅ 明确的退出码（0 = 通过，1 = 失败）
+- ✅ 便于自动化的结构化日志
+- ✅ 通过日志输出提供操作说明
 
-To add new tests:
+<a id="future-testing"></a>
+
+## 后续测试
+
+添加新测试：
 
 ```mermaid
 flowchart LR
@@ -384,14 +450,15 @@ flowchart LR
     F --> G[Update README]
 ```
 
-1. Add test method to `LDAPTLSSecurityTester` class
-2. Add to appropriate test phase in `run_all_tests()`
-3. Document expected behavior in this README
-4. Test fails first, then fix implementation
-5. Verify MITM proxy detects the issue
-6. Update this README with new test documentation
+1. 向 `LDAPTLSSecurityTester` 类添加测试方法
+2. 在 `run_all_tests()` 的相应测试阶段加入调用
+3. 在此 README 中说明预期行为
+4. 先使测试失败，再修复实现
+5. 验证 MITM 代理能够检测该问题
+6. 在此 README 中补充新测试文档
 
-Example:
+示例：
+
 ```python
 def test_new_feature(self) -> TestResult:
     """Test description here."""

@@ -1,76 +1,89 @@
-# tau-bench + LangGraph
+<a id="tau-bench--langgraph"></a>
 
-A customer service agent built with LangGraph, instrumented with OpenInference, running tau-bench retail domain tasks. This is the LangGraph counterpart to the [OpenAI Agents SDK implementation](../tau_bench_openai_agents/README.md) — same tools, same database, same simulated user, different framework. Comparing traces between the two reveals how framework choice affects what trajectory information is available.
+# tau-bench 与 LangGraph 示例
 
-## What This Does
+这是使用 LangGraph 构建的客服 Agent，通过 OpenInference 埋点，运行 tau-bench 零售领域任务。它是 [OpenAI Agents SDK 实现](../tau_bench_openai_agents/README.md)的 LangGraph 对应版本，使用相同工具、数据库和模拟用户，仅框架不同。比较两者追踪可以了解框架选择如何影响可获取的轨迹信息。
 
-Runs the same retail customer service agent through the same tau-bench tasks as the OpenAI Agents SDK version. The agent authenticates users, looks up orders, and executes mutations (cancellations, returns, exchanges, modifications) using 16 tools — all traced to Phoenix.
+<a id="what-this-does"></a>
 
-## Architecture
+## 功能说明
+
+运行与 OpenAI Agents SDK 版本相同的零售客服 Agent，执行相同 tau-bench 任务。Agent 使用 16 个工具验证用户身份、查询订单并执行取消、退货、换货和修改等变更，全部追踪至 Phoenix。
+
+<a id="architecture"></a>
+
+## 架构
 
 ```
-Simulated User (not traced)          Agent Framework (traced)
-+---------------------+    msg    +------------------------------+
+模拟用户（不追踪）          Agent 框架（追踪）
++---------------------+    消息   +------------------------------+
 | LLMUserSimulationEnv | -------> | LangGraph StateGraph         |
-| (litellm/gpt-4o)    | <------- |   "agent" node (ChatOpenAI)  |
-+---------------------+  response |   "tools" node (ToolNode)    |
-                                  |   conditional routing        |
-                                  |   | LLM spans                |
-                                  |   | TOOL spans               |
+| (litellm/gpt-4o)    | <------- |   "agent" 节点 (ChatOpenAI)  |
++---------------------+  响应     |   "tools" 节点 (ToolNode)    |
+                                  |   条件路由        |
+                                  |   | LLM span                |
+                                  |   | TOOL span               |
                                   +------------------------------+
                                            | OTel/OTLP
                                            v
                                   +------------------+
-                                  | Phoenix (local)  |
+                                  | Phoenix（本地）  |
                                   | localhost:6006   |
                                   +------------------+
 ```
 
-The agent is a `StateGraph(MessagesState)` with two nodes:
-- **"agent"** — calls `ChatOpenAI` with the full message history and bound tools
-- **"tools"** — executes tool calls via `ToolNode`
+Agent 是一个包含两个节点的 `StateGraph(MessagesState)`：
 
-Conditional routing loops between agent → tools until the LLM produces a response with no tool calls, then routes to END.
+- **"agent"** — 使用完整消息历史和已绑定工具调用 `ChatOpenAI`
+- **"tools"** — 通过 `ToolNode` 执行工具调用
 
-Each outer turn (user message → agent response, potentially with multiple internal tool-call loops) produces a span tree:
+条件路由在 agent → tools 之间循环，直到 LLM 生成不含工具调用的响应，随后路由至 END。
+
+每个外层轮次（用户消息 → Agent 响应，内部可能包含多个工具调用循环）生成一棵 span 树：
 
 ```
-conversation.turn (manual)              ← wraps the full turn
-  LangGraph (auto)                      ← graph execution
-    ChatOpenAI (auto, LLM)              ← LLM call with message history
-    <tool_name> (auto, TOOL)            ← tool execution (if any)
-    ChatOpenAI (auto, LLM)              ← follow-up LLM call
+conversation.turn （手动）              ← 包围完整轮次
+  LangGraph （自动）                      ← 图执行
+    ChatOpenAI （自动，LLM）              ← 包含消息历史的 LLM 调用
+    <tool_name> （自动，TOOL）            ← 工具执行（若有）
+    ChatOpenAI （自动，LLM）              ← 后续 LLM 调用
 ```
 
-### Key differences from the OpenAI Agents SDK version
+<a id="key-differences-from-the-openai-agents-sdk-version"></a>
 
-- **Span nesting**: LangGraph produces a flatter span tree — LLM and TOOL spans are siblings under the graph span, rather than nested under agent workflow spans.
-- **Message accumulation**: LangGraph's `MessagesState` carries the full conversation history forward, so later LLM spans contain all prior messages. Token usage scales with conversation length.
-- **Turn boundaries**: Both implementations use a manual `conversation.turn` span to group each turn, but the internal structure differs.
+### 与 OpenAI Agents SDK 版本的主要区别
 
-## Usage
+- **Span 嵌套**：LangGraph 生成更扁平的 span 树，LLM 和 TOOL span 是图 span 下的同级节点，不嵌套在 Agent 工作流 span 下。
+- **消息累积**：LangGraph 的 `MessagesState` 持续传递完整对话历史，因此后续 LLM span 包含此前的所有消息。token 用量随对话长度增长。
+- **轮次边界**：两种实现都使用手动 `conversation.turn` span 对每个轮次分组，但内部结构不同。
 
-From the `examples/agents/` directory:
+<a id="usage"></a>
+
+## 使用方法
+
+在 `examples/agents/` 目录中执行：
 
 ```bash
-# Run all 10 selected tasks
+# 运行选定的全部 10 个任务
 python -m tau_bench_langgraph
 
-# Run specific tasks
+# 运行指定任务
 python -m tau_bench_langgraph --tasks dev:0 dev:12
 
-# Run without Phoenix
+# 不使用 Phoenix
 python -m tau_bench_langgraph --no-phoenix
 ```
 
-## File Structure
+<a id="file-structure"></a>
 
-| File | Purpose |
+## 文件结构
+
+| 文件 | 用途 |
 |------|---------|
-| `agent.py` | LangGraph `StateGraph` definition and multi-turn conversation loop |
-| `tools.py` | 16 retail tools as LangChain `@tool` functions wrapping tau-bench `Tool.invoke()` |
-| `db.py` | In-memory DB loader; deep-copies tau-bench JSON data per task |
-| `user_sim.py` | Simulated user wrapper (same as OpenAI Agents SDK version) |
-| `phoenix_setup.py` | OpenInference `LangChainInstrumentor` + Phoenix OTLP setup |
-| `tasks.py` / `tasks_scaled.py` | Task selection from tau-bench dev/train splits |
-| `run.py` | CLI entry point |
+| `agent.py` | LangGraph `StateGraph` 定义和多轮对话循环 |
+| `tools.py` | 16 个以 LangChain `@tool` 函数实现的零售工具，封装 tau-bench `Tool.invoke()` |
+| `db.py` | 内存数据库加载器；为每个任务深拷贝 tau-bench JSON 数据 |
+| `user_sim.py` | 模拟用户封装，与 OpenAI Agents SDK 版本相同 |
+| `phoenix_setup.py` | OpenInference `LangChainInstrumentor` 和 Phoenix OTLP 设置 |
+| `tasks.py` / `tasks_scaled.py` | 从 tau-bench dev/train 划分选择任务 |
+| `run.py` | CLI 入口 |
