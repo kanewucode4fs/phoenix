@@ -1,5 +1,14 @@
 # Agent Instructions
 
+## 项目阶段
+
+`iteration`
+
+## Vault 工作流入口
+
+本项目「可信评测平台」的 Vault 公共规则与工作流分工见 `/Users/kanewu/Documents/Obsidian/dev-vault/VAULT.md`。
+Codex 开发工作流通过对应的 `dev-*` 独立技能执行；执行约定见 `/Users/kanewu/Documents/Obsidian/dev-vault/.codex/workflows/execution.md`，业务步骤见 `/Users/kanewu/Documents/Obsidian/dev-vault/.codex/skills/dev-*/SKILL.md`。
+
 ## Build & Development
 
 This repo uses a **Makefile** for all build, test, lint, and dev commands. Run `make help` to see all available targets.
