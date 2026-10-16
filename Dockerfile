@@ -41,7 +41,10 @@ COPY ./schemas /phoenix/schemas
 RUN npm i -g corepack
 RUN corepack enable
 RUN corepack install
-RUN pnpm install
+# 下载缓存保留已完成的包；限制并发并延长超时，适应较慢的构建网络。
+RUN --mount=type=cache,id=phoenix-pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store \
+      --network-concurrency=4 --fetch-timeout=600000
 # Build the app (phoenix-ui) and its workspace dependencies in topological
 # order. The vite build writes to /phoenix/src/phoenix/server/static.
 RUN pnpm --filter 'phoenix-ui...' run build

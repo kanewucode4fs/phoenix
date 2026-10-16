@@ -4,6 +4,10 @@
 
 `iteration`
 
+## 测试 Agent
+
+用户的测试 Agent 项目位于 `/Users/kanewu/Documents/TechSet/FirstAgent`，后续 Phoenix 接入与评测测试参考该项目。
+
 ## Vault 工作流入口
 
 本项目「可信评测平台」的 Vault 公共规则与工作流分工见 `/Users/kanewu/Documents/Obsidian/dev-vault/VAULT.md`。
